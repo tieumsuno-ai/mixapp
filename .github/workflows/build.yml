@@ -1,0 +1,92 @@
+# Fabrique les installateurs de MixApp sur les machines de GitHub :
+#   - MixApp-Mac-AppleSilicon.dmg  (Mac M1, M2, M3, M4…)
+#   - MixApp-Mac-Intel.dmg         (Mac Intel, avant 2021)
+#   - MixApp-Setup-Windows.exe
+# Se lance à chaque envoi sur la branche principale, ou à la main (onglet Actions).
+name: Installateurs MixApp
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            label: AppleSilicon
+          - runner: macos-15-intel
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.label == 'Intel' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliothèques
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Vérification rapide (analyse d'un morceau de test)
+        run: |
+          brew install ffmpeg
+          python tools/make_test_tracks.py /tmp/testmusic
+          python tools/check_analysis.py /tmp/testmusic
+      - name: Construction de MixApp.app
+        run: |
+          python -m PyInstaller MixApp.spec --noconfirm --log-level WARN
+          # signature locale (« ad hoc ») de tout le paquet : obligatoire sur Mac Apple
+          codesign --force --deep --sign - dist/MixApp.app
+          codesign --verify --deep --strict dist/MixApp.app
+      - name: Test de démarrage de l'appli construite
+        run: |
+          mkdir -p "$HOME/Library/Application Support/MixApp"
+          echo '{"roots": ["/tmp/testmusic"], "volume": 0.9}' > "$HOME/Library/Application Support/MixApp/settings.json"
+          QT_QPA_PLATFORM=offscreen MIXAPP_FAKE_AUDIO=1 dist/MixApp.app/Contents/MacOS/MixApp &
+          sleep 90; kill %1 || true
+          python - <<'PY'
+          import sqlite3, os
+          db = os.path.expanduser("~/Library/Application Support/MixApp/library.db")
+          n = sqlite3.connect(db).execute("select count(*) from tracks where bpm is not null").fetchone()[0]
+          print("morceaux analysés par l'appli construite :", n)
+          assert n >= 4, "l'appli construite n'a pas analysé les morceaux"
+          PY
+      - name: Image disque (.dmg)
+        run: |
+          mkdir dmg
+          cp -R dist/MixApp.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "MixApp" -srcfolder dmg -ov -format UDZO "MixApp-Mac-${{ matrix.label }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MixApp-Mac-${{ matrix.label }}
+          path: MixApp-Mac-${{ matrix.label }}.dmg
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliothèques
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Construction de MixApp.exe
+        run: python -m PyInstaller MixApp.spec --noconfirm --log-level WARN
+      - name: Installateur (Inno Setup)
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc installer\MixApp.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MixApp-Windows
+          path: installer/Output/MixApp-Setup-Windows.exe

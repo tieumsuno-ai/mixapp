@@ -1,0 +1,9 @@
+pedalboard>=0.9      # changement de tempo (Rubber Band), effets, export — Spotify
+librosa>=0.10        # analyse audio (attaques, chroma)
+mutagen>=1.47        # tags ID3
+watchdog>=4.0        # surveillance des dossiers
+sounddevice>=0.4     # sortie audio (Mac et Windows : rien d'autre à installer)
+scipy>=1.10          # filtres de l'échange des basses
+soundfile>=0.12.1    # lecture des MP3 (libsndfile, fourni pour Mac et Windows)
+soxr>=0.3            # changement de fréquence d'échantillonnage
+PySide6>=6.6         # interface graphique (Qt)
