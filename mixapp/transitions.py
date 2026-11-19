@@ -229,6 +229,37 @@ def _declick_tail(buffer: np.ndarray, original: np.ndarray, n: int = 441):
     buffer[-n:] = buffer[-n:] * (1 - w) + original[-n:] * w
 
 
+def _match_resume(tail_src: np.ndarray, native: np.ndarray, guess: int,
+                  win: int = int(0.4 * SR), search: int = int(0.06 * SR)) -> int:
+    """Position dans `native` qui prolonge exactement la fin de `tail_src`
+    (corrélation sur les 0,4 dernières secondes, ± 60 ms autour de `guess`)."""
+    ref = tail_src[-win:].mean(1).astype(np.float64)
+    lo = guess - win - search
+    seg_ = _slice(native, max(0, lo), win + 2 * search).mean(1).astype(np.float64)
+    if lo < 0 or len(seg_) < win + 2 * search or np.std(ref) < 1e-4:
+        return guess
+    c = np.correlate(seg_, ref, mode="valid")
+    e = np.sqrt(np.convolve(seg_ ** 2, np.ones(win), mode="valid")) * np.linalg.norm(ref) + 1e-9
+    nc = c / e
+    k = int(np.argmax(nc))
+    return lo + k + win if nc[k] > 0.6 else guess
+
+
+def _match_start(y: np.ndarray, guess: int, native: np.ndarray,
+                 win: int = int(0.4 * SR), search: int = int(0.06 * SR)) -> int:
+    """Position dans `y` (audio étiré) où commence exactement `native`."""
+    ref = native[:win].mean(1).astype(np.float64)
+    lo = guess - search
+    seg_ = _slice(y, max(0, lo), win + 2 * search).mean(1).astype(np.float64)
+    if lo < 0 or len(seg_) < win + 2 * search or np.std(ref) < 1e-4:
+        return guess
+    c = np.correlate(seg_, ref, mode="valid")
+    e = np.sqrt(np.convolve(seg_ ** 2, np.ones(win), mode="valid")) * np.linalg.norm(ref) + 1e-9
+    nc = c / e
+    k = int(np.argmax(nc))
+    return lo + k if nc[k] > 0.6 else guess
+
+
 def _round4(x: float) -> int:
     return int(4 * round(x / 4))
 
@@ -247,19 +278,93 @@ def _overlap_start(a: Track, L: int) -> float:
     return max(ov, floor)
 
 
+def key_match(a: Track, b: Track) -> str:
+    """'ok' (même clé, voisine ou relative), 'proche' (±2 ou diagonale), 'conflit', '?'."""
+    def cam(t):
+        try:
+            return t.row["camelot"]
+        except (KeyError, IndexError, TypeError):
+            return None
+    ca, cb = cam(a), cam(b)
+    if not ca or not cb:
+        return "?"
+    from .analysis import camelot_neighbors
+    if cb in camelot_neighbors(ca):
+        return "ok"
+    na, la, nb_, lb = int(ca[:-1]), ca[-1], int(cb[:-1]), cb[-1]
+    d = min((na - nb_) % 12, (nb_ - na) % 12)
+    if (la == lb and d == 2) or (la != lb and d == 1):
+        return "proche"
+    return "conflit"
+
+
+def key_shift_for(a: Track, b: Track, max_st: int = 2):
+    """Plus petite transposition de b (demi-tons, ±max_st) qui rend sa clé
+    compatible avec celle de a, ou None. +1 demi-ton = +7 sur la roue Camelot."""
+    try:
+        ca, cb = a.row["camelot"], b.row["camelot"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    if not ca or not cb:
+        return None
+    from .analysis import camelot_neighbors
+    ok = camelot_neighbors(ca)
+    n, letter = int(cb[:-1]), cb[-1]
+    for st in (1, -1, 2, -2):
+        if abs(st) <= max_st and f"{(n - 1 + 7 * st) % 12 + 1}{letter}" in ok:
+            return st
+    return None
+
+
+GRID_SHARP_MIN = 1.3     # en dessous, les kicks ne sont pas assez nets pour caler
+
+
 def plan_beatmatch(a: Track, b: Track):
-    """Calcule où et comment enchaîner a → b en calant les tempos. None si impossible."""
+    """Calcule où et comment enchaîner a → b en calant les tempos. None si impossible.
+
+    Comme un DJ : tempos proches + clés compatibles → long mélange ;
+    clés qui frottent → mélange court (4 mesures) pour que les harmonies
+    ne se superposent presque pas ; kicks pas nets ou tempos trop éloignés →
+    pas de calage (la transition se fera à l'écho)."""
     if not (a.analyzed and b.analyzed):
         return None
     r = b.bpm / a.bpm
     if abs(r - 1) > MAX_STRETCH:
         return None
+    key = key_match(a, b)
     intro_bars = (b.intro_end - b.first_beat) / b.bar
     L = int(np.clip(_round4(intro_bars), MIX_MIN_BARS, MIX_MAX_BARS))
+    if key == "proche":
+        L = min(L, 8)
+    shift = 0
+    if key == "conflit":
+        st = key_shift_for(a, b)
+        if st is not None:
+            # comme le « key shift » d'une table DJ : b entre transposé dans la
+            # clé de a, puis revient doucement à sa vraie clé pendant que a s'efface
+            shift, L = st, min(L, 16)
+        else:
+            L = 4
+    if abs(r - 1) > 0.05:              # gros écart de tempo : glissement court
+        L = min(L, 8)
     ov_a = _overlap_start(a, L)
     # le « drop » de b (fin de son intro) tombe à la fin de la superposition
     b_start = max(b.first_beat, b.intro_end - L * b.bar)
-    return dict(r=r, L=L, ov_a=ov_a, b_start=b_start)
+    # les kicks sont-ils assez nets aux deux endroits pour un calage propre ?
+    n = 4 * L
+    sa = _grid_phase(_slice(a.audio, int(ov_a * SR), int(L * a.bar * SR)),
+                     np.arange(n + 1) * 60.0 / a.bpm)[1]
+    sb = _grid_phase(_slice(b.audio, int(b_start * SR), int(L * b.bar * SR)),
+                     np.arange(n + 1) * 60.0 / b.bpm)[1]
+    if min(sa, sb) < GRID_SHARP_MIN:
+        return None
+    if shift:
+        key = "transposé"
+    why = {"transposé": f"clé de l'entrant ajustée ({shift:+d} demi-ton) puis rétablie",
+           "ok": "clés compatibles", "proche": "clés voisines", "conflit": "clés éloignées : mélange court",
+           "?": "clé inconnue"}[key]
+    return dict(r=r, L=L, ov_a=ov_a, b_start=b_start, key=key, sharp=(sa, sb), shift=shift,
+                why=f"Mix au tempo {a.bpm:.0f}→{b.bpm:.0f} BPM, {why}, {L} mesures")
 
 
 def lock_point(a: Track, lead: float = 25.0) -> float:
@@ -281,16 +386,26 @@ def _glide(n_beats: int, bpm_a: float, bpm_b: float) -> np.ndarray:
     return bpm_a + (bpm_b - bpm_a) * (0.5 - 0.5 * np.cos(np.pi * u))
 
 
-def _stretch_beats(x: np.ndarray, bpm: float, tempos: np.ndarray) -> np.ndarray:
-    """Étire x (qui commence sur un temps) pour que son temps j dure 60/tempos[j]."""
+MARGIN = int(0.5 * SR)       # musique lue en plus avant / après chaque transition
+
+
+def _stretch_beats(x: np.ndarray, bpm: float, tempos: np.ndarray, pre: int, post: int,
+                   pitch: np.ndarray | None = None):
+    """Étire x (temps n°0 à l'échantillon `pre`) pour que son temps j dure
+    60/tempos[j]. Les marges `pre` / `post` (jouées au tempo de début / de fin)
+    absorbent le démarrage et l'arrêt du moteur d'étirement : on les retire
+    ensuite. Renvoie (audio étiré, longueur de la marge de début une fois étirée)."""
     beat_in = 60.0 / bpm * SR
-    bounds = np.round(np.arange(len(tempos) + 1) * beat_in).astype(int)
+    bounds = pre + np.round(np.arange(len(tempos) + 1) * beat_in).astype(int)
     factor = np.empty(len(x))
+    factor[:bounds[0]] = tempos[0] / bpm
     for j, tp in enumerate(tempos):
         factor[bounds[j]:bounds[j + 1]] = tp / bpm
     factor[bounds[-1]:] = tempos[-1] / bpm
-    return pedalboard.time_stretch(np.ascontiguousarray(x.T), SR,
-                                   stretch_factor=factor.astype(np.float64)).T
+    kw = {} if pitch is None else {"pitch_shift_in_semitones": pitch.astype(np.float64)}
+    y = pedalboard.time_stretch(np.ascontiguousarray(x.T), SR,
+                                stretch_factor=factor.astype(np.float64), **kw).T
+    return y, int(round(pre / (tempos[0] / bpm)))
 
 
 def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
@@ -307,8 +422,12 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
     b_s = int(round(plan["b_start"] * SR))
     n_a_in = int(round(L * a.bar * SR))
     n_b_in = int(round(L * b.bar * SR))
-    a_in = _slice(a.audio, s_ov, n_a_in)
-    b_in = _slice(b.audio, b_s, n_b_in)
+    M_ = MARGIN
+    # entrées avec une marge de vraie musique avant et après : aucun décalage ni
+    # démarrage du moteur d'étirement ne laisse de trou (silence) dans le tampon
+    a_ext = _slice(a.audio, s_ov - M_, n_a_in + 2 * M_)
+    b_ext = _slice(b.audio, b_s - M_, n_b_in + 2 * M_)
+    a_in, b_in = a_ext[M_:M_ + n_a_in], b_ext[M_:M_ + n_b_in]
 
     tempos = _glide(nb, a.bpm, b.bpm)
     out_beats = np.concatenate([[0.0], np.cumsum(60.0 / tempos)])     # s
@@ -320,23 +439,39 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
         e, sharp = _grid_phase(x, np.arange(nb + 1) * 60.0 / bpm)
         return e if sharp >= 1.5 else 0
     e_a, e_b = local_err(a_in, a.bpm), local_err(b_in, b.bpm)
-    rel = e_b - e_a          # retard de b sur a, à compenser
+    rel = int(np.clip(e_b - e_a, -M_ // 2, M_ // 2))     # retard de b sur a, à compenser
 
-    def place(y, shift):
-        y = y[shift:] if shift >= 0 else np.pad(y, ((-shift, 0), (0, 0)))
-        y = y[:ov_len]
-        return np.pad(y, ((0, ov_len - len(y)), (0, 0))).astype(np.float32)
+    def take(y, start):
+        """ov_len échantillons de y à partir de `start` (toujours de la vraie musique)."""
+        start = max(0, start)
+        seg_ = y[start:start + ov_len]
+        if len(seg_) < ov_len:          # ne devrait pas arriver grâce aux marges
+            seg_ = np.pad(seg_, ((0, ov_len - len(seg_)), (0, 0)), mode="edge")
+        return np.ascontiguousarray(seg_, dtype=np.float32)
 
-    if abs(r - 1) < 0.002:
-        a_ov, b_ov = place(a_in, 0), place(b_in, rel)
+    shift = plan.get("shift", 0)
+    if abs(r - 1) < 0.002 and not shift:
+        a_ov, b_ov = take(a_ext, M_), take(b_ext, M_ + rel)
         offs = (0, rel)
     else:
-        ya = _stretch_beats(a_in, a.bpm, tempos)
-        yb = _stretch_beats(b_in, b.bpm, tempos)
+        ya, pa = _stretch_beats(a_ext, a.bpm, tempos, M_, M_)
+        pitch = None
+        if shift:
+            # transposé jusqu'à la moitié, retour en douceur, vraie clé 1 mesure avant la fin
+            bar_in = int(round(b.bar * SR))
+            g0, g1 = M_ + (L // 2) * bar_in, M_ + (L - 1) * bar_in
+            k = np.clip((np.arange(len(b_ext)) - g0) / max(g1 - g0, 1), 0, 1)
+            pitch = shift * (0.5 + 0.5 * np.cos(np.pi * k))
+        yb, pb = _stretch_beats(b_ext, b.bpm, tempos, M_, M_, pitch)
         # Rubber Band décale un peu les attaques : on mesure ce retard et on l'enlève
-        d_a = _stretch_offset(a_in, np.arange(nb + 1) * 60.0 / a.bpm, ya, out_beats)
-        d_b = _stretch_offset(b_in, np.arange(nb + 1) * 60.0 / b.bpm, yb, out_beats)
-        a_ov, b_ov = place(ya, d_a), place(yb, d_b + rel)
+        d_a = _stretch_offset(a_in, np.arange(nb + 1) * 60.0 / a.bpm,
+                              ya[pa:pa + ov_len + M_], out_beats)
+        d_b = _stretch_offset(b_in, np.arange(nb + 1) * 60.0 / b.bpm,
+                              yb[pb:pb + ov_len + M_], out_beats)
+        # au tout début, a joue encore à son tempo : on recale précisément le
+        # début étiré sur l'original pour que l'entrée dans le tampon soit inaudible
+        d_a = _match_start(ya, pa + d_a, a_ext[M_:]) - pa
+        a_ov, b_ov = take(ya, pa + d_a), take(yb, pb + d_b + rel)
         offs = (d_a, d_b + rel)
 
     stems = (a_ov.copy(), b_ov.copy()) if DEBUG_STEMS else None
@@ -350,7 +485,7 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
     q = max(1, L // 4)
     in_end = at_bar(q)                                  # b monte sur la 1re phrase
     mid, mid_end = at_bar(L // 2), at_bar(L // 2 + 1)   # échange sur 1 mesure
-    out_start = at_bar(L - max(4, q))                   # a s'efface sur la dernière
+    out_start = at_bar(max(L // 2, L - max(4, q)))      # a s'efface sur la dernière phrase
     swap = np.clip((t - mid) / max(mid_end - mid, 1), 0, 1)
     swap = 0.5 - 0.5 * np.cos(np.pi * swap)
     g_b_high = np.sin(np.pi / 2 * np.clip(t / in_end, 0, 1))
@@ -360,9 +495,11 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
     buf = (a_low * (1 - swap)[:, None] + a_high * (g_a_high * duck)[:, None]
            + b_low * swap[:, None] + b_high * (g_b_high * duck)[:, None]).astype(np.float32)
 
-    _declick_join(buf, a.audio[s_ov:s_ov + 441])
-    b_end = b_s + n_b_in + rel          # b a été recalé de `rel` : on reprend d'autant plus loin
-    _declick_tail(buf, _slice(b.audio, b_end - 441, 441))
+    _declick_join(buf, a.audio[s_ov:s_ov + 1323], 1323)
+    # Où reprendre b d'origine : on cherche, autour de la position théorique,
+    # l'endroit où la fin du tampon (qui n'est plus que b) colle exactement à b.
+    b_end = _match_resume(b_ov, b.audio, b_s + n_b_in + rel)
+    _declick_tail(buf, _slice(b.audio, b_end - 1323, 1323), 1323)     # fondu de 30 ms
     return Transition("beatmatch", s_ov, buf, b, 0, b_s, b_end=b_end,
                       info=dict(plan, ov_len=ov_len, offsets=offs, bar_pos=bar_pos, grid_err=(e_a, e_b),
                                 stems=stems))
@@ -447,13 +584,23 @@ def render_fade(a: Track, b: Track, seconds: float = 6.0) -> Transition:
 
 
 def render_auto(a: Track, b: Track) -> Transition:
-    """Choisit la meilleure transition possible entre a et b."""
+    """Choisit la meilleure transition propre possible entre a et b :
+    calage tempo + clé si possible, sinon écho sur le temps, sinon fondu."""
     plan = plan_beatmatch(a, b)
     if plan:
-        return render_beatmatch(a, b, plan)
+        tr = render_beatmatch(a, b, plan)
+        tr.info["why"] = plan["why"]
+        return tr
     if a.analyzed:
-        # Tempos incompatibles : écho à la fin du corps du morceau (début d'outro)
+        # Tempos incompatibles ou kicks pas nets : écho à la fin du corps du
+        # morceau (début d'outro), b démarre proprement sur son 1er temps
         t = min(a.outro_start, a.grid_end - 2 * a.bar)
         pos = int(round(a.next_beat_after(t) * SR))
-        return render_echo_out(a.audio, pos, a.bpm, b)
-    return render_fade(a, b)
+        tr = render_echo_out(a.audio, pos, a.bpm, b)
+        r = b.bpm / a.bpm if b.analyzed else 1
+        tr.info["why"] = (f"Écho : tempos trop éloignés ({a.bpm:.0f}→{b.bpm:.0f} BPM)"
+                          if abs(r - 1) > MAX_STRETCH else "Écho : rythme pas assez net pour caler")
+        return tr
+    tr = render_fade(a, b)
+    tr.info["why"] = "Fondu enchaîné"
+    return tr

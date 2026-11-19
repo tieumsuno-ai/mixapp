@@ -64,7 +64,9 @@ class Engine:
         self.finished = False
         self.history: list[dict] = []
         self.frames_out = 0
-        self.log = log or (lambda msg: None)
+        self._log = log or (lambda msg: None)
+        self._deferred: list = []
+        self._audio_thread = None        # messages / objets à libérer hors du fil audio
         # appelé (row mis à jour) quand un morceau a été analysé à la volée
         self.on_analyzed = on_analyzed
         self.volume = 1.0
@@ -213,6 +215,7 @@ class Engine:
 
     def pull(self, n: int) -> np.ndarray:
         """Renvoie n échantillons stéréo. Appelé par la carte son : jamais de calcul lourd."""
+        self._audio_thread = threading.current_thread()
         out = np.zeros((n, 2), np.float32)
         filled = 0
         with self.lock:
@@ -235,6 +238,21 @@ class Engine:
             x = out[over]
             out[over] = np.sign(x) * (0.75 + 0.2 * np.tanh((np.abs(x) - 0.75) / 0.2))
         return out
+
+    def log(self, msg: str):
+        """Journal : depuis le fil audio, le message est différé (rien de lent ici)."""
+        if threading.current_thread() is self._audio_thread:
+            self._deferred.append(msg)
+        else:
+            self._log(msg)
+
+    def _flush_deferred(self):
+        with self.lock:
+            items, self._deferred = self._deferred, []
+        for it in items:
+            if isinstance(it, str):
+                self._log(it)
+        del items                       # libération des gros tableaux ici, pas dans le fil audio
 
     def _advance(self):
         """Passe au segment suivant (sous verrou, doit rester instantané)."""
@@ -263,8 +281,10 @@ class Engine:
                 self.log("■ fin de la lecture")
             return
         if self.cur.trans is None and self.cur.track is not None and seg.trans is not None:
-            self.cache = {k: v for k, v in self.cache.items()
-                          if k == self.cur.track.id}      # libère la mémoire
+            keep = self.cur.track.id
+            self._deferred.append([v for k, v in self.cache.items() if k != keep])
+            self._deferred.append(seg)                    # libérés par le fil de travail
+            self.cache = {k: v for k, v in self.cache.items() if k == keep}
 
     def _crossfade_to(self, seg: Segment, b: Track, b_pos: int):
         """Coupe nette (20 ms) de la position courante vers b à b_pos. Sous verrou."""
@@ -287,6 +307,7 @@ class Engine:
 
     def service(self):
         """Travail de fond : touche suivant, préchargement, préparation des transitions."""
+        self._flush_deferred()
         if self.stop_requests:
             self._handle_stop()
             return

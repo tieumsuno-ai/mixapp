@@ -362,7 +362,7 @@ def analyze_library(conn: sqlite3.Connection, workers: int | None = None,
     kind = os.environ.get("MIXAPP_POOL", "thread")
     Pool = ThreadPoolExecutor if kind == "thread" else ProcessPoolExecutor
     if workers is None:
-        workers = max(1, min(4, (os.cpu_count() or 2) - 1))
+        workers = max(1, min(3, (os.cpu_count() or 2) - 2))
     with Pool(max_workers=workers) as pool:
         futures = [pool.submit(_worker, (r["id"], r["path"])) for r in todo]
         for done, fut in enumerate(as_completed(futures), 1):

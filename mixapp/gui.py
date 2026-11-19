@@ -153,7 +153,7 @@ class AudioOutput:
         def cb(outdata, frames, t, status):
             outdata[:] = self.engine.pull(frames)
         self.stream = sd.OutputStream(samplerate=SR, channels=2, dtype="float32",
-                                      blocksize=1024, latency="high", callback=cb)
+                                      blocksize=2048, latency=0.35, callback=cb)
         self.stream.start()
 
     def stop(self):
@@ -949,6 +949,8 @@ class MainWindow(QMainWindow):
 
 
 def main(argv=None):
+    # le fil audio récupère la main plus vite quand l'analyse tourne en fond (anti-craquements)
+    sys.setswitchinterval(0.001)
     app = QApplication(sys.argv if argv is None else argv)
     app.setApplicationName(APP_NAME)
     app.setStyleSheet(STYLE)
