@@ -161,14 +161,33 @@ class AudioOutput:
             return
         import sounddevice as sd
 
-        def cb(outdata, frames, t, status):
-            outdata[:] = self.engine.pull(frames)
+        # Écriture « bloquante » depuis un fil dédié : la carte son lit dans un
+        # tampon géré en C (~0,6 s), sans avoir besoin de Python. Si Python est
+        # occupé un instant (préparation d'un mix, analyse…), le son continue :
+        # plus de craquements, contrairement au mode « callback ».
         self.stream = sd.OutputStream(samplerate=SR, channels=2, dtype="float32",
-                                      blocksize=2048, latency=0.35, callback=cb)
+                                      blocksize=0, latency=0.6)
         self.stream.start()
+        self._run = True
+
+        def writer():
+            block = 1024
+            while self._run:
+                try:
+                    self.stream.write(self.engine.pull(block))
+                except Exception:
+                    if not self._run:
+                        break
+                    time.sleep(0.01)
+        self._thread = threading.Thread(target=writer, daemon=True, name="mixapp-audio")
+        self._thread.start()
 
     def stop(self):
         self._fake = False
+        self._run = False
+        if getattr(self, "_thread", None) is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
         if self.stream is not None:
             self.stream.stop()
             self.stream.close()
