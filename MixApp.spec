@@ -46,5 +46,8 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": "0.3.0",
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.music",
+            # Pas d'« App Nap » : macOS ralentirait fortement l'analyse en
+            # arrière-plan dès que la fenêtre est cachée.
+            "NSAppSleepDisabled": True,
         },
     )
