@@ -60,6 +60,7 @@ def main(argv=None):
     s = sub.add_parser("scan"); s.add_argument("folders", nargs="+")
     s.add_argument("--force", action="store_true", help="réanalyser tous les morceaux")
     sub.add_parser("playlists")
+    sub.add_parser("covertest", help="vérifie la recherche de pochettes sur internet")
     s = sub.add_parser("show"); s.add_argument("name")
     s = sub.add_parser("search"); s.add_argument("query", nargs="+")
     s = sub.add_parser("compatible"); s.add_argument("track_id", type=int)
@@ -75,6 +76,13 @@ def main(argv=None):
     s.add_argument("--queue", nargs="*", default=[],
                    help="ID@secondes = jouer ensuite, ID@secondes:a = ajouter à la file")
     a = p.parse_args(args)
+
+    if a.cmd == "covertest":
+        from . import covers
+        url = covers.search_online("Eurythmics", "Sweet Dreams [www.fuvi-clan.com]")
+        img = covers._get_bytes(url) if url else b""
+        print("pochette :", url, len(img), "octets")
+        return 0 if len(img) > 1000 else 1
 
     conn = db.connect(a.db)
 

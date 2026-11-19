@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFr
 
 from . import analysis, covers, db, library, search
 from .engine import Engine
+from .widgets import Equalizer, MixBadge, make_icon
 from .transitions import SR
 
 APP_NAME = "MixApp"
@@ -63,9 +64,19 @@ QPushButton#next { background: #2e7d5b; border-color: #2e7d5b; color: white;
             font-weight: 600; font-size: 15px; padding: 10px 22px; }
 QPushButton#next:hover { background: #379a6f; }
 QPushButton#stop { background: #c0392b; border-color: #c0392b; color: white;
-            font-weight: 600; font-size: 15px; padding: 10px 22px; }
+            font-weight: 600; font-size: 13px; padding: 8px 14px; }
 QPushButton#stop:hover { background: #d84a3b; }
 QPushButton#stop:disabled { background: #3a2a2a; border-color: #3a2a2a; color: #7a6060; }
+QPushButton#play { background: #4f6bed; border-color: #4f6bed; color: white;
+            font-weight: 600; font-size: 15px; padding: 10px 22px; }
+QPushButton#play:hover { background: #5d79ff; }
+QPushButton#deck { background: #2a2e38; border-color: #3a4050; color: #e6e6e6;
+            font-weight: 600; font-size: 13px; padding: 8px 14px; }
+QPushButton#deck:hover { background: #343947; }
+QPushButton#deck:disabled, QPushButton#next:disabled { color: #666; background: #22252d; border-color: #2a2e38; }
+QPushButton#flat { background: transparent; border: none; padding: 6px; }
+QPushButton#flat:hover { background: #2a2e38; }
+QLabel#remain { color: #e6e6e6; font-weight: 600; min-width: 52px; }
 QLabel#counter { color: #c8cdd8; font-size: 13px; }
 QLabel#section { color: #8a90a0; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
 QLabel#nowTitle { font-size: 20px; font-weight: 700; color: #fff; }
@@ -197,6 +208,7 @@ class MainWindow(QMainWindow):
         self.logos: set[str] = set()          # images « logo » partagées par plusieurs MP3
         self.cover_pix: dict[int, QPixmap] = {}
         self._cover_wanted: dict[int, dict] = {}
+        self._cover_urgent: list[dict] = []
         self._cover_lock = threading.Lock()
         self._cover_event = threading.Event()
         threading.Thread(target=self._cover_worker, daemon=True).start()
@@ -224,6 +236,12 @@ class MainWindow(QMainWindow):
         top.addWidget(self.search_box, 1)
         self.btn_folders = QPushButton("Dossiers de musique…")
         top.addWidget(self.btn_folders)
+        self.btn_full = QPushButton()
+        self.btn_full.setObjectName("flat")
+        self.btn_full.setIcon(make_icon("fullscreen", 18, "#c8cdd8"))
+        self.btn_full.setIconSize(QSize(18, 18))
+        self.btn_full.setToolTip("Plein écran (F11 · ⌃⌘F sur Mac) — Échap pour sortir")
+        top.addWidget(self.btn_full)
         v.addLayout(top)
 
         # trois colonnes
@@ -236,9 +254,16 @@ class MainWindow(QMainWindow):
         lab.setObjectName("section")
         lv.addWidget(lab)
         self.playlist_list = QListWidget()
+        self.playlist_list.setToolTip("Glisse ici un dossier de MP3 pour l'ajouter")
+        self.playlist_list.setAcceptDrops(True)
+        self.playlist_list.viewport().setAcceptDrops(True)
+        self.playlist_list.viewport().installEventFilter(self)
         self.playlist_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.playlist_list.setTextElideMode(Qt.ElideRight)
         lv.addWidget(self.playlist_list, 1)
+        drop_hint = QLabel("↧ glisse un dossier de MP3 ici")
+        drop_hint.setStyleSheet("color:#6f7686; font-size:11px;")
+        lv.addWidget(drop_hint)
         split.addWidget(left)
 
         # morceaux
@@ -256,6 +281,8 @@ class MainWindow(QMainWindow):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
+        self.table.setIconSize(QSize(26, 26))
+        self.table.verticalHeader().setDefaultSectionSize(32)
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.Fixed)
         self.table.setColumnWidth(0, 26)
@@ -302,7 +329,7 @@ class MainWindow(QMainWindow):
         qa.addStretch(1)
         qa.addWidget(self.btn_remove)
         rv.addLayout(qa)
-        hint = QLabel("🔒 déjà préparé   ★ file prioritaire")
+        hint = QLabel("🔒 déjà préparé   ★ file prioritaire   ↑↓ / Retirer : tous les morceaux")
         hint.setStyleSheet("color:#6f7686; font-size:11px;")
         rv.addWidget(hint)
         split.addWidget(right)
@@ -339,25 +366,48 @@ class MainWindow(QMainWindow):
         rcol.addWidget(self.transition_label, alignment=Qt.AlignRight)
         row1.addLayout(rcol)
         pv.addLayout(row1)
+        self.mix_badge = MixBadge()
+        pv.addWidget(self.mix_badge)
         row2 = QHBoxLayout()
         self.pos_label = QLabel("0:00")
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
         self.progress.setMaximumHeight(6)
         self.len_label = QLabel("0:00")
+        self.len_label.setStyleSheet("color:#8a90a0;")
+        self.remain_label = QLabel("-0:00")
+        self.remain_label.setObjectName("remain")
+        self.remain_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.remain_label.setToolTip("Temps restant du morceau en cours")
         row2.addWidget(self.pos_label)
         row2.addWidget(self.progress, 1)
+        row2.addWidget(self.remain_label)
         row2.addWidget(self.len_label)
         pv.addLayout(row2)
         row3 = QHBoxLayout()
-        self.btn_stop = QPushButton("■  Stop")
-        self.btn_stop.setObjectName("stop")
-        self.btn_stop.setToolTip("Arrêt en douceur (écho) · 2 appuis rapides : arrêt immédiat")
-        self.btn_next = QPushButton("⏭  Suivant")
+        self.btn_play = QPushButton("  Lecture")
+        self.btn_play.setObjectName("play")
+        self.btn_play.setIcon(make_icon("play", 18))
+        self.btn_play.setIconSize(QSize(18, 18))
+        self.btn_play.setToolTip("Lecture / pause (espace) — la pause part en écho, la reprise repart au même endroit")
+        self.btn_stop33 = QPushButton("  Stop 33 tours")
+        self.btn_stop33.setObjectName("deck")
+        self.btn_stop33.setIcon(make_icon("turntable", 20))
+        self.btn_stop33.setIconSize(QSize(20, 20))
+        self.btn_stop33.setToolTip("Arrêt : le disque ralentit jusqu'à l'arrêt (S) · 2e appui : arrêt immédiat")
+        self.btn_pullup = QPushButton("  Pull-up")
+        self.btn_pullup.setObjectName("stop")
+        self.btn_pullup.setIcon(make_icon("pullup", 20))
+        self.btn_pullup.setIconSize(QSize(20, 20))
+        self.btn_pullup.setToolTip("Arrêt façon DJ : scratch, rembobinage, écho (P) · 2e appui : arrêt immédiat")
+        self.btn_stop = self.btn_pullup         # compatibilité
+        self.btn_next = QPushButton("  Suivant")
         self.btn_next.setObjectName("next")
-        self.btn_next.setToolTip("Sortie en écho vers le morceau suivant (2 appuis rapides : coupe nette)")
-        row3.addWidget(self.btn_stop)
-        row3.addWidget(self.btn_next)
+        self.btn_next.setIcon(make_icon("next", 18))
+        self.btn_next.setIconSize(QSize(18, 18))
+        self.btn_next.setToolTip("Sortie en écho vers le morceau suivant (→) · 2 appuis rapides : coupe nette")
+        for b in (self.btn_play, self.btn_stop33, self.btn_pullup, self.btn_next):
+            row3.addWidget(b)
         row3.addSpacing(20)
         row3.addWidget(QLabel("🔈"))
         self.volume = QSlider(Qt.Horizontal)
@@ -365,6 +415,9 @@ class MainWindow(QMainWindow):
         self.volume.setValue(int(self.settings.get("volume", 0.9) * 100))
         self.volume.setFixedWidth(140)
         row3.addWidget(self.volume)
+        row3.addSpacing(16)
+        self.eq = Equalizer(lambda: self.engine)
+        row3.addWidget(self.eq)
         row3.addStretch(1)
         self.status = QLabel("")
         self.status.setStyleSheet("color:#8a90a0;")
@@ -388,8 +441,11 @@ class MainWindow(QMainWindow):
         self.btn_remove.clicked.connect(self.remove_from_queue)
         self.btn_up.clicked.connect(lambda: self.move_in_queue(-1))
         self.btn_down.clicked.connect(lambda: self.move_in_queue(+1))
-        self.btn_stop.clicked.connect(self.soft_stop)
+        self.btn_play.clicked.connect(self.play_pause)
+        self.btn_stop33.clicked.connect(lambda: self.styled_stop("turntable"))
+        self.btn_pullup.clicked.connect(lambda: self.styled_stop("pullup"))
         self.btn_next.clicked.connect(self.skip)
+        self.btn_full.clicked.connect(self.toggle_fullscreen)
         self.volume.valueChanged.connect(self._on_volume)
 
         self.bus.log.connect(self._on_log)
@@ -402,13 +458,25 @@ class MainWindow(QMainWindow):
                                                                self.search_box.selectAll()))
         for seq in (QKeySequence("Ctrl+Right"), QKeySequence(Qt.Key_MediaNext)):
             QShortcut(seq, self, activated=self.skip, context=Qt.ApplicationShortcut)
+        QShortcut(QKeySequence(Qt.Key_MediaPlay), self, activated=self.play_pause,
+                  context=Qt.ApplicationShortcut)
+        QShortcut(QKeySequence(Qt.Key_MediaTogglePlayPause), self, activated=self.play_pause,
+                  context=Qt.ApplicationShortcut)
+        QShortcut(QKeySequence(Qt.Key_Space), self, activated=self.play_pause)
+        QShortcut(QKeySequence(Qt.Key_S), self, activated=lambda: self.styled_stop("turntable"))
+        QShortcut(QKeySequence(Qt.Key_P), self, activated=lambda: self.styled_stop("pullup"))
+        QShortcut(QKeySequence(Qt.Key_Right), self, activated=self.skip)
+        for seq in (QKeySequence(Qt.Key_F11), QKeySequence("Ctrl+Meta+F")):
+            QShortcut(seq, self, activated=self.toggle_fullscreen)
+        QShortcut(QKeySequence(Qt.Key_Escape), self,
+                  activated=lambda: self.isFullScreen() and self.toggle_fullscreen())
         QShortcut(QKeySequence(Qt.Key_Return), self.table, activated=lambda: self.queue_selected(True))
         QShortcut(QKeySequence("Ctrl+Return"), self.table, activated=lambda: self.queue_selected(False))
         QShortcut(QKeySequence(Qt.Key_Delete), self.queue_list, activated=self.remove_from_queue)
         QShortcut(QKeySequence(Qt.Key_Backspace), self.queue_list, activated=self.remove_from_queue)
         self.search_box.returnPressed.connect(lambda: (self.table.setFocus(), self.table.selectRow(0)))
 
-        self.ui_timer = QTimer(self, interval=250)
+        self.ui_timer = QTimer(self, interval=200)
         self.ui_timer.timeout.connect(self.refresh_player)
         self.ui_timer.start()
 
@@ -428,13 +496,57 @@ class MainWindow(QMainWindow):
     def choose_folders(self):
         d = QFileDialog.getExistingDirectory(self, "Dossier de musique à ajouter",
                                              str(Path.home() / "Music"))
-        if not d:
-            return
+        if d:
+            self.add_folders([d])
+
+    def add_folders(self, dirs):
+        """Ajoute des dossiers de musique (bouton ou glisser-déposer)."""
         roots = self.settings.setdefault("roots", [])
-        if d not in roots:
-            roots.append(d)
-            save_settings(self.settings)
+        added = []
+        for d in dirs:
+            d = str(Path(d).resolve())
+            inside = any(Path(d) == Path(r) or Path(r) in Path(d).parents for r in roots)
+            if not inside:
+                # un dossier parent remplace ses sous-dossiers déjà ajoutés
+                roots[:] = [r for r in roots if Path(d) not in Path(r).parents]
+                roots.append(d)
+                added.append(d)
+        save_settings(self.settings)
+        if self.observer is not None and added:
+            try:
+                self.observer.stop()
+            except Exception:
+                pass
+            self.observer = None
+        self.status.setText(f"Ajout de {len(added)} dossier(s)…" if added else "Dossier déjà dans la bibliothèque")
         self.start_library_tasks()
+
+    def eventFilter(self, obj, ev):
+        if obj is self.playlist_list.viewport():
+            t = ev.type()
+            if t in (ev.Type.DragEnter, ev.Type.DragMove):
+                md = ev.mimeData()
+                if md.hasUrls() and any(Path(u.toLocalFile()).is_dir() for u in md.urls()):
+                    ev.acceptProposedAction()
+                    self.playlist_list.setStyleSheet("QListWidget { border: 2px dashed #6c8cff; }")
+                    return True
+            elif t == ev.Type.DragLeave:
+                self.playlist_list.setStyleSheet("")
+            elif t == ev.Type.Drop:
+                self.playlist_list.setStyleSheet("")
+                dirs = [u.toLocalFile() for u in ev.mimeData().urls()
+                        if Path(u.toLocalFile()).is_dir()]
+                if dirs:
+                    ev.acceptProposedAction()
+                    self.add_folders(dirs)
+                    return True
+        return super().eventFilter(obj, ev)
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
 
     def start_library_tasks(self):
         """Scan + analyse en arrière-plan, puis surveillance des dossiers."""
@@ -536,12 +648,15 @@ class MainWindow(QMainWindow):
         p.end()
         return pm
 
-    def want_cover(self, row: dict):
+    def want_cover(self, row: dict, urgent: bool = False):
         """Demande (sans bloquer) la jaquette d'un morceau."""
         if row["id"] in self.cover_pix:
             return
         with self._cover_lock:
-            self._cover_wanted.setdefault(row["id"], row)
+            if urgent:
+                self._cover_urgent.append(row)
+            else:
+                self._cover_wanted.setdefault(row["id"], row)
         self._cover_event.set()
 
     def _cover_worker(self):
@@ -549,23 +664,38 @@ class MainWindow(QMainWindow):
         while True:
             self._cover_event.wait()
             with self._cover_lock:
-                items = [(i, r) for i, r in self._cover_wanted.items() if i not in done]
-                self._cover_wanted.clear()
-                self._cover_event.clear()
-            for i, r in items:
-                try:
-                    data = covers.get_cover(r, self.logos,
-                                            online=self.settings.get("covers_online", True))
-                except Exception:
-                    data = None
-                done.add(i)
-                self.bus.cover_ready.emit(i, data)
+                if self._cover_urgent:
+                    r = self._cover_urgent.pop()
+                elif self._cover_wanted:
+                    r = self._cover_wanted.pop(next(iter(self._cover_wanted)))
+                else:
+                    self._cover_event.clear()
+                    continue
+            if r["id"] in done:
+                continue
+            try:
+                data = covers.get_cover(r, self.logos,
+                                        online=self.settings.get("covers_online", True))
+            except Exception:
+                data = None
+            done.add(r["id"])
+            self.bus.cover_ready.emit(r["id"], data)
+
+    def _small_placeholder(self):
+        if not hasattr(self, "_small_ph"):
+            self._small_ph = self._placeholder(52)
+        return self._small_ph
 
     def _on_cover_ready(self, track_id, data):
         pm = self._rounded(data, 168) if data else None
         self.cover_pix[track_id] = pm or self._placeholder(168)
         self._queue_sig = None            # forcer le rafraîchissement des icônes
         self._show_current_cover()
+        for i, r in enumerate(self.shown_rows):      # vignette dans la liste des morceaux
+            if r["id"] == track_id:
+                it = self.table.item(i, 1)
+                if it is not None:
+                    it.setIcon(QIcon(self.cover_pix[track_id]))
 
     def _show_current_cover(self):
         t = self.engine.now_playing()[0] if self.engine else None
@@ -574,7 +704,7 @@ class MainWindow(QMainWindow):
             return
         pm = self.cover_pix.get(t.id)
         if pm is None:
-            self.want_cover(t.row)
+            self.want_cover(t.row, urgent=True)
             self.cover.setPixmap(self._placeholder(84))
         else:
             self.cover.setPixmap(pm.scaled(84, 84, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -690,6 +820,11 @@ class MainWindow(QMainWindow):
             if is_cur:
                 for c in range(1, 6):
                     cells[c].setFont(bold)
+            pm = self.cover_pix.get(r["id"])
+            if pm is None:
+                self.want_cover(r)                 # chargée au fil de l'eau (internet)
+                pm = self._small_placeholder()
+            cells[1].setIcon(QIcon(pm))
             for c, it in enumerate(cells):
                 self.table.setItem(i, c, it)
             if sel_id == r["id"]:
@@ -710,7 +845,18 @@ class MainWindow(QMainWindow):
         self.btn_play_next.setEnabled(has_sel and playing)
         self.btn_enqueue.setEnabled(has_sel and playing)
         self.btn_next.setEnabled(playing)
-        self.btn_stop.setEnabled(playing)
+        self.btn_stop33.setEnabled(playing)
+        self.btn_pullup.setEnabled(playing)
+        self._update_play_icon()
+
+    def _update_play_icon(self):
+        eng = self.engine
+        running = eng is not None and not eng.paused and not eng.pausing
+        want = "pause" if running else "play"
+        if getattr(self, "_play_icon", None) != want:
+            self._play_icon = want
+            self.btn_play.setIcon(make_icon(want, 18))
+            self.btn_play.setText("  Pause" if running else "  Lecture")
 
     # ---------------------------------------------------------------- lecture
 
@@ -776,6 +922,22 @@ class MainWindow(QMainWindow):
         self.refresh_player()
         self._refill_dots()
 
+    def play_pause(self):
+        eng = self.engine
+        if eng is None:
+            self.play_from_selection()
+        elif eng.paused or eng.pausing:
+            eng.resume()
+        else:
+            eng.pause()
+        self._update_play_icon()
+
+    def styled_stop(self, style):
+        if self.engine is None:
+            return
+        self.engine.stop_soft(style)
+        self._update_play_icon()
+
     def soft_stop(self):
         """Bouton Stop : sortie en écho ; 2e appui pendant l'écho = arrêt immédiat."""
         if self.engine is None:
@@ -794,6 +956,8 @@ class MainWindow(QMainWindow):
         self.now_info.setText("")
         self.transition_label.setText("")
         self.progress.setValue(0)
+        self.remain_label.setText("-0:00")
+        self.mix_badge.set_state(None)
         self.counter.setText("")
         self.cover.setPixmap(self._placeholder(84))
         self.queue_list.clear()
@@ -814,24 +978,36 @@ class MainWindow(QMainWindow):
                             ("jouera ensuite" if front else "ajouté à la file"))
         self.refresh_queue()
 
-    def _priority_index(self):
+    def _queue_pos(self):
         it = self.queue_list.currentItem()
         if it is None:
             return None
-        kind, idx = it.data(Qt.UserRole) or (None, None)
-        return idx if kind == "prioritaire" else None
+        data = it.data(Qt.UserRole)
+        return data[1] if data else None
+
+    def _priority_index(self):          # compatibilité
+        return self._queue_pos()
 
     def remove_from_queue(self):
-        i = self._priority_index()
-        if i is not None and self.engine:
-            self.engine.remove_from_queue(i)
-            self.refresh_queue()
+        i = self._queue_pos()
+        if i is None or self.engine is None:
+            self.status.setText("Choisis d'abord un morceau dans « À suivre »")
+            return
+        if not self.engine.remove_upcoming(i):
+            self.status.setText("Ce morceau est déjà en train de s'enchaîner")
+        self._queue_sig = None
+        self.refresh_queue(select_pos=min(i, self.queue_list.count() - 2))
 
     def move_in_queue(self, delta):
-        i = self._priority_index()
-        if i is not None and self.engine:
-            j = self.engine.move_in_queue(i, delta)
-            self.refresh_queue(select_priority=j)
+        i = self._queue_pos()
+        if i is None or self.engine is None:
+            self.status.setText("Choisis d'abord un morceau dans « À suivre »")
+            return
+        j = self.engine.move_upcoming(i, delta)
+        if j == i and 0 <= i + delta < self.queue_list.count():
+            self.status.setText("Ce morceau est déjà en train de s'enchaîner")
+        self._queue_sig = None
+        self.refresh_queue(select_pos=j)
 
     def _on_volume(self, v):
         if self.engine:
@@ -850,6 +1026,23 @@ class MainWindow(QMainWindow):
             self.stop()
             self.now_info.setText("Arrêté" if stopped else "Fin de la playlist")
             return
+        self._update_play_icon()
+        st = eng.transition_state()
+        if eng.paused:
+            self.mix_badge.set_state(None)
+            self.transition_label.setText("❚❚ en pause — Lecture pour reprendre")
+            return
+        if eng.stopping:
+            self.mix_badge.set_state("pause" if eng.pausing else "stop", 0,
+                                     {"pause": "Pause en écho…", "turntable": "Le disque ralentit…",
+                                      "pullup": "Pull-up !"}.get(eng.stop_style, "Arrêt en écho…"))
+        elif st:
+            kind, frac, why = st
+            tgt = eng.transition_target()
+            name = (tgt.row.get("title") or "") if tgt is not None else ""
+            self.mix_badge.set_state(kind, frac, f"→ {name}" + (f"   ·   {why}" if why else ""))
+        else:
+            self.mix_badge.set_state(None)
         t, pos = eng.now_playing()
         if t is None:
             return
@@ -869,12 +1062,14 @@ class MainWindow(QMainWindow):
         self.now_info.setText(info)
         self.pos_label.setText(_fmt(pos))
         self.len_label.setText(_fmt(t.length))
+        self.remain_label.setText("-" + _fmt(max(0.0, t.length - pos)))
         self.progress.setMaximum(1000)
         self.progress.setValue(int(1000 * pos / max(t.length, 1)))
         kind = eng.in_transition()
         target = eng.transition_target()
         if eng.stopping:
-            self.transition_label.setText("〰 arrêt en écho")
+            self.transition_label.setText({"pause": "❚❚ pause en écho", "turntable": "◉ arrêt 33 tours",
+                                           "pullup": "↺ pull-up"}.get(eng.stop_style, "〰 arrêt en écho"))
         elif kind and target is not None and target.id != t.id:
             name = target.row.get("title") or ""
             name = name if len(name) < 40 else name[:38] + "…"
@@ -904,18 +1099,17 @@ class MainWindow(QMainWindow):
         elif self.current_folder:
             self.show_playlist(self.current_folder, keep_selection=True)
 
-    def refresh_queue(self, select_priority=None):
+    def refresh_queue(self, select_pos=None):
         if self.engine is None:
             return
         items = self.engine.upcoming(40)
         sig = [(k, r["id"]) for k, r in items]
-        if getattr(self, "_queue_sig", None) == sig and select_priority is None:
+        if getattr(self, "_queue_sig", None) == sig and select_pos is None:
             return
         self._queue_sig = sig
-        cur_sel = self._priority_index() if select_priority is None else select_priority
+        cur_sel = self._queue_pos() if select_pos is None else select_pos
         self.queue_list.clear()
-        p = 0
-        for kind, r in items:
+        for pos, (kind, r) in enumerate(items):
             label = f"{r.get('title') or r['filename']}\n{r.get('artist') or ''}"
             icon = {"figé": "🔒 ", "prioritaire": "★ ", "playlist": ""}[kind]
             it = QListWidgetItem(icon + label)
@@ -924,22 +1118,11 @@ class MainWindow(QMainWindow):
                 self.want_cover(r)
                 pm = self._placeholder(76)
             it.setIcon(QIcon(pm))
-            if kind == "prioritaire":
-                it.setData(Qt.UserRole, ("prioritaire", p))
-                it.setForeground(QColor("#ffd479"))
-                if cur_sel == p:
-                    self.queue_list.addItem(it)
-                    self.queue_list.setCurrentItem(it)
-                    p += 1
-                    continue
-                p += 1
-            elif kind == "figé":
-                it.setForeground(QColor("#8fb3ff"))
-                it.setData(Qt.UserRole, ("figé", None))
-            else:
-                it.setForeground(QColor("#8fb3ff"))
-                it.setData(Qt.UserRole, ("playlist", None))
+            it.setData(Qt.UserRole, (kind, pos))
+            it.setForeground(QColor("#ffd479" if kind == "prioritaire" else "#8fb3ff"))
             self.queue_list.addItem(it)
+            if cur_sel == pos:
+                self.queue_list.setCurrentItem(it)
 
     def closeEvent(self, e):
         self.stop()

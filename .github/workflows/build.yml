@@ -50,6 +50,8 @@ jobs:
           # signature locale (« ad hoc ») de tout le paquet : obligatoire sur Mac Apple
           codesign --force --deep --sign - dist/MixApp.app
           codesign --verify --deep --strict dist/MixApp.app
+      - name: Test des pochettes depuis internet (certificats HTTPS dans l'appli)
+        run: dist/MixApp.app/Contents/MacOS/MixApp covertest
       - name: Test de démarrage de l'appli construite (2 fois, à froid)
         run: |
           for essai in 1 2; do
@@ -136,7 +138,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la fichiers
-          TAG="v0.3.${{ github.run_number }}"
+          TAG="v0.4.${{ github.run_number }}"
           gh release create "$TAG" fichiers/* \
             --repo "${{ github.repository }}" \
             --title "MixApp 0.3 (version ${{ github.run_number }})" \

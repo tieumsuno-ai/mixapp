@@ -70,7 +70,11 @@ class Engine:
         # appelé (row mis à jour) quand un morceau a été analysé à la volée
         self.on_analyzed = on_analyzed
         self.volume = 1.0
-        self.stopping = False          # arrêt en écho en cours
+        self.stopping = False          # arrêt (ou mise en pause) en cours
+        self.stop_style = "echo"       # echo | turntable | pullup | pause
+        self.paused = False            # en pause (reprise possible)
+        self._resume: tuple | None = None   # (segment à reprendre, transition prévue)
+        self.last_block = np.zeros((0, 2), np.float32)   # pour l'égaliseur animé
         self.stop_requests = 0
         self._thread = None
         self._stop = False
@@ -101,19 +105,62 @@ class Engine:
         with self.lock:
             self.priority.append(dict(row))
 
+    def _cancel_pending(self, requeue: bool) -> bool:
+        """Annule la transition déjà préparée (si elle n'a pas commencé).
+        requeue : remettre son morceau en tête de file prioritaire. Sous verrou."""
+        tr, seg = self.pending, self.cur
+        if tr is None or seg is None or seg.trans is not None or seg.next is not None:
+            return False
+        if seg.pos > tr.a_end - int(1.0 * SR):        # trop près : l'enchaînement est lancé
+            return False
+        seg.end = len(seg.audio)
+        self.pending = None
+        if requeue:
+            self.priority.appendleft(dict(tr.b.row))
+        return True
+
+    def _flat(self):
+        return list(self.priority) + list(self.auto[self.auto_idx:])
+
+    def _set_flat(self, flat, n_prio):
+        self.priority = deque(flat[:n_prio])
+        self.auto[self.auto_idx:] = flat[n_prio:]
+
+    def remove_upcoming(self, pos: int) -> bool:
+        """Retire le n° `pos` de la liste « À suivre » (telle que renvoyée par upcoming)."""
+        with self.lock:
+            if self.pending is not None:
+                if pos == 0:
+                    return self._cancel_pending(requeue=False)
+                pos -= 1
+            flat = self._flat()
+            if not 0 <= pos < len(flat):
+                return False
+            n_prio = len(self.priority) - (1 if pos < len(self.priority) else 0)
+            del flat[pos]
+            self._set_flat(flat, n_prio)
+            return True
+
+    def move_upcoming(self, pos: int, delta: int) -> int:
+        """Déplace d'un cran le n° `pos` de « À suivre » ; renvoie sa nouvelle place.
+        Un morceau qui monte au-dessus d'un morceau prioritaire devient prioritaire."""
+        with self.lock:
+            target = pos + delta
+            if self.pending is not None and (pos == 0 or target == 0):
+                if not self._cancel_pending(requeue=True):
+                    return pos                         # déjà en train de s'enchaîner
+            off = 1 if self.pending is not None else 0
+            flat = self._flat()
+            i, j = pos - off, target - off
+            if not (0 <= i < len(flat) and 0 <= j < len(flat)):
+                return pos
+            flat[i], flat[j] = flat[j], flat[i]
+            self._set_flat(flat, len(self.priority))
+            return target
+
     def remove_from_queue(self, index: int):
         with self.lock:
             del self.priority[index]
-
-    def move_in_queue(self, index: int, delta: int) -> int:
-        """Déplace le n° `index` de la file prioritaire ; renvoie sa nouvelle place."""
-        with self.lock:
-            j = max(0, min(len(self.priority) - 1, index + delta))
-            if j != index:
-                item = self.priority[index]
-                del self.priority[index]
-                self.priority.insert(j, item)
-            return j
 
     def peek_next(self) -> dict | None:
         with self.lock:
@@ -196,10 +243,13 @@ class Engine:
             if not self.stopping:
                 self.skip_requests += 1
 
-    def stop_soft(self):
-        """Stop : sortie en écho puis silence. Un 2e appui coupe tout de suite."""
+    def stop_soft(self, style: str = "echo"):
+        """Stop avec effet (echo | turntable | pullup). Un 2e appui coupe tout de suite."""
         with self.lock:
-            if self.stopping and self.cur is not None:
+            if self.paused and self.cur is None:
+                self.finished = True
+                return
+            if self.stopping and self.cur is not None and self.stop_style != "pause":
                 # 2e appui : fondu de 30 ms et fin
                 seg = self.cur
                 n = min(int(0.03 * SR), seg.end - seg.pos)
@@ -209,7 +259,52 @@ class Engine:
                 self.pending = None
                 return
             self.stopping = True
+            self.paused = False
+            self._resume = None
+            self.stop_style = style
             self.stop_requests += 1
+
+    def pause(self):
+        """Pause : le son part en écho + fader ; reprise au même endroit."""
+        with self.lock:
+            if self.stopping or self.paused or self.cur is None:
+                return
+            self.stopping = True
+            self.stop_style = "pause"
+            self.stop_requests += 1
+
+    def resume(self):
+        """Reprise après une pause (fondu d'entrée de 60 ms, sur le temps)."""
+        with self.lock:
+            if self._resume is None:
+                return False
+            seg, pending = self._resume
+            self._resume = None
+            n = min(int(0.06 * SR), seg.end - seg.pos)
+            head = seg.audio[seg.pos:seg.pos + n].copy()
+            head *= np.linspace(0, 1, len(head), dtype=np.float32)[:, None]
+            seg.pos += n
+            self.cur = Segment(head, 0, len(head), track=seg.track, trans=None, nxt=seg)
+            self.pending = pending
+            self.paused = False
+            self.stopping = False
+            self.stop_style = "echo"
+            self.finished = False
+        self.log("▶ reprise")
+        return True
+
+    @property
+    def pausing(self) -> bool:
+        return self.stopping and self.stop_style == "pause"
+
+    def transition_state(self):
+        """(type, avancement 0..1, explication) de la transition en cours, ou None."""
+        with self.lock:
+            seg = self.cur
+            if seg is None or seg.trans is None:
+                return None
+            tr = seg.trans
+            return tr.kind, seg.pos / max(1, len(tr.buffer)), tr.info.get("why", "")
 
     # ------------------------------------------------------------ sortie audio
 
@@ -237,6 +332,7 @@ class Engine:
         if over.any():
             x = out[over]
             out[over] = np.sign(x) * (0.75 + 0.2 * np.tanh((np.abs(x) - 0.75) / 0.2))
+        self.last_block = out
         return out
 
     def log(self, msg: str):
@@ -271,6 +367,11 @@ class Engine:
             return
         else:                                             # fin de A sans transition prête
             self.cur = None
+            if self.stopping and self.stop_style == "pause":
+                self.paused = True
+                self.stopping = False
+                self._deferred.append("❚❚ pause")
+                return
             if self.stopping:
                 self.finished = True
                 self.log("■ arrêt")
@@ -318,7 +419,7 @@ class Engine:
 
         # Reprise si la lecture s'est arrêtée faute de transition prête
         with self.lock:
-            idle = self.cur is None and not self.finished
+            idle = self.cur is None and not self.finished and not self.paused
         if idle:
             row = self._pop_next()
             if row is None:
@@ -379,28 +480,47 @@ class Engine:
         return render_echo_out(seg.audio, p, bpm, b)
 
     def _handle_stop(self):
+        from . import effects
         with self.lock:
             self.stop_requests = 0
             seg = self.cur
             if seg is None:
-                self.finished = True
+                if not self.paused:
+                    self.finished = True
                 return
             pos = seg.pos
+            style = self.stop_style
+            pending = self.pending
+        if seg.next is not None and pos + int(0.5 * SR) >= seg.end:
+            with self.lock:                      # court segment de raccord : on attend la suite
+                self.stop_requests += 1
+            return
         a = seg.track
         t = pos / SR + SKIP_SAFETY
-        if seg.trans is None and a is not None and a.analyzed:
-            t = a.next_beat_after(t)
+        if style != "turntable" and seg.trans is None and a is not None and a.analyzed:
+            t = a.next_beat_after(t)                     # l'effet part sur le temps
         bpm = a.bpm if (a is not None and a.analyzed) else 120.0
         p = int(round(t * SR))
-        tail = render_echo_stop(seg.audio, p, bpm)
+        if style == "turntable":
+            tail = effects.render_turntable_stop(seg.audio, p, bpm)
+        elif style == "pullup":
+            tail = effects.render_pullup(seg.audio, p, bpm)
+        else:
+            tail = render_echo_stop(seg.audio, p, bpm)
         with self.lock:
-            if self.cur is seg and seg.pos < p:
+            if self.cur is seg and seg.pos < p and self.stopping:
+                if style == "pause":
+                    # de quoi reprendre exactement là où l'effet commence
+                    keep = Segment(seg.audio, p, seg.end, track=seg.track,
+                                   trans=seg.trans, nxt=seg.next)
+                    self._resume = (keep, pending)
                 seg.end = min(p, seg.end)
                 seg.next = Segment(tail, 0, len(tail))
                 seg.trans = None
                 self.pending = None
-                self.log("〰 arrêt en écho")
-            elif self.cur is not None:
+                self.log({"pause": "❚❚ pause en écho", "turntable": "◉ arrêt 33 tours",
+                          "pullup": "↺ pull-up"}.get(style, "〰 arrêt en écho"))
+            elif self.cur is not None and self.stopping:
                 self.stop_requests += 1          # réessayer
 
     def _handle_skip(self):

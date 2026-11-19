@@ -2,13 +2,12 @@
 
 Ordre de recherche :
 1. cache local (dossier de données de l'appli, « covers ») ;
-2. image intégrée au MP3 (tag ID3), sauf si c'est un **logo** : une image
-   identique présente dans plusieurs morceaux (logo de DJ / de « remix pool »)
-   n'est pas une vraie pochette ;
-3. sur internet (si autorisé) : catalogue iTunes d'Apple, puis Deezer. Seuls
+2. sur internet (si autorisé) : catalogue iTunes d'Apple, puis Deezer. Seuls
    l'artiste et le titre (nettoyés) sont envoyés. Le résultat n'est retenu que
    si l'artiste correspond, pour éviter les mauvaises pochettes ;
-4. à défaut, le logo intégré s'il y en a un.
+3. à défaut, l'image intégrée au MP3 si ce n'est pas un **logo** (image
+   identique dans plusieurs morceaux : logo de DJ / de « remix pool ») ;
+4. sinon rien (l'appli affiche une pochette neutre).
 
 Les recherches infructueuses sont mémorisées 30 jours pour ne pas interroger
 internet à chaque lancement.
@@ -22,6 +21,7 @@ import re
 import time
 import unicodedata
 import urllib.parse
+import ssl
 import urllib.request
 from collections import Counter
 from pathlib import Path
@@ -96,18 +96,36 @@ def clean_artist(artist: str) -> str:
 def _artist_ok(wanted: str, found: str) -> bool:
     w, f = set(_norm(wanted).split()), set(_norm(found).split())
     w -= {"the", "dj", "and", "les", "le", "la"}
-    return bool(w) and len(w & f) >= max(1, len(w) // 2)
+    if w and len(w & f) >= max(1, len(w) // 2):
+        return True
+    # tolère les fautes de frappe des tags (« Euryhmics » pour « Eurythmics »)
+    from difflib import SequenceMatcher
+    a, b = _norm(wanted).replace(" ", ""), _norm(found).replace(" ", "")
+    return len(a) >= 4 and SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def _ssl_context():
+    # L'appli empaquetée n'a pas accès aux certificats du système : on utilise
+    # ceux de certifi (sinon toutes les recherches HTTPS échouent en silence).
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+_CTX = _ssl_context()
 
 
 def _get_json(url: str):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    with urllib.request.urlopen(req, timeout=TIMEOUT, context=_CTX) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
 def _get_bytes(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    with urllib.request.urlopen(req, timeout=TIMEOUT, context=_CTX) as r:
         return r.read()
 
 
@@ -163,8 +181,6 @@ def get_cover(row: dict, logos: set[str], online: bool = True,
 
     emb = embedded(row["path"])
     is_logo = emb is not None and hashlib.md5(emb).hexdigest() in logos
-    if emb and not is_logo:
-        return emb                                   # vraie pochette intégrée : pas de cache
 
     miss = d / f"{key}.none"
     recently_missed = miss.exists() and time.time() - miss.stat().st_mtime < RETRY_AFTER
@@ -180,5 +196,5 @@ def get_cover(row: dict, logos: set[str], online: bool = True,
                     return img
             miss.touch()
         except Exception:
-            pass                                     # pas de réseau : on réessaiera au prochain lancement
-    return emb                                       # le logo, faute de mieux
+            pass                                     # pas de réseau : on réessaiera plus tard
+    return emb if (emb and not is_logo) else None

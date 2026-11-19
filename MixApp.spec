@@ -43,7 +43,9 @@ if sys.platform == "darwin":
         bundle_identifier="fr.mixapp.player",
         info_plist={
             "CFBundleDisplayName": "MixApp",
-            "CFBundleShortVersionString": "0.3.0",
+            "CFBundleDevelopmentRegion": "fr",
+            "CFBundleLocalizations": ["fr"],
+            "CFBundleShortVersionString": "0.4.0",
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.music",
             # Pas d'« App Nap » : macOS ralentirait fortement l'analyse en
