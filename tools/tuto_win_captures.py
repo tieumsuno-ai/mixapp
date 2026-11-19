@@ -168,11 +168,27 @@ def search():
 step("recherche", search)
 snap("recherche", 1.5)
 def first_row():
-    r = main.rectangle()
-    mouse.click(coords=(r.left + 600, r.top + 163))      # 1re ligne des résultats
+    cells = [e for e in main.descendants(control_type="DataItem")
+             if "Playa" in (e.window_text() or "")]
+    log("cellules trouvées :", len(cells))
+    if cells:
+        cells[0].click_input()
+    else:
+        r = main.rectangle()
+        mouse.click(coords=(r.left + 600, r.top + 170))
 step("sélection résultat", first_row)
 snap("recherche_selection", 0.8)
-step("jouer ensuite", lambda: click(main, title="Jouer ensuite", control_type="Button"))
+def play_next():
+    b = main.child_window(title="Jouer ensuite", control_type="Button").wrapper_object()
+    log("Jouer ensuite actif :", b.is_enabled())
+    if b.is_enabled():
+        b.click_input()
+    else:                                    # double-clic sur la ligne = « Jouer ensuite »
+        cells = [e for e in main.descendants(control_type="DataItem")
+                 if "Playa" in (e.window_text() or "")]
+        if cells:
+            cells[0].double_click_input()
+step("jouer ensuite", play_next)
 snap("jouer_ensuite", 1.5)
 step("effacer recherche", lambda: (main.child_window(control_type="Edit", found_index=0)
                                    .wrapper_object().click_input(),
