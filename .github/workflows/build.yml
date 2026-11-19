@@ -7,6 +7,9 @@ name: Installateurs MixApp
 
 on:
   push:
+    paths-ignore:
+      - "tools/tuto_*"
+      - ".github/workflows/tuto-windows.yml"
     branches: [main]
   workflow_dispatch:
 

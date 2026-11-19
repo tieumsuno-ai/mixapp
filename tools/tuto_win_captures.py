@@ -66,6 +66,14 @@ def click(win, **kw):
 env = dict(os.environ, MIXAPP_FAKE_AUDIO="1")
 appdata = Path(os.environ["APPDATA"]) / "MixApp"
 
+# fenêtres de la machine de test (console…) réduites, pochettes en ligne coupées
+# (musique fictive : on garde les pochettes intégrées aux MP3 de démo)
+subprocess.run(["powershell", "-NoProfile", "-Command",
+                "(New-Object -ComObject Shell.Application).MinimizeAll()"], capture_output=True)
+time.sleep(2)
+appdata.mkdir(parents=True, exist_ok=True)
+(appdata / "settings.json").write_text(json.dumps({"covers_online": False, "volume": 0.9}))
+
 # ------------------------------------------------------------------ 1. installateur
 log("== installateur")
 subprocess.Popen([SETUP], env=env)
@@ -114,7 +122,7 @@ if str(MUSIC) not in roots:
     log("dossier réglé directement")
     subprocess.run(["taskkill", "/IM", "MixApp.exe", "/F"], capture_output=True)
     time.sleep(2)
-    st.write_text(json.dumps({"roots": [str(MUSIC)], "volume": 0.9}))
+    st.write_text(json.dumps({"roots": [str(MUSIC)], "volume": 0.9, "covers_online": False}))
     exe = Path(os.environ["LOCALAPPDATA"]) / "Programs" / "MixApp" / "MixApp.exe"
     subprocess.Popen([str(exe)], env=env)
 
@@ -166,12 +174,12 @@ step("playlist 2", lambda: click(main, title="Soirée Disco", control_type="List
 snap("file_attente", 1.5)
 
 # temps forts
-step("temps forts", lambda: click(main, title_re=".*Temps forts.*", control_type="Button"))
+step("temps forts", lambda: click(main, title_re=".*Temps forts.*"))
 snap("temps_forts", 1.5)
 step("menu durée", lambda: click(main, control_type="ComboBox"))
 snap("temps_forts_menu", 1.0)
 step("fermer menu", lambda: keyboard.send_keys("{ESC}"))
-step("temps forts off", lambda: click(main, title_re=".*Temps forts.*", control_type="Button"))
+step("temps forts off", lambda: click(main, title_re=".*Temps forts.*"))
 
 # timeline : on avance vers la fin pour voir un enchaînement
 def seek():
@@ -180,26 +188,12 @@ def seek():
         bar = el
     r = bar.rectangle()
     snap("timeline_avant", 0.5)
-    mouse.click(coords=(int(r.left + 0.86 * (r.right - r.left)), int((r.top + r.bottom) / 2)))
+    mouse.click(coords=(int(r.left + 0.58 * (r.right - r.left)), int((r.top + r.bottom) / 2)))
 step("timeline", seek)
 snap("timeline_apres", 1.0)
-t0 = time.time()
-got = False
-while time.time() - t0 < 90:
-    time.sleep(2)
-    try:
-        txt = " ".join(e.window_text() for e in main.descendants(control_type="Text"))
-    except Exception:
-        txt = ""
-    if "mix calé vers" in txt or "écho vers" in txt:
-        time.sleep(3)
-        snap("mix_en_cours", 0)
-        time.sleep(4)
-        snap("mix_en_cours_2", 0)
-        got = True
-        break
-log("enchaînement vu :", got)
-time.sleep(12)
+for k in range(12):                     # l'enchaînement arrive ~20 s plus tard
+    snap(f"vers_mix_{k:02d}", 3.0)
+time.sleep(5)
 
 # boutons du lecteur
 step("pause", lambda: click(main, title_re=".*Pause.*", control_type="Button"))

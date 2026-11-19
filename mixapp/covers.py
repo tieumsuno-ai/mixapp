@@ -103,13 +103,25 @@ def clean_artist(artist: str) -> str:
 
 def _artist_ok(wanted: str, found: str) -> bool:
     w, f = set(_norm(wanted).split()), set(_norm(found).split())
-    w -= {"the", "dj", "and", "les", "le", "la"}
-    if w and len(w & f) >= max(1, len(w) // 2):
+    w -= {"the", "dj", "and", "les", "le", "la", "los", "el"}
+    if w and len(w & f) >= max(1, -(-len(w) * 2 // 3)):     # au moins 2/3 des mots
         return True
     # tolère les fautes de frappe des tags (« Euryhmics » pour « Eurythmics »)
     from difflib import SequenceMatcher
     a, b = _norm(wanted).replace(" ", ""), _norm(found).replace(" ", "")
     return len(a) >= 4 and SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def _title_ok(wanted: str, found: str) -> bool:
+    """Le titre trouvé doit vraiment correspondre (sinon : mauvaise pochette)."""
+    w = set(_norm(clean_title(wanted)).split()) - {"the", "le", "la", "les", "a"}
+    f = set(_norm(clean_title(found)).split())
+    if not w:
+        return False
+    if len(w & f) >= max(1, -(-len(w) * 2 // 3)):
+        return True
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, _norm(clean_title(wanted)), _norm(clean_title(found))).ratio() >= 0.8
 
 
 def _any_artist_ok(wanted: list[str], found: str) -> bool:
@@ -184,7 +196,8 @@ def search_itunes(artist: str, title: str, fetch=_get_json, accept=None) -> str 
                                 "country": "FR"})
     data = fetch(f"https://itunes.apple.com/search?{q}")
     for res in data.get("results", []):
-        if _any_artist_ok(accept or [artist], res.get("artistName", "")) and res.get("artworkUrl100"):
+        if (_any_artist_ok(accept or [artist], res.get("artistName", "")) and res.get("artworkUrl100")
+                and _title_ok(title, res.get("trackName", ""))):
             return res["artworkUrl100"].replace("100x100bb", "600x600bb")
     return None
 
@@ -193,7 +206,8 @@ def search_deezer(artist: str, title: str, fetch=_get_json, accept=None) -> str 
     q = urllib.parse.quote(f"{artist} {title}")
     data = fetch(f"https://api.deezer.com/search?q={q}&limit=15")
     for res in data.get("data", []):
-        if _any_artist_ok(accept or [artist], (res.get("artist") or {}).get("name", "")):
+        if (_any_artist_ok(accept or [artist], (res.get("artist") or {}).get("name", ""))
+                and _title_ok(title, res.get("title", ""))):
             url = (res.get("album") or {}).get("cover_big")
             if url:
                 return url
@@ -205,7 +219,8 @@ def search_artist_picture(artist: str, fetch=_get_json) -> str | None:
     q = urllib.parse.quote(artist)
     data = fetch(f"https://api.deezer.com/search/artist?q={q}&limit=5")
     for res in data.get("data", []):
-        if _artist_ok(artist, res.get("name", "")) and res.get("picture_big") \
+        if _norm(artist).replace(" ", "") == _norm(res.get("name", "")).replace(" ", "") \
+                and res.get("picture_big") \
                 and "/artist//" not in res.get("picture_big", ""):
             return res["picture_big"]
     return None
