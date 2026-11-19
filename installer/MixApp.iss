@@ -3,7 +3,7 @@
 [Setup]
 AppId={{6F2C3B1E-4A7D-4E8B-9C21-5D0A7F3E2B10}
 AppName=MixApp
-AppVersion=0.3.0
+AppVersion=0.4.0
 AppPublisher=MixApp
 DefaultDirName={localappdata}\Programs\MixApp
 DefaultGroupName=MixApp

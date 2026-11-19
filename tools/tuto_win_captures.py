@@ -1,0 +1,221 @@
+"""Captures d'écran réelles de l'installation et de l'utilisation de MixApp
+sous Windows, pour le tutoriel. Lancé par GitHub Actions (windows-latest).
+
+    python tools/tuto_win_captures.py installateur.exe dossier_musique dossier_captures
+"""
+
+import json
+import os
+import sqlite3
+import subprocess
+import sys
+import time
+import traceback
+from pathlib import Path
+
+from PIL import ImageGrab
+from pywinauto import Desktop, keyboard, mouse
+
+SETUP, MUSIC, OUT = sys.argv[1], Path(sys.argv[2]).resolve(), Path(sys.argv[3])
+OUT.mkdir(parents=True, exist_ok=True)
+LOG = []
+N = [0]
+
+
+def log(*a):
+    msg = " ".join(str(x) for x in a)
+    print(msg, flush=True)
+    LOG.append(msg)
+
+
+def snap(name, wait=1.2):
+    time.sleep(wait)
+    N[0] += 1
+    f = OUT / f"{N[0]:02d}_{name}.png"
+    ImageGrab.grab(all_screens=True).save(f)
+    log("capture", f.name)
+
+
+def step(label, fn):
+    try:
+        fn()
+    except Exception:
+        log(f"⚠ étape « {label} » :", traceback.format_exc().splitlines()[-1])
+
+
+def find_window(title_re, timeout=60):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        for w in Desktop(backend="uia").windows():
+            try:
+                import re
+                if re.search(title_re, w.window_text() or ""):
+                    return w
+            except Exception:
+                pass
+        time.sleep(0.5)
+    raise TimeoutError(title_re)
+
+
+def click(win, **kw):
+    el = win.child_window(**kw).wrapper_object()
+    el.click_input()
+    return el
+
+
+env = dict(os.environ, MIXAPP_FAKE_AUDIO="1")
+appdata = Path(os.environ["APPDATA"]) / "MixApp"
+
+# ------------------------------------------------------------------ 1. installateur
+log("== installateur")
+subprocess.Popen([SETUP], env=env)
+wiz = find_window(r"(Installation|Setup).*MixApp|MixApp.*(Installation|Setup)", 90)
+wiz.set_focus()
+snap("install_dossier", 2.5)                      # page « Dossier de destination »
+keyboard.send_keys("{ENTER}")
+snap("install_taches", 2.0)                        # page « Tâches supplémentaires »
+step("icône bureau", lambda: click(wiz, title_re=".*icône sur le Bureau.*"))
+snap("install_taches_cochee", 0.8)
+keyboard.send_keys("{ENTER}")
+snap("install_pret", 2.0)                          # page « Prêt à installer »
+keyboard.send_keys("{ENTER}")
+snap("install_en_cours", 1.0)
+time.sleep(25)
+snap("install_fin", 1.0)                           # page « Fin de l'installation »
+keyboard.send_keys("{ENTER}")                      # « Terminer » (lance MixApp)
+
+# ------------------------------------------------------------------ 2. premier lancement
+log("== premier lancement")
+box = None
+try:
+    box = find_window(r"^MixApp$", 120)
+    snap("bienvenue", 3.0)
+    keyboard.send_keys("{ENTER}")                  # ferme « Bienvenue »
+    snap("choix_dossier", 3.0)
+    dlg = find_window(r"Dossier de musique", 20)
+
+    def pick():
+        ed = dlg.child_window(title_re="Dossier.*", control_type="Edit").wrapper_object()
+        ed.set_edit_text(str(MUSIC))
+        snap("choix_dossier_saisi", 0.8)
+        click(dlg, title_re="Sélectionner.*dossier", control_type="Button")
+    step("choix du dossier", pick)
+except Exception:
+    log("⚠ premier lancement :", traceback.format_exc().splitlines()[-1])
+
+# si le choix du dossier n'a pas abouti, on le règle directement
+time.sleep(3)
+st = appdata / "settings.json"
+try:
+    roots = json.loads(st.read_text()).get("roots", [])
+except Exception:
+    roots = []
+if str(MUSIC) not in roots:
+    log("dossier réglé directement")
+    subprocess.run(["taskkill", "/IM", "MixApp.exe", "/F"], capture_output=True)
+    time.sleep(2)
+    st.write_text(json.dumps({"roots": [str(MUSIC)], "volume": 0.9}))
+    exe = Path(os.environ["LOCALAPPDATA"]) / "Programs" / "MixApp" / "MixApp.exe"
+    subprocess.Popen([str(exe)], env=env)
+
+# ------------------------------------------------------------------ 3. analyse
+log("== analyse")
+db = appdata / "library.db"
+for i in range(120):
+    time.sleep(3)
+    try:
+        c = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=10)
+        n, tot = c.execute("select count(bpm), count(*) from tracks").fetchone()
+        c.close()
+    except Exception:
+        n, tot = 0, 0
+    if i == 3:
+        snap("analyse_en_cours", 0)
+    if tot and n >= tot:
+        break
+log("morceaux analysés :", n, "/", tot)
+time.sleep(8)                                       # pochettes
+
+main = find_window(r"^MixApp$", 30)
+step("agrandir", lambda: main.maximize())
+time.sleep(2)
+main.set_focus()
+snap("fenetre", 1.5)
+
+# ------------------------------------------------------------------ 4. utilisation
+log("== utilisation")
+step("playlist", lambda: click(main, title="Soirée Disco", control_type="ListItem"))
+snap("playlist", 1.5)
+step("lancer", lambda: click(main, title_re=".*Lancer la playlist.*", control_type="Button"))
+snap("lecture", 6.0)
+
+def search():
+    ed = main.child_window(control_type="Edit", found_index=0).wrapper_object()
+    ed.click_input()
+    keyboard.send_keys("playa", with_spaces=True)
+step("recherche", search)
+snap("recherche", 1.5)
+step("sélection résultat", lambda: keyboard.send_keys("{ENTER}"))   # focus sur le 1er résultat
+time.sleep(0.6)
+step("jouer ensuite", lambda: click(main, title="Jouer ensuite", control_type="Button"))
+snap("jouer_ensuite", 1.5)
+step("effacer recherche", lambda: (main.child_window(control_type="Edit", found_index=0)
+                                   .wrapper_object().click_input(),
+                                   keyboard.send_keys("^a{BACKSPACE}")))
+step("playlist 2", lambda: click(main, title="Soirée Disco", control_type="ListItem"))
+snap("file_attente", 1.5)
+
+# temps forts
+step("temps forts", lambda: click(main, title_re=".*Temps forts.*", control_type="Button"))
+snap("temps_forts", 1.5)
+step("menu durée", lambda: click(main, control_type="ComboBox"))
+snap("temps_forts_menu", 1.0)
+step("fermer menu", lambda: keyboard.send_keys("{ESC}"))
+step("temps forts off", lambda: click(main, title_re=".*Temps forts.*", control_type="Button"))
+
+# timeline : on avance vers la fin pour voir un enchaînement
+def seek():
+    bar = None
+    for el in main.descendants(control_type="ProgressBar"):
+        bar = el
+    r = bar.rectangle()
+    snap("timeline_avant", 0.5)
+    mouse.click(coords=(int(r.left + 0.86 * (r.right - r.left)), int((r.top + r.bottom) / 2)))
+step("timeline", seek)
+snap("timeline_apres", 1.0)
+t0 = time.time()
+got = False
+while time.time() - t0 < 90:
+    time.sleep(2)
+    try:
+        txt = " ".join(e.window_text() for e in main.descendants(control_type="Text"))
+    except Exception:
+        txt = ""
+    if "mix calé vers" in txt or "écho vers" in txt:
+        time.sleep(3)
+        snap("mix_en_cours", 0)
+        time.sleep(4)
+        snap("mix_en_cours_2", 0)
+        got = True
+        break
+log("enchaînement vu :", got)
+time.sleep(12)
+
+# boutons du lecteur
+step("pause", lambda: click(main, title_re=".*Pause.*", control_type="Button"))
+snap("pause_echo", 0.8)
+time.sleep(5)
+snap("en_pause", 0)
+step("reprise", lambda: click(main, title_re=".*Lecture.*", control_type="Button"))
+snap("reprise", 3.0)
+step("suivant", lambda: click(main, title_re=".*Suivant.*", control_type="Button"))
+snap("suivant_echo", 0.8)
+time.sleep(10)
+step("stop 33", lambda: click(main, title_re=".*Stop 33.*", control_type="Button"))
+snap("stop_33", 0.7)
+time.sleep(5)
+snap("arrete", 0)
+
+(OUT / "journal.txt").write_text("\n".join(LOG), encoding="utf-8")
+subprocess.run(["taskkill", "/IM", "MixApp.exe", "/F"], capture_output=True)
+log("terminé")
