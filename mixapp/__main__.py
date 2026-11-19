@@ -79,10 +79,21 @@ def main(argv=None):
 
     if a.cmd == "covertest":
         from . import covers
-        url = covers.search_online("Eurythmics", "Sweet Dreams [www.fuvi-clan.com]")
-        img = covers._get_bytes(url) if url else b""
-        print("pochette :", url, len(img), "octets")
-        return 0 if len(img) > 1000 else 1
+        cases = [("Euryhmics", "Sweet Dreams [www.fuvi-clan.com]"),
+                 ("Stef Konstan", "Bruno Mars - 24K Magic (Stef Konstan Edit)"),
+                 ("Jungeli, Abou Debeing, Alonzo, Imen Es & Lossa", "Petit Génie (Extended Mix)"),
+                 ("Tropic Music", "Talina - Ca va bouger (feat. Meiway, Décibel & Big Tom)"),
+                 ("Decibel, Dr, Dr", "Ambiance tropicale, Kiss Kiss")]
+        found = 0
+        for art, tit in cases:
+            try:
+                url = covers.search_online(art, tit)
+            except Exception as e:
+                url = f"ERREUR {e}"
+            found += bool(url and url.startswith("http"))
+            print(f"pochette : {tit[:40]:40} → {url}")
+        print(f"{found}/{len(cases)} trouvées")
+        return 0 if found >= 3 else 1
 
     conn = db.connect(a.db)
 

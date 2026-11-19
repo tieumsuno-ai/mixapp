@@ -31,7 +31,7 @@ from mutagen.id3 import ID3
 
 from .db import data_dir
 
-RETRY_AFTER = 30 * 24 * 3600
+RETRY_AFTER = 7 * 24 * 3600
 TIMEOUT = 6
 USER_AGENT = "MixApp/0.3 (lecteur personnel)"
 
@@ -88,9 +88,17 @@ def clean_title(title: str) -> str:
     return re.sub(r"\s+", " ", t).strip(" -_")
 
 
+_SEP = re.compile(r"\s*(?:,|&|\+|/|;|\s(?:feat\.?|ft\.?|featuring|x|vs\.?|with|et|and)\s)\s*", re.I)
+
+
+def artists_of(artist: str) -> list[str]:
+    """Tous les artistes crédités (« A & B feat. C » → [A, B, C])."""
+    return [x.strip() for x in _SEP.split(artist or "") if x and x.strip()]
+
+
 def clean_artist(artist: str) -> str:
-    a = re.split(r"\s(?:feat\.?|ft\.?|&|,|x|vs\.?|with)\s", artist or "", flags=re.I)[0]
-    return re.sub(r"\s+", " ", a).strip()
+    a = artists_of(artist)
+    return a[0] if a else ""
 
 
 def _artist_ok(wanted: str, found: str) -> bool:
@@ -102,6 +110,28 @@ def _artist_ok(wanted: str, found: str) -> bool:
     from difflib import SequenceMatcher
     a, b = _norm(wanted).replace(" ", ""), _norm(found).replace(" ", "")
     return len(a) >= 4 and SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def _any_artist_ok(wanted: list[str], found: str) -> bool:
+    return any(_artist_ok(w, found) for w in wanted)
+
+
+def _queries(artist: str, title: str):
+    """Variantes à essayer, de la plus précise à la plus large :
+    (artiste pour la recherche, titre, artistes acceptés)."""
+    arts = artists_of(artist)
+    t = clean_title(title)
+    out = []
+    # « Bruno Mars - 24K Magic » dans le titre : l'artiste est dans le titre
+    if " - " in t:
+        left, right = [x.strip() for x in t.split(" - ", 1)]
+        la = artists_of(left)
+        out.append((la[0] if la else left, clean_title(right), la + arts))
+    if arts and t:
+        out.append((arts[0], t, arts))
+        for other in arts[1:3]:
+            out.append((other, t, arts))
+    return out
 
 
 def _ssl_context():
@@ -149,20 +179,72 @@ def search_deezer(artist: str, title: str, fetch=_get_json) -> str | None:
     return None
 
 
+def search_itunes(artist: str, title: str, fetch=_get_json, accept=None) -> str | None:
+    q = urllib.parse.urlencode({"term": f"{artist} {title}", "entity": "song", "limit": 15,
+                                "country": "FR"})
+    data = fetch(f"https://itunes.apple.com/search?{q}")
+    for res in data.get("results", []):
+        if _any_artist_ok(accept or [artist], res.get("artistName", "")) and res.get("artworkUrl100"):
+            return res["artworkUrl100"].replace("100x100bb", "600x600bb")
+    return None
+
+
+def search_deezer(artist: str, title: str, fetch=_get_json, accept=None) -> str | None:
+    q = urllib.parse.quote(f"{artist} {title}")
+    data = fetch(f"https://api.deezer.com/search?q={q}&limit=15")
+    for res in data.get("data", []):
+        if _any_artist_ok(accept or [artist], (res.get("artist") or {}).get("name", "")):
+            url = (res.get("album") or {}).get("cover_big")
+            if url:
+                return url
+    return None
+
+
+def search_artist_picture(artist: str, fetch=_get_json) -> str | None:
+    """Dernier recours : la photo de l'artiste (Deezer)."""
+    q = urllib.parse.quote(artist)
+    data = fetch(f"https://api.deezer.com/search/artist?q={q}&limit=5")
+    for res in data.get("data", []):
+        if _artist_ok(artist, res.get("name", "")) and res.get("picture_big") \
+                and "/artist//" not in res.get("picture_big", ""):
+            return res["picture_big"]
+    return None
+
+
 def search_online(artist: str, title: str, fetch=_get_json) -> str | None:
-    a, t = clean_artist(artist), clean_title(title)
-    if not (a and t):
-        return None
-    errors = 0
-    for fn in (search_itunes, search_deezer):
+    tries = errors = 0
+    qs = _queries(artist, title)
+    for a, t, accept in qs:
+        if not (a and t):
+            continue
+        for fn in (search_itunes, search_deezer):
+            tries += 1
+            try:
+                url = fn(a, t, fetch, accept)
+                if url:
+                    return url
+            except Exception:
+                errors += 1
+    # titre seul (artiste mal écrit ou absent des tags)
+    t = clean_title(title)
+    accept = artists_of(artist)
+    if t and accept:
         try:
-            url = fn(a, t, fetch)
+            tries += 1
+            url = search_itunes("", t, fetch, accept)
             if url:
                 return url
         except Exception:
             errors += 1
-    if errors == 2:              # aucun catalogue joignable (pas de réseau…)
+    if tries and errors == tries:              # aucun catalogue joignable (pas de réseau…)
         raise ConnectionError("catalogues injoignables")
+    for a in artists_of(artist)[:2]:
+        try:
+            url = search_artist_picture(a, fetch)
+            if url:
+                return url
+        except Exception:
+            pass
     return None
 
 
@@ -182,7 +264,7 @@ def get_cover(row: dict, logos: set[str], online: bool = True,
     emb = embedded(row["path"])
     is_logo = emb is not None and hashlib.md5(emb).hexdigest() in logos
 
-    miss = d / f"{key}.none"
+    miss = d / f"{key}.none2"
     recently_missed = miss.exists() and time.time() - miss.stat().st_mtime < RETRY_AFTER
     if online and not recently_missed:
         try:
