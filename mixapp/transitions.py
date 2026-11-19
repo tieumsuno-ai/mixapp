@@ -347,9 +347,16 @@ def plan_beatmatch(a: Track, b: Track):
             L = 4
     if abs(r - 1) > 0.05:              # gros écart de tempo : glissement court
         L = min(L, 8)
+    hl = b.row.get("_hl_mix_bars") or a.row.get("_hl_mix_bars")
+    if hl:
+        # mode « temps forts » : on entre en plein morceau (souvent chanté) →
+        # superposition courte, pas de transposition
+        L, shift = int(hl), 0
     ov_a = _overlap_start(a, L)
     # le « drop » de b (fin de son intro) tombe à la fin de la superposition
     b_start = max(b.first_beat, b.intro_end - L * b.bar)
+    if b.row.get("_hl_entry") is not None:
+        b_start = float(b.row["_hl_entry"])
     # les kicks sont-ils assez nets aux deux endroits pour un calage propre ?
     n = 4 * L
     sa = _grid_phase(_slice(a.audio, int(ov_a * SR), int(L * a.bar * SR)),
@@ -360,8 +367,10 @@ def plan_beatmatch(a: Track, b: Track):
         return None
     if shift:
         key = "transposé"
+    if hl:
+        key = key if key != "conflit" else "conflit_hl"
     why = {"transposé": f"clé de l'entrant ajustée ({shift:+d} demi-ton) puis rétablie",
-           "ok": "clés compatibles", "proche": "clés voisines", "conflit": "clés éloignées : mélange court",
+           "ok": "clés compatibles", "proche": "clés voisines", "conflit": "clés éloignées : mélange court", "conflit_hl": "clés éloignées",
            "?": "clé inconnue"}[key]
     return dict(r=r, L=L, ov_a=ov_a, b_start=b_start, key=key, sharp=(sa, sb), shift=shift,
                 why=f"Mix au tempo {a.bpm:.0f}→{b.bpm:.0f} BPM, {why}, {L} mesures")
@@ -596,7 +605,7 @@ def render_auto(a: Track, b: Track) -> Transition:
         # morceau (début d'outro), b démarre proprement sur son 1er temps
         t = min(a.outro_start, a.grid_end - 2 * a.bar)
         pos = int(round(a.next_beat_after(t) * SR))
-        tr = render_echo_out(a.audio, pos, a.bpm, b)
+        tr = render_echo_out(a.audio, pos, a.bpm, b, b_start=b.row.get("_hl_entry"))
         r = b.bpm / a.bpm if b.analyzed else 1
         tr.info["why"] = (f"Écho : tempos trop éloignés ({a.bpm:.0f}→{b.bpm:.0f} BPM)"
                           if abs(r - 1) > MAX_STRETCH else "Écho : rythme pas assez net pour caler")

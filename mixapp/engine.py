@@ -36,6 +36,7 @@ from collections import deque
 
 import numpy as np
 
+from . import highlights as HL
 from .transitions import (SR, Track, Transition, load_track, lock_point,
                           render_auto, render_echo_out, render_echo_stop)
 
@@ -75,6 +76,8 @@ class Engine:
         self.paused = False            # en pause (reprise possible)
         self._resume: tuple | None = None   # (segment à reprendre, transition prévue)
         self.last_block = np.zeros((0, 2), np.float32)   # pour l'égaliseur animé
+        self.hl_mode: str | None = None        # « temps forts » : None | "court" | "moyen"
+        self._hl_info: dict[int, dict | None] = {}
         self.stop_requests = 0
         self._thread = None
         self._stop = False
@@ -157,6 +160,33 @@ class Engine:
             flat[i], flat[j] = flat[j], flat[i]
             self._set_flat(flat, len(self.priority))
             return target
+
+    # ------------------------------------------------------------ temps forts
+    def set_highlights(self, mode: str | None):
+        """Active / désactive le mode « temps forts » (à tout moment).
+        L'enchaînement déjà préparé est recalculé s'il n'a pas commencé."""
+        with self.lock:
+            if mode == self.hl_mode:
+                return
+            self.hl_mode = mode
+            self._cancel_pending(requeue=True)
+        self.log({None: "Temps forts désactivés", "court": "Temps forts : court",
+                  "moyen": "Temps forts : moyen"}.get(mode, ""))
+
+    def hl_window(self, t: Track) -> dict | None:
+        """Passage retenu pour ce morceau dans le mode actuel (ou None)."""
+        if not self.hl_mode or t is None or not t.analyzed:
+            return None
+        base = HL.view(t, None)
+        if t.id not in self._hl_info:
+            try:
+                self._hl_info[t.id] = HL.find(base)
+            except Exception:
+                self._hl_info[t.id] = None
+        return HL.window(base, self.hl_mode, self._hl_info[t.id])
+
+    def _view(self, t: Track, now: float | None = None) -> Track:
+        return HL.view(t, self.hl_window(t), now)
 
     def seek(self, seconds: float) -> bool:
         """Déplace la lecture dans le morceau en cours (fondu croisé de 20 ms).
@@ -480,13 +510,16 @@ class Engine:
                      and self.pending is None)
             if ready:
                 a = seg.track
-                due = seg.pos / SR >= lock_point(a)
-        if not ready or not due:
+                now = seg.pos / SR
+        if not ready:
+            return
+        a = self._view(a, now)
+        if now < lock_point(a):
             return
         row = self._pop_next()
         if row is None:
             return
-        b = self._get_track(row)
+        b = self._view(self._get_track(row))
         tr = render_auto(a, b)
         with self.lock:
             if self.cur is seg and seg.pos < tr.a_end - int(0.05 * SR):
@@ -512,7 +545,8 @@ class Engine:
         else:
             bpm = a.bpm if a.analyzed else 120.0
         p = int(round(t * SR))
-        return render_echo_out(seg.audio, p, bpm, b)
+        b = self._view(b)
+        return render_echo_out(seg.audio, p, bpm, b, b_start=b.row.get("_hl_entry"))
 
     def _handle_stop(self):
         from . import effects

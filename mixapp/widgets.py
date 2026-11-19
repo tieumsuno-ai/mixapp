@@ -246,6 +246,21 @@ class SeekBar(QProgressBar):
         self.setMouseTracking(True)
         self.dragging = False
         self.seekable = True
+        self.zone = None            # (début, fin) en fraction : passage « temps forts »
+
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        if self.zone:
+            a, b = self.zone
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            col = QColor("#e0a526")
+            col.setAlpha(150)
+            p.setPen(Qt.NoPen)
+            p.setBrush(col)
+            w, h = self.width(), self.height()
+            p.drawRoundedRect(QRectF(a * w, h - 3, max(2.0, (b - a) * w), 3), 1.5, 1.5)
+            p.end()
 
     def _frac(self, ev):
         return min(max(ev.position().x() / max(1, self.width()), 0.0), 1.0)

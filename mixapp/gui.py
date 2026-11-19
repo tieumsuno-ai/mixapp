@@ -27,7 +27,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QPainter,
                            QPainterPath, QPixmap, QShortcut)
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFrame,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QProgressBar,
                                QPushButton, QSlider, QSplitter, QTableWidget,
@@ -76,6 +76,11 @@ QPushButton#deck:hover { background: #343947; }
 QPushButton#deck:disabled, QPushButton#next:disabled { color: #666; background: #22252d; border-color: #2a2e38; }
 QPushButton#flat { background: transparent; border: none; padding: 6px; }
 QPushButton#flat:hover { background: #2a2e38; }
+QPushButton#hl { background: #2a2e38; border: 1px solid #3a4050; color: #c8cdd8;
+            font-weight: 600; padding: 8px 12px; }
+QPushButton#hl:checked { background: #b8860b; border-color: #e0a526; color: #fff; }
+QComboBox { background: #22252d; border: 1px solid #333844; border-radius: 8px; padding: 6px 10px; color: #e6e6e6; }
+QComboBox QAbstractItemView { background: #22252d; color: #e6e6e6; selection-background-color: #2f3b66; }
 QLabel#remain { color: #e6e6e6; font-weight: 600; min-width: 52px; }
 QLabel#counter { color: #c8cdd8; font-size: 13px; }
 QLabel#section { color: #8a90a0; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
@@ -224,6 +229,7 @@ class MainWindow(QMainWindow):
         self.mode = "playlist"            # ou "search"
         self._analysis_running = False
         self._analysis_again = False
+        self._hl_cache: dict = {}
         self.played_ids: set[int] = set()     # morceaux déjà joués pendant la session
         self.logos: set[str] = set()          # images « logo » partagées par plusieurs MP3
         self.cover_pix: dict[int, QPixmap] = {}
@@ -429,7 +435,22 @@ class MainWindow(QMainWindow):
         self.btn_next.setToolTip("Sortie en écho vers le morceau suivant (→) · 2 appuis rapides : coupe nette")
         for b in (self.btn_play, self.btn_stop33, self.btn_pullup, self.btn_next):
             row3.addWidget(b)
-        row3.addSpacing(20)
+        row3.addSpacing(14)
+        self.btn_hl = QPushButton("★ Temps forts")
+        self.btn_hl.setObjectName("hl")
+        self.btn_hl.setCheckable(True)
+        self.btn_hl.setToolTip("Ne mixer que les meilleurs moments de chaque morceau (refrain / drop),\n"
+                               "sans les longues intros et outros. Activable à tout moment :\n"
+                               "s'applique dès le prochain enchaînement. (H)")
+        self.hl_len = QComboBox()
+        self.hl_len.addItems(["Court  ~1 min 30", "Moyen  ~2 min 30"])
+        self.hl_len.setToolTip("Durée de chaque morceau en mode Temps forts")
+        hl_set = self.settings.get("highlights")
+        self.btn_hl.setChecked(bool(hl_set))
+        self.hl_len.setCurrentIndex(1 if hl_set == "moyen" or self.settings.get("hl_len") == "moyen" else 0)
+        row3.addWidget(self.btn_hl)
+        row3.addWidget(self.hl_len)
+        row3.addSpacing(14)
         row3.addWidget(QLabel("🔈"))
         self.volume = QSlider(Qt.Horizontal)
         self.volume.setRange(0, 100)
@@ -467,6 +488,8 @@ class MainWindow(QMainWindow):
         self.btn_pullup.clicked.connect(lambda: self.styled_stop("pullup"))
         self.btn_next.clicked.connect(self.skip)
         self.btn_full.clicked.connect(self.toggle_fullscreen)
+        self.btn_hl.toggled.connect(lambda _: self._on_highlights())
+        self.hl_len.currentIndexChanged.connect(lambda _: self._on_highlights())
         self.volume.valueChanged.connect(self._on_volume)
 
         self.bus.log.connect(self._on_log)
@@ -487,6 +510,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_S), self, activated=lambda: self.styled_stop("turntable"))
         QShortcut(QKeySequence(Qt.Key_P), self, activated=lambda: self.styled_stop("pullup"))
         QShortcut(QKeySequence(Qt.Key_Right), self, activated=self.skip)
+        QShortcut(QKeySequence(Qt.Key_H), self, activated=self.btn_hl.toggle)
         for seq in (QKeySequence(Qt.Key_F11), QKeySequence("Ctrl+Meta+F")):
             QShortcut(seq, self, activated=self.toggle_fullscreen)
         QShortcut(QKeySequence(Qt.Key_Escape), self,
@@ -919,6 +943,7 @@ class MainWindow(QMainWindow):
             try:
                 eng = Engine(log=self.bus.log.emit, on_analyzed=on_analyzed)
                 eng.volume = self.volume.value() / 100
+                eng.hl_mode = self._hl_mode()
                 eng.load_playlist(rows, start)
                 self.bus.playback_ready.emit(eng)
             except Exception as e:
@@ -952,6 +977,22 @@ class MainWindow(QMainWindow):
         else:
             eng.pause()
         self._update_play_icon()
+
+    def _hl_mode(self):
+        if not self.btn_hl.isChecked():
+            return None
+        return "moyen" if self.hl_len.currentIndex() == 1 else "court"
+
+    def _on_highlights(self):
+        mode = self._hl_mode()
+        self.settings["highlights"] = mode
+        self.settings["hl_len"] = "moyen" if self.hl_len.currentIndex() == 1 else "court"
+        save_settings(self.settings)
+        if self.engine is not None:
+            threading.Thread(target=self.engine.set_highlights, args=(mode,), daemon=True).start()
+        self.status.setText({None: "Temps forts désactivés : morceaux en entier",
+                             "court": "Temps forts (court) : dès le prochain enchaînement",
+                             "moyen": "Temps forts (moyen) : dès le prochain enchaînement"}[mode])
 
     def _on_seek(self, frac):
         eng = self.engine
@@ -1096,6 +1137,16 @@ class MainWindow(QMainWindow):
         self.len_label.setText(_fmt(t.length))
         self.remain_label.setText("-" + _fmt(max(0.0, t.length - pos)))
         self.progress.seekable = not (eng.in_transition() or eng.stopping)
+        win = self._hl_cache.get((t.id, eng.hl_mode)) if eng.hl_mode else None
+        if eng.hl_mode and (t.id, eng.hl_mode) not in self._hl_cache:
+            self._hl_cache[(t.id, eng.hl_mode)] = None
+            def calc(tr=t, mode=eng.hl_mode, e=eng):
+                try:
+                    self._hl_cache[(tr.id, mode)] = e.hl_window(tr)
+                except Exception:
+                    pass
+            threading.Thread(target=calc, daemon=True).start()
+        self.progress.zone = ((win["entry"] / t.length, win["exit"] / t.length) if win else None)
         if self.progress.dragging:
             pos = self.progress.value() / 1000 * t.length      # aperçu pendant le glisser
             self.pos_label.setText(_fmt(pos))
@@ -1124,7 +1175,8 @@ class MainWindow(QMainWindow):
             cur_left = max(0.0, (t.outro_start if t.analyzed else t.length) - pos)
         else:
             cur_left = max(0.0, t.length - pos)
-        left = cur_left + sum(effective_duration(r, i == len(upcoming) - 1)
+        cap = {"court": 90.0, "moyen": 160.0}.get(eng.hl_mode)
+        left = cur_left + sum(min(effective_duration(r, i == len(upcoming) - 1), cap or 1e9)
                               for i, r in enumerate(upcoming))
         end = time.localtime(time.time() + left)
         self.counter.setText(f"Reste ≈ {_fmt_long(left)} · {len(upcoming)} morceaux · "
