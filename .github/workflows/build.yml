@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-latest
             label: AppleSilicon
           - runner: macos-15-intel
             label: Intel
@@ -30,7 +30,15 @@ jobs:
       - name: Bibliothèques
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pyinstaller
+          if [ "${{ matrix.label }}" = "Intel" ]; then
+            # dernières versions encore fournies toutes prêtes pour les Mac Intel
+            python -m pip install "numba==0.62.1" "llvmlite==0.45.1"
+            echo "numba==0.62.1" > /tmp/contraintes.txt
+            echo "llvmlite==0.45.1" >> /tmp/contraintes.txt
+            python -m pip install -r requirements.txt pyinstaller -c /tmp/contraintes.txt
+          else
+            python -m pip install -r requirements.txt pyinstaller
+          fi
       - name: Vérification rapide (analyse d'un morceau de test)
         run: |
           brew install ffmpeg
