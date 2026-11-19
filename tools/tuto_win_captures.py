@@ -50,7 +50,7 @@ def find_window(title_re, timeout=60):
             try:
                 import re
                 if re.search(title_re, w.window_text() or ""):
-                    return w
+                    return Desktop(backend="uia").window(handle=w.handle)
             except Exception:
                 pass
         time.sleep(0.5)

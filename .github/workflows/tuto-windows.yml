@@ -40,6 +40,9 @@ jobs:
         run: python tools/make_demo_tracks.py "$HOME\Music\Mes playlists"
       - name: Captures
         shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: utf-8
         run: |
           Add-Type -AssemblyName System.Windows.Forms
           [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
