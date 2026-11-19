@@ -62,8 +62,12 @@ jobs:
           n = 0
           for _ in range(72):
               time.sleep(5)
+              if not os.path.exists(db):
+                  continue
               try:
-                  n = sqlite3.connect(db).execute("select count(*) from tracks where bpm is not null").fetchone()[0]
+                  c = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=30)
+                  n = c.execute("select count(*) from tracks where bpm is not null").fetchone()[0]
+                  c.close()
               except Exception:
                   n = 0
               if n >= 4:

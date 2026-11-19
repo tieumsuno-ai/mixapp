@@ -64,7 +64,9 @@ def data_dir() -> Path:
 
 def connect(path: str | Path | None = None) -> sqlite3.Connection:
     db_path = Path(path) if path else data_dir() / "library.db"
-    conn = sqlite3.connect(db_path)
+    # timeout : si la base est momentanément occupée par un autre fil (analyse
+    # en arrière-plan pendant une recherche…), on attend au lieu d'échouer.
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)

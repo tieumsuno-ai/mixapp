@@ -361,13 +361,16 @@ def analyze_library(conn: sqlite3.Connection, workers: int | None = None,
             if err:
                 errors.append(err)
             else:
-                conn.execute(
-                    "UPDATE tracks SET bpm=?, first_beat=?, key_name=?, camelot=?, mix_in=?, "
-                    "intro_end=?, outro_start=?, energy=?, analyzed_mtime=? WHERE id=?",
-                    (res["bpm"], res["first_beat"], res["key_name"], res["camelot"],
-                     res["mix_in"], res["intro_end"], res["outro_start"], res["energy"],
-                     mtimes[track_id], track_id))
-                conn.commit()
+                try:
+                    conn.execute(
+                        "UPDATE tracks SET bpm=?, first_beat=?, key_name=?, camelot=?, mix_in=?, "
+                        "intro_end=?, outro_start=?, energy=?, analyzed_mtime=? WHERE id=?",
+                        (res["bpm"], res["first_beat"], res["key_name"], res["camelot"],
+                         res["mix_in"], res["intro_end"], res["outro_start"], res["energy"],
+                         mtimes[track_id], track_id))
+                    conn.commit()
+                except sqlite3.Error as e:      # ne jamais interrompre toute l'analyse
+                    errors.append(f"enregistrement impossible : {e}")
             if progress:
                 progress(done, len(todo))
     return errors
