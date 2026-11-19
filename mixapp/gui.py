@@ -208,6 +208,7 @@ class Bus(QObject):
     analysis_progress = Signal(int, int)
     playback_ready = Signal(object)       # Engine ou Exception
     cover_ready = Signal(int, object)     # id du morceau, octets de l'image (ou None)
+    hl_ready = Signal()                   # un passage « temps forts » de plus est calculé
 
 
 # ------------------------------------------------------------------ fenêtre principale
@@ -230,6 +231,16 @@ class MainWindow(QMainWindow):
         self._analysis_running = False
         self._analysis_again = False
         self._hl_cache: dict = {}
+        # passages « temps forts » par morceau : {chemin|mtime: {"court": win, "moyen": win}}
+        self._hl_file = db.data_dir() / "highlights.json"
+        try:
+            self._hl_store = json.loads(self._hl_file.read_text())
+        except Exception:
+            self._hl_store = {}
+        self._hl_queue: list = []
+        self._hl_lock = threading.Lock()
+        self._hl_event = threading.Event()
+        threading.Thread(target=self._hl_worker, daemon=True).start()
         self.played_ids: set[int] = set()     # morceaux déjà joués pendant la session
         self.logos: set[str] = set()          # images « logo » partagées par plusieurs MP3
         self.cover_pix: dict[int, QPixmap] = {}
@@ -497,6 +508,9 @@ class MainWindow(QMainWindow):
         self.bus.analysis_progress.connect(self._on_analysis_progress)
         self.bus.playback_ready.connect(self._on_playback_ready)
         self.bus.cover_ready.connect(self._on_cover_ready)
+        self._hl_refresh = QTimer(self, singleShot=True, interval=400)
+        self._hl_refresh.timeout.connect(self._update_playlist_header)
+        self.bus.hl_ready.connect(self._hl_refresh.start)
 
         QShortcut(QKeySequence.Find, self, activated=lambda: (self.search_box.setFocus(),
                                                                self.search_box.selectAll()))
@@ -797,10 +811,23 @@ class MainWindow(QMainWindow):
         self.mode = "playlist"
         self.current_folder = folder
         rows = [dict(r) for r in library.playlist_tracks(self.conn, folder)]
-        total = sum(effective_duration(r, i == len(rows) - 1) for i, r in enumerate(rows))
-        self.tracks_title.setText(f"PLAYLIST · {self._display_name(folder).upper()} · "
-                                  f"{len(rows)} MORCEAUX · {_fmt_long(total)} EN MIX")
         self._fill_table(rows, keep_selection)
+        self._update_playlist_header()
+        self.want_hl(rows)                 # calcule les passages en fond (pour les durées)
+
+    def _update_playlist_header(self):
+        if self.mode != "playlist" or not self.current_folder:
+            return
+        rows = self.shown_rows
+        mode = self._hl_mode()
+        if mode:
+            total = self.mix_duration(rows, mode)
+            extra = f" EN TEMPS FORTS ({mode.upper()})"
+        else:
+            total = sum(effective_duration(r, i == len(rows) - 1) for i, r in enumerate(rows))
+            extra = " EN MIX"
+        self.tracks_title.setText(f"PLAYLIST · {self._display_name(self.current_folder).upper()} · "
+                                  f"{len(rows)} MORCEAUX · {_fmt_long(total)}{extra}")
 
     def _on_search_changed(self, _text):
         self._search_timer.start()
@@ -978,6 +1005,70 @@ class MainWindow(QMainWindow):
             eng.pause()
         self._update_play_icon()
 
+    @staticmethod
+    def _hl_key(r):
+        return f"{r['path']}|{r.get('mtime')}"
+
+    def hl_known(self, r, mode):
+        """Passage retenu (dict) / False si pas de passage / None si pas encore calculé."""
+        e = self._hl_store.get(self._hl_key(r))
+        if e is None:
+            return None
+        return e.get(mode) or False
+
+    def want_hl(self, rows):
+        with self._hl_lock:
+            for r in rows:
+                if r.get("bpm") and self._hl_key(r) not in self._hl_store:
+                    self._hl_queue.append(r)
+        self._hl_event.set()
+
+    def _hl_worker(self):
+        from . import highlights as HL
+        from .transitions import load_track
+        dirty = 0
+        while True:
+            self._hl_event.wait()
+            with self._hl_lock:
+                if not self._hl_queue:
+                    self._hl_event.clear()
+                    if dirty:
+                        try:
+                            self._hl_file.write_text(json.dumps(self._hl_store))
+                        except Exception:
+                            pass
+                        dirty = 0
+                    continue
+                r = self._hl_queue.pop(0)
+            k = self._hl_key(r)
+            if k in self._hl_store:
+                continue
+            try:
+                tr = load_track(r)
+                info = HL.find(tr)
+                self._hl_store[k] = {m: HL.window(tr, m, info) for m in HL.MODES}
+            except Exception:
+                self._hl_store[k] = {}
+            dirty += 1
+            self.bus.hl_ready.emit()
+
+    def mix_duration(self, rows, mode, first_index_plays_from_start=True):
+        """Durée estimée d'une suite de morceaux dans le mix (s)."""
+        total = 0.0
+        for i, r in enumerate(rows):
+            last = i == len(rows) - 1
+            w = self.hl_known(r, mode) if mode else False
+            if w:
+                start = (float(r.get("first_beat") or 0) if (i == 0 and first_index_plays_from_start)
+                         else w["entry"])
+                end = float(r.get("duration") or 0) if last else w["exit"]
+                total += max(0.0, end - start)
+            elif w is None:                        # pas encore calculé : estimation
+                total += min(effective_duration(r, last), {"court": 90.0, "moyen": 160.0}[mode])
+            else:
+                total += effective_duration(r, last)
+        return total
+
     def _hl_mode(self):
         if not self.btn_hl.isChecked():
             return None
@@ -990,6 +1081,7 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
         if self.engine is not None:
             threading.Thread(target=self.engine.set_highlights, args=(mode,), daemon=True).start()
+        self._update_playlist_header()
         self.status.setText({None: "Temps forts désactivés : morceaux en entier",
                              "court": "Temps forts (court) : dès le prochain enchaînement",
                              "moyen": "Temps forts (moyen) : dès le prochain enchaînement"}[mode])
@@ -1171,13 +1263,23 @@ class MainWindow(QMainWindow):
     def _update_counter(self, eng, t, pos):
         """Durée totale, temps restant et heure de fin estimée."""
         upcoming = [r for _, r in eng.upcoming(1000)]
-        if upcoming:
-            cur_left = max(0.0, (t.outro_start if t.analyzed else t.length) - pos)
+        mode = eng.hl_mode
+        if not upcoming:
+            cur_end = t.length
+        elif mode and t.analyzed:
+            w = self.hl_known(t.row.get("_base") or t.row, mode)
+            cur_end = w["exit"] if w else t.outro_start
+            if w and cur_end < pos + 12:            # activé après le passage : sortie à la phrase suivante
+                cur_end = pos + 12 + 4 * t.bar
         else:
-            cur_left = max(0.0, t.length - pos)
-        cap = {"court": 90.0, "moyen": 160.0}.get(eng.hl_mode)
-        left = cur_left + sum(min(effective_duration(r, i == len(upcoming) - 1), cap or 1e9)
-                              for i, r in enumerate(upcoming))
+            cur_end = t.outro_start if t.analyzed else t.length
+        cur_left = max(0.0, cur_end - pos)
+        self.want_hl(upcoming)
+        if mode:
+            left = cur_left + self.mix_duration(upcoming, mode, first_index_plays_from_start=False)
+        else:
+            left = cur_left + sum(effective_duration(r, i == len(upcoming) - 1)
+                                  for i, r in enumerate(upcoming))
         end = time.localtime(time.time() + left)
         self.counter.setText(f"Reste ≈ {_fmt_long(left)} · {len(upcoming)} morceaux · "
                              f"fin vers {end.tm_hour}:{end.tm_min:02d}")
