@@ -7,7 +7,8 @@ Bibliothèques : pedalboard (lecture MP3, Mac/Windows/Linux) et librosa.
 from __future__ import annotations
 
 import sqlite3
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 import librosa
 import numpy as np
@@ -354,7 +355,12 @@ def analyze_library(conn: sqlite3.Connection, workers: int | None = None,
     errors = []
     if not todo:
         return errors
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    # MIXAPP_POOL=thread : analyse dans des fils plutôt que des processus
+    kind = os.environ.get("MIXAPP_POOL", "process")
+    Pool = ThreadPoolExecutor if kind == "thread" else ProcessPoolExecutor
+    if workers is None:
+        workers = max(1, min(4, (os.cpu_count() or 2) - 1))
+    with Pool(max_workers=workers) as pool:
         futures = [pool.submit(_worker, (r["id"], r["path"])) for r in todo]
         for done, fut in enumerate(as_completed(futures), 1):
             track_id, res, err = fut.result()

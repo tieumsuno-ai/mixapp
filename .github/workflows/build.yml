@@ -50,6 +50,16 @@ jobs:
           # signature locale (« ad hoc ») de tout le paquet : obligatoire sur Mac Apple
           codesign --force --deep --sign - dist/MixApp.app
           codesign --verify --deep --strict dist/MixApp.app
+      - name: Diagnostic de l'analyse en parallèle
+        continue-on-error: true
+        run: |
+          echo "### 1. Python normal, processus"
+          python tools/diag_run.py 240 python -m mixapp --db /tmp/d1.db scan /tmp/testmusic
+          echo "### 2. Appli construite, processus"
+          python tools/diag_run.py 240 dist/MixApp.app/Contents/MacOS/MixApp --cli --db /tmp/d2.db scan /tmp/testmusic
+          echo "### 3. Appli construite, fils"
+          MIXAPP_POOL=thread python tools/diag_run.py 240 dist/MixApp.app/Contents/MacOS/MixApp --cli --db /tmp/d3.db scan /tmp/testmusic
+          for d in 1 2 3; do python -c "import sqlite3; print('essai $d :', sqlite3.connect('/tmp/d$d.db').execute('select count(*) from tracks where bpm is not null').fetchone()[0], 'analysés')" || true; done
       - name: Test de démarrage de l'appli construite
         run: |
           mkdir -p "$HOME/Library/Application Support/MixApp"
