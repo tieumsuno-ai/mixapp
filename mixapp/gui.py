@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFr
 
 from . import analysis, covers, db, library, search
 from .engine import Engine
-from .widgets import Equalizer, MixBadge, make_icon
+from .widgets import Equalizer, MixBadge, SeekBar, make_icon
 from .transitions import SR
 
 APP_NAME = "MixApp"
@@ -83,8 +83,9 @@ QLabel#nowTitle { font-size: 20px; font-weight: 700; color: #fff; }
 QLabel#nowInfo { color: #9aa3b5; font-size: 13px; }
 QLabel#transition { color: #f0a43a; font-weight: 600; }
 QFrame#player { background: #1b1e24; border-radius: 12px; }
-QProgressBar { background: #2a2e38; border: none; border-radius: 3px; height: 6px; }
-QProgressBar::chunk { background: #6c8cff; border-radius: 3px; }
+QProgressBar { background: #2a2e38; border: none; border-radius: 4px; height: 8px; }
+QProgressBar::chunk { background: #6c8cff; border-radius: 4px; }
+QProgressBar:hover { background: #343a48; }
 QSlider::groove:horizontal { background: #2a2e38; height: 4px; border-radius: 2px; }
 QSlider::handle:horizontal { background: #e6e6e6; width: 12px; margin: -5px 0; border-radius: 6px; }
 QSplitter::handle { background: #15171c; }
@@ -389,9 +390,10 @@ class MainWindow(QMainWindow):
         pv.addWidget(self.mix_badge)
         row2 = QHBoxLayout()
         self.pos_label = QLabel("0:00")
-        self.progress = QProgressBar()
-        self.progress.setTextVisible(False)
-        self.progress.setMaximumHeight(6)
+        self.progress = SeekBar()
+        self.progress.setMaximumHeight(10)
+        self.progress.setToolTip("Clique ou glisse pour avancer / reculer dans le morceau")
+        self.progress.seek.connect(self._on_seek)
         self.len_label = QLabel("0:00")
         self.len_label.setStyleSheet("color:#8a90a0;")
         self.remain_label = QLabel("-0:00")
@@ -951,6 +953,17 @@ class MainWindow(QMainWindow):
             eng.pause()
         self._update_play_icon()
 
+    def _on_seek(self, frac):
+        eng = self.engine
+        if eng is None:
+            return
+        t, _ = eng.now_playing()
+        if t is None:
+            return
+        if not eng.seek(frac * t.length):
+            self.status.setText("Impossible de se déplacer pendant un enchaînement")
+        self.refresh_player()
+
     def styled_stop(self, style):
         if self.engine is None:
             return
@@ -1082,8 +1095,13 @@ class MainWindow(QMainWindow):
         self.pos_label.setText(_fmt(pos))
         self.len_label.setText(_fmt(t.length))
         self.remain_label.setText("-" + _fmt(max(0.0, t.length - pos)))
-        self.progress.setMaximum(1000)
-        self.progress.setValue(int(1000 * pos / max(t.length, 1)))
+        self.progress.seekable = not (eng.in_transition() or eng.stopping)
+        if self.progress.dragging:
+            pos = self.progress.value() / 1000 * t.length      # aperçu pendant le glisser
+            self.pos_label.setText(_fmt(pos))
+            self.remain_label.setText("-" + _fmt(max(0.0, t.length - pos)))
+        else:
+            self.progress.setValue(int(1000 * pos / max(t.length, 1)))
         kind = eng.in_transition()
         target = eng.transition_target()
         if eng.stopping:

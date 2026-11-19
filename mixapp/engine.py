@@ -158,6 +158,38 @@ class Engine:
             self._set_flat(flat, len(self.priority))
             return target
 
+    def seek(self, seconds: float) -> bool:
+        """Déplace la lecture dans le morceau en cours (fondu croisé de 20 ms).
+        Impossible pendant un enchaînement ou un arrêt."""
+        with self.lock:
+            seg = self.cur
+            if seg is None or seg.trans is not None or self.stopping or self.paused:
+                return False
+            real = seg
+            if seg.next is not None and seg.next.track is seg.track and seg.next.audio is not seg.audio:
+                real = seg.next                       # petit segment de raccord en tête
+            elif seg.next is not None or seg.track is None:
+                return False
+            t = real.track
+            target = int(max(0.0, min(seconds, t.length - 2.0)) * SR)
+            tr = self.pending
+            if tr is not None and target >= tr.a_end - int(1.0 * SR):
+                # on saute au-delà de l'enchaînement prévu : il sera recalculé
+                tr, self.pending = self.pending, None
+                self.priority.appendleft(dict(tr.b.row))
+                tr = None
+            end = tr.a_end if tr is not None else len(real.audio)
+            n = XFADE
+            ramp = np.linspace(0, 1, n, dtype=np.float32)[:, None]
+            out_ = np.zeros((n, 2), np.float32)
+            cur_src = seg.audio[seg.pos:seg.pos + n]
+            out_[:len(cur_src)] = cur_src * (1 - ramp[:len(cur_src)])
+            new_src = real.audio[target:target + n]
+            out_[:len(new_src)] += new_src * ramp[:len(new_src)]
+            real.pos, real.end = target + n, end
+            self.cur = Segment(out_, 0, n, track=t, nxt=real)
+            return True
+
     def remove_from_queue(self, index: int):
         with self.lock:
             del self.priority[index]
@@ -218,6 +250,9 @@ class Engine:
             if seg is None:
                 return None, 0.0
             if seg.trans is None:
+                nxt = seg.next
+                if nxt is not None and nxt.track is seg.track and nxt.audio is not seg.audio:
+                    return seg.track, nxt.pos / SR       # court raccord (reprise, saut)
                 return seg.track, seg.pos / SR
             tr = seg.trans
             # pendant un mix calé, le morceau entrant devient « en cours » à mi-parcours

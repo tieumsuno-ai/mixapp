@@ -7,9 +7,9 @@ import math
 import time
 
 import numpy as np
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QProgressBar, QWidget
 
 
 # ------------------------------------------------------------------ icônes
@@ -228,3 +228,40 @@ class MixBadge(QWidget):
         p.setBrush(accent)
         p.drawRoundedRect(QRectF(knob - 6, cy - 10, 12, 20), 3, 3)
         p.end()
+
+
+# ------------------------------------------------------------------ barre de lecture
+
+class SeekBar(QProgressBar):
+    """Barre de progression cliquable / glissable pour avancer ou reculer."""
+
+    seek = Signal(float)          # fraction 0..1, émise au relâchement
+    dragging_changed = Signal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setTextVisible(False)
+        self.setRange(0, 1000)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMouseTracking(True)
+        self.dragging = False
+        self.seekable = True
+
+    def _frac(self, ev):
+        return min(max(ev.position().x() / max(1, self.width()), 0.0), 1.0)
+
+    def mousePressEvent(self, ev):
+        if ev.button() == Qt.LeftButton and self.seekable:
+            self.dragging = True
+            self.dragging_changed.emit(True)
+            self.setValue(int(1000 * self._frac(ev)))
+
+    def mouseMoveEvent(self, ev):
+        if self.dragging:
+            self.setValue(int(1000 * self._frac(ev)))
+
+    def mouseReleaseEvent(self, ev):
+        if self.dragging:
+            self.dragging = False
+            self.dragging_changed.emit(False)
+            self.seek.emit(self._frac(ev))
