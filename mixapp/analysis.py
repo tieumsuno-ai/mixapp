@@ -355,8 +355,11 @@ def analyze_library(conn: sqlite3.Connection, workers: int | None = None,
     errors = []
     if not todo:
         return errors
-    # MIXAPP_POOL=thread : analyse dans des fils plutôt que des processus
-    kind = os.environ.get("MIXAPP_POOL", "process")
+    # Analyse dans des fils (threads) d'un même processus : aussi rapide sur Mac
+    # (le gros du calcul se fait hors du verrou de Python), et bien plus fiable
+    # dans l'appli empaquetée : pas de copies de l'appli relancées en arrière-plan,
+    # une seule compilation numba. MIXAPP_POOL=process pour des processus séparés.
+    kind = os.environ.get("MIXAPP_POOL", "thread")
     Pool = ThreadPoolExecutor if kind == "thread" else ProcessPoolExecutor
     if workers is None:
         workers = max(1, min(4, (os.cpu_count() or 2) - 1))
