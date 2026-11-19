@@ -82,7 +82,11 @@ wiz.set_focus()
 snap("install_dossier", 2.5)                      # page « Dossier de destination »
 keyboard.send_keys("{ENTER}")
 snap("install_taches", 2.0)                        # page « Tâches supplémentaires »
-step("icône bureau", lambda: click(wiz, title_re=".*icône sur le Bureau.*"))
+def tick():
+    r = wiz.rectangle()
+    # case « Créer une icône sur le Bureau » (position fixe dans l'assistant)
+    mouse.click(coords=(r.left + 52, r.top + 175))
+step("icône bureau", tick)
 snap("install_taches_cochee", 0.8)
 keyboard.send_keys("{ENTER}")
 snap("install_pret", 2.0)                          # page « Prêt à installer »
@@ -163,8 +167,11 @@ def search():
     keyboard.send_keys("playa", with_spaces=True)
 step("recherche", search)
 snap("recherche", 1.5)
-step("sélection résultat", lambda: keyboard.send_keys("{ENTER}"))   # focus sur le 1er résultat
-time.sleep(0.6)
+def first_row():
+    r = main.rectangle()
+    mouse.click(coords=(r.left + 600, r.top + 163))      # 1re ligne des résultats
+step("sélection résultat", first_row)
+snap("recherche_selection", 0.8)
 step("jouer ensuite", lambda: click(main, title="Jouer ensuite", control_type="Button"))
 snap("jouer_ensuite", 1.5)
 step("effacer recherche", lambda: (main.child_window(control_type="Edit", found_index=0)
@@ -174,12 +181,12 @@ step("playlist 2", lambda: click(main, title="Soirée Disco", control_type="List
 snap("file_attente", 1.5)
 
 # temps forts
-step("temps forts", lambda: click(main, title_re=".*Temps forts.*"))
+step("temps forts", lambda: click(main, title_re=".*Temps forts.*", found_index=0))
 snap("temps_forts", 1.5)
 step("menu durée", lambda: click(main, control_type="ComboBox"))
 snap("temps_forts_menu", 1.0)
 step("fermer menu", lambda: keyboard.send_keys("{ESC}"))
-step("temps forts off", lambda: click(main, title_re=".*Temps forts.*"))
+step("temps forts off", lambda: click(main, title_re=".*Temps forts.*", found_index=0))
 
 # timeline : on avance vers la fin pour voir un enchaînement
 def seek():
