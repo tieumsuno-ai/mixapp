@@ -73,10 +73,12 @@ jobs:
               if n >= 4:
                   break
           print("morceaux analysés par l'appli construite :", n)
-          assert n >= 4, "l'appli construite n'a pas analysé les morceaux"
+          open("test_result.txt", "w").write(str(n))
           PY
           kill %1 || true
-          tail -20 app.log || true
+          echo "----- journal de l'appli -----"; tail -60 app.log || true
+          ls -la "$HOME/Library/Application Support/MixApp" || true
+          test "$(cat test_result.txt)" -ge 4
       - name: Image disque (.dmg)
         run: |
           mkdir dmg
