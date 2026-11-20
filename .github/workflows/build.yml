@@ -101,7 +101,12 @@ jobs:
           mkdir dmg
           cp -R dist/MixApp.app dmg/
           ln -s /Applications dmg/Applications
-          hdiutil create -volname "MixApp" -srcfolder dmg -ov -format UDZO "MixApp-Mac-${{ matrix.label }}.dmg"
+          # hdiutil échoue parfois (« Resource busy ») sur les machines de GitHub : on réessaie
+          for i in 1 2 3 4 5; do
+            hdiutil create -volname "MixApp" -srcfolder dmg -ov -format UDZO "MixApp-Mac-${{ matrix.label }}.dmg" && break
+            echo "nouvel essai dans 15 s"; sleep 15
+          done
+          test -f "MixApp-Mac-${{ matrix.label }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: MixApp-Mac-${{ matrix.label }}
