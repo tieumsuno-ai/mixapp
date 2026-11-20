@@ -173,7 +173,7 @@ class AudioOutput:
         # occupé un instant (préparation d'un mix, analyse…), le son continue :
         # plus de craquements, contrairement au mode « callback ».
         self.stream = sd.OutputStream(samplerate=SR, channels=2, dtype="float32",
-                                      blocksize=0, latency=0.6)
+                                      blocksize=0, latency=0.4)
         self.stream.start()
         self._run = True
 
@@ -307,6 +307,7 @@ class MainWindow(QMainWindow):
         self.playlist_list.setAcceptDrops(True)
         self.playlist_list.viewport().setAcceptDrops(True)
         self.playlist_list.viewport().installEventFilter(self)
+        self.playlist_list.installEventFilter(self)
         self.playlist_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.playlist_list.setTextElideMode(Qt.ElideRight)
         lv.addWidget(self.playlist_list, 1)
@@ -323,6 +324,7 @@ class MainWindow(QMainWindow):
         self.tracks_title.setObjectName("section")
         mv.addWidget(self.tracks_title)
         self.table = QTableWidget(0, 7)
+        self.table.installEventFilter(self)
         self.table.setToolTip("Gras ▶ : en cours · bleu : à venir · gris : déjà joué\n"
                               "Pastille : vert = s'enchaîne parfaitement, orange = possible, rouge = difficile")
         self.table.setHorizontalHeaderLabels(["", "Titre", "Artiste", "BPM", "Clé", "Durée", ""])
@@ -367,6 +369,7 @@ class MainWindow(QMainWindow):
         lab.setObjectName("section")
         rv.addWidget(lab)
         self.queue_list = QListWidget()
+        self.queue_list.installEventFilter(self)
         self.queue_list.setToolTip("Les prochains morceaux : 🔒 déjà préparé · ★ demande prioritaire")
         self.queue_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.queue_list.setTextElideMode(Qt.ElideRight)
@@ -620,6 +623,16 @@ class MainWindow(QMainWindow):
         self.start_library_tasks()
 
     def eventFilter(self, obj, ev):
+        # Espace / → dans les listes : ce sont les touches du lecteur (sinon la
+        # liste les « mange » pour sa propre navigation, surtout sous Windows)
+        if ev.type() == ev.Type.KeyPress and obj in (self.table, self.queue_list, self.playlist_list) \
+                and not ev.modifiers():
+            if ev.key() == Qt.Key_Space:
+                self.play_pause()
+                return True
+            if ev.key() == Qt.Key_Right:
+                self.skip()
+                return True
         if obj is self.playlist_list.viewport():
             t = ev.type()
             if t in (ev.Type.DragEnter, ev.Type.DragMove):
@@ -1178,12 +1191,14 @@ class MainWindow(QMainWindow):
     def _hl_mode(self):
         return "on" if self.btn_hl.isChecked() else None
 
-    def vocal_map(self, track):
+    def vocal_map(self, track, compute=True):
         """Carte du chant d'un morceau (calculée une fois, puis gardée sur disque)."""
         from . import vocals as V
         r = track.row.get("_base") or track.row
         key = self._hl_key(r)
         a = self.vocal_cache.get(key)
+        if a is None and not compute:
+            return None
         if a is None:
             with self._vocal_lock:
                 a = self.vocal_cache.get(key)

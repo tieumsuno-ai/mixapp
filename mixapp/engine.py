@@ -127,7 +127,11 @@ class Engine:
         seg.end = len(seg.audio)
         self.pending = None
         if requeue:
-            self.priority.appendleft(dict(tr.b.row))
+            src = tr.b.row
+            row = dict(src.get("_base") or src)
+            if src.get("_from_priority") or (src.get("_base") or {}).get("_from_priority"):
+                row["_from_priority"] = True
+            self._push_back(row)
         return True
 
     def _flat(self):
@@ -206,7 +210,7 @@ class Engine:
         self.log({None: "Temps forts désactivés", "court": "Temps forts : court",
                   "moyen": "Temps forts : moyen"}.get(mode, ""))
 
-    def hl_window(self, t: Track) -> dict | None:
+    def hl_window(self, t: Track, quick: bool = False) -> dict | None:
         """Passage retenu pour ce morceau dans le mode actuel (ou None)."""
         if not self.hl_mode or t is None or not t.analyzed:
             return None
@@ -219,15 +223,18 @@ class Engine:
         vocal = None
         if self.vocal_provider is not None:
             try:
-                frames = self.vocal_provider(base)
+                try:
+                    frames = self.vocal_provider(base, compute=not quick)
+                except TypeError:
+                    frames = None if quick else self.vocal_provider(base)
                 if frames is not None:
                     vocal = HL.vocal_bars(frames, base)
             except Exception:
                 vocal = None
         return HL.window(base, self.hl_mode, self._hl_info[t.id], vocal)
 
-    def _view(self, t: Track, now: float | None = None) -> Track:
-        return HL.view(t, self.hl_window(t), now)
+    def _view(self, t: Track, now: float | None = None, quick: bool = False) -> Track:
+        return HL.view(t, self.hl_window(t, quick), now)
 
     def seek(self, seconds: float) -> bool:
         """Déplace la lecture dans le morceau en cours (fondu croisé de 20 ms).
@@ -247,7 +254,11 @@ class Engine:
             if tr is not None and target >= tr.a_end - int(1.0 * SR):
                 # on saute au-delà de l'enchaînement prévu : il sera recalculé
                 tr, self.pending = self.pending, None
-                self.priority.appendleft(dict(tr.b.row))
+                src = tr.b.row
+                row = dict(src.get("_base") or src)
+                if src.get("_from_priority"):
+                    row["_from_priority"] = True
+                self._push_back(row)
                 tr = None
             end = tr.a_end if tr is not None else len(real.audio)
             n = XFADE
@@ -288,11 +299,23 @@ class Engine:
     def _pop_next(self) -> dict | None:
         with self.lock:
             if self.priority:
-                return self.priority.popleft()
+                r = self.priority.popleft()
+                r["_from_priority"] = True
+                return r
             if self.auto_idx < len(self.auto):
                 self.auto_idx += 1
-                return self.auto[self.auto_idx - 1]
+                r = self.auto[self.auto_idx - 1]
+                r.pop("_from_priority", None)
+                return r
             return None
+
+    def _push_back(self, row: dict):
+        """Remet un morceau sorti de la file exactement où il était (sous verrou)."""
+        row = dict(row.get("_base") or row) if row.get("_base") else row
+        if row.get("_from_priority"):
+            self.priority.appendleft(row)
+        else:
+            self.auto.insert(self.auto_idx, row)
 
     def _get_track(self, row: dict) -> Track:
         t = self.cache.get(row["id"])
@@ -384,6 +407,12 @@ class Engine:
         """Reprise après une pause (fondu d'entrée de 60 ms, sur le temps)."""
         with self.lock:
             if self._resume is None:
+                if self.stopping and self.stop_style == "pause" and self.cur is not None:
+                    # la pause n'a pas encore commencé : on l'annule simplement
+                    self.stopping = False
+                    self.stop_requests = 0
+                    self.stop_style = "echo"
+                    return True
                 return False
             seg, pending = self._resume
             self._resume = None
@@ -517,7 +546,13 @@ class Engine:
     # ------------------------------------------------------------ préparation (fil séparé)
 
     def service(self):
-        """Travail de fond : touche suivant, préchargement, préparation des transitions."""
+        """Travail de fond (hors ligne : les deux parties à la suite)."""
+        self.service_commands()
+        self.service_prepare()
+
+    def service_commands(self):
+        """Touches Suivant / Stop / Pause : traitées tout de suite, jamais
+        bloquées par la préparation d'un mix (fil séparé)."""
         self._flush_deferred()
         if self.stop_requests:
             self._handle_stop()
@@ -543,16 +578,16 @@ class Engine:
                 self.history.append(b.row)
             self.log(f"▶ {b.label}")
 
-        # Préchargement du morceau candidat (décodage ~0,5 s)
+    def service_prepare(self):
+        """Préchargement du morceau suivant et préparation du mix (lent : 2 à 15 s)."""
         cand = self.peek_next()
         if cand is not None and cand["id"] not in self.cache:
             self._get_track(cand)
 
-        # Préparer la transition quand on atteint le point de verrouillage
         with self.lock:
             seg = self.cur
             ready = (seg is not None and seg.trans is None and seg.next is None
-                     and self.pending is None)
+                     and self.pending is None and not self.stopping and not self.skip_requests)
             if ready:
                 a = seg.track
                 now = seg.pos / SR
@@ -561,13 +596,22 @@ class Engine:
         a = self._view(a, now)
         if now < lock_point(a):
             return
-        row = self._pop_next()
+        # on choisit le morceau sans le retirer de la file : si une touche est
+        # pressée pendant le calcul, le résultat est simplement abandonné
+        row = self.peek_next()
         if row is None:
             return
         b = self._view(self._get_track(row))
         tr = render_auto(a, b)
         with self.lock:
-            if self.cur is seg and seg.pos < tr.a_end - int(0.05 * SR):
+            still = (self.cur is seg and self.pending is None and not self.stopping
+                     and not self.skip_requests and self.peek_next() is not None
+                     and self.peek_next()["id"] == row["id"])
+            if not still:
+                return
+            popped = self._pop_next()
+            tr.b.row["_from_priority"] = popped.get("_from_priority", False)
+            if seg.pos < tr.a_end - int(0.05 * SR):
                 seg.end = tr.a_end
                 self.pending = tr
                 return
@@ -575,11 +619,11 @@ class Engine:
         # Trop tard (morceau très court, ou ajout de dernière minute) : écho au prochain temps
         tr = self._echo_from(seg, pos_now, b)
         with self.lock:
-            if self.cur is seg and seg.pos < tr.a_end:
+            if self.cur is seg and seg.pos < tr.a_end and self.pending is None:
                 seg.end = tr.a_end
                 self.pending = tr
             else:
-                self.priority.appendleft(row)              # on réessaiera
+                self._push_back(popped)                    # on réessaiera
 
     def _echo_from(self, seg: Segment, pos: int, b: Track) -> Transition:
         a = seg.track
@@ -590,7 +634,7 @@ class Engine:
         else:
             bpm = a.bpm if a.analyzed else 120.0
         p = int(round(t * SR))
-        b = self._view(b)
+        b = self._view(b, quick=True)
         return render_echo_out(seg.audio, p, bpm, b, b_start=b.row.get("_hl_entry"))
 
     def _handle_stop(self):
@@ -681,15 +725,19 @@ class Engine:
     # ------------------------------------------------------------ temps réel
 
     def start_worker(self):
-        def loop():
+        def loop(fn, pause):
             while not self._stop:
                 try:
-                    self.service()
+                    fn()
                 except Exception as e:  # ne jamais tuer le fil
                     self.log(f"⚠ {e}")
-                time.sleep(0.05)
-        self._thread = threading.Thread(target=loop, daemon=True)
+                time.sleep(pause)
+        self._thread = threading.Thread(target=loop, args=(self.service_commands, 0.02),
+                                        daemon=True, name="mixapp-commandes")
+        self._thread_prep = threading.Thread(target=loop, args=(self.service_prepare, 0.1),
+                                             daemon=True, name="mixapp-preparation")
         self._thread.start()
+        self._thread_prep.start()
 
     def stop(self):
         self._stop = True
