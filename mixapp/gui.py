@@ -81,6 +81,7 @@ QPushButton#hl { background: #2a2e38; border: 1px solid #3a4050; color: #c8cdd8;
 QPushButton#hl:checked { background: #b8860b; border-color: #e0a526; color: #fff; }
 QComboBox { background: #22252d; border: 1px solid #333844; border-radius: 8px; padding: 6px 10px; color: #e6e6e6; }
 QComboBox QAbstractItemView { background: #22252d; color: #e6e6e6; selection-background-color: #2f3b66; }
+QLabel#fact { color: #aab0bf; font-size: 12px; padding: 0 14px; }
 QLabel#remain { color: #e6e6e6; font-weight: 600; min-width: 52px; }
 QLabel#counter { color: #c8cdd8; font-size: 13px; }
 QLabel#section { color: #8a90a0; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
@@ -208,6 +209,7 @@ class Bus(QObject):
     analysis_progress = Signal(int, int)
     playback_ready = Signal(object)       # Engine ou Exception
     cover_ready = Signal(int, object)     # id du morceau, octets de l'image (ou None)
+    info_ready = Signal(str, object)      # clé du morceau, infos (année, anecdote…)
     hl_ready = Signal()                   # un passage « temps forts » de plus est calculé
 
 
@@ -232,6 +234,8 @@ class MainWindow(QMainWindow):
         self._analysis_again = False
         self._hl_cache: dict = {}
         # passages « temps forts » par morceau : {chemin|mtime: {"court": win, "moyen": win}}
+        from . import trackinfo
+        self.info_cache = trackinfo.InfoCache(db.data_dir() / "infos.json")
         self._hl_file = db.data_dir() / "highlights2.json"
         from . import vocals as V
         self.vocals_ok = V.available()
@@ -409,7 +413,16 @@ class MainWindow(QMainWindow):
         self.now_info.setObjectName("nowInfo")
         col.addWidget(self.now_title)
         col.addWidget(self.now_info)
-        row1.addLayout(col, 1)
+        row1.addLayout(col, 2)
+        self.fact_label = QLabel("")
+        self.fact_label.setObjectName("fact")
+        self.fact_label.setWordWrap(True)
+        self.fact_label.setOpenExternalLinks(True)
+        self.fact_label.setTextFormat(Qt.RichText)
+        self.fact_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.fact_label.setToolTip("Le saviez-vous ? Année de sortie (MusicBrainz) et anecdote tirée de "
+                                   "Wikipédia, sans rien inventer")
+        row1.addWidget(self.fact_label, 3)
         self.counter = QLabel("")
         self.counter.setToolTip("Temps restant de la soirée, nombre de morceaux et heure de fin estimée")
         self.counter.setObjectName("counter")
@@ -531,6 +544,7 @@ class MainWindow(QMainWindow):
         self.bus.analysis_progress.connect(self._on_analysis_progress)
         self.bus.playback_ready.connect(self._on_playback_ready)
         self.bus.cover_ready.connect(self._on_cover_ready)
+        self.bus.info_ready.connect(self._on_info_ready)
         self._hl_refresh = QTimer(self, singleShot=True, interval=400)
         self._hl_refresh.timeout.connect(self._update_playlist_header)
         self.bus.hl_ready.connect(self._hl_refresh.start)
@@ -763,6 +777,46 @@ class MainWindow(QMainWindow):
                 data = None
             done.add(r["id"])
             self.bus.cover_ready.emit(r["id"], data)
+
+    # ------------------------------------------------------------ « le saviez-vous ? »
+    def _show_info(self, r):
+        key = self._hl_key(r)
+        self._info_key = key
+        e = self.info_cache.get(key)
+        if e is not None:
+            self._render_info(r, e)
+            return
+        self.fact_label.setText("")
+        if not self.settings.get("covers_online", True):
+            return
+
+        def work(row=dict(r), k=key):
+            from . import trackinfo
+            try:
+                info = trackinfo.lookup(row.get("artist") or "", row.get("title") or "")
+            except Exception:
+                info = None
+            if info is not None:
+                self.info_cache.put(k, info)
+                self.bus.info_ready.emit(k, (row, info))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_info_ready(self, key, payload):
+        if key == getattr(self, "_info_key", None):
+            self._render_info(*payload)
+
+    def _render_info(self, r, e):
+        import html
+        parts = []
+        if e.get("year"):
+            parts.append(f"<b>{html.escape(r.get('artist') or '')}</b> · sorti en {e['year']}")
+        fact = e.get("fact")
+        if fact:
+            if len(fact) > 230:
+                fact = fact[:227].rsplit(" ", 1)[0] + "…"
+            src = f' <a style="color:#6c8cff;" href="{e.get("url", "")}">{e.get("source", "Wikipédia")}</a>'
+            parts.append(f"<i>{html.escape(fact)}</i>{src}")
+        self.fact_label.setText("<br>".join(parts))
 
     def _small_placeholder(self):
         if not hasattr(self, "_small_ph"):
@@ -1277,6 +1331,7 @@ class MainWindow(QMainWindow):
             self.now_title.setText(title)
             self._refill_dots()
             self._show_current_cover()
+            self._show_info(t.row.get("_base") or t.row)
         self._update_counter(eng, t, pos)
         info = t.row.get("artist") or ""
         if t.analyzed:

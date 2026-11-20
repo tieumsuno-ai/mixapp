@@ -62,6 +62,7 @@ def main(argv=None):
     sub.add_parser("playlists")
     sub.add_parser("covertest", help="vérifie la recherche de pochettes sur internet")
     sub.add_parser("vocaltest", help="vérifie la détection du chant (modèle embarqué)")
+    sub.add_parser("infotest", help="vérifie les infos « le saviez-vous ? » (Wikipédia, MusicBrainz)")
     s = sub.add_parser("show"); s.add_argument("name")
     s = sub.add_parser("search"); s.add_argument("query", nargs="+")
     s = sub.add_parser("compatible"); s.add_argument("track_id", type=int)
@@ -77,6 +78,20 @@ def main(argv=None):
     s.add_argument("--queue", nargs="*", default=[],
                    help="ID@secondes = jouer ensuite, ID@secondes:a = ajouter à la file")
     a = p.parse_args(args)
+
+    if a.cmd == "infotest":
+        from . import trackinfo
+        cases = [("Michael Jackson", "Billie Jean (Extended Mix) [www.fuvi-clan.com]"),
+                 ("Lucenzo & Don Omar", "Danza Kuduro (Edit Mix)"),
+                 ("Céline Dion", "J'irai Où Tu Iras (Extended Mix By Fuvi Clan)"),
+                 ("Ottawan", "D.I.S.C.O (Extended Mix By Fuvi Clan)"),
+                 ("Les Paillettes", "Boule à facettes")]
+        ok = 0
+        for art, tit in cases:
+            info = trackinfo.lookup(art, tit)
+            ok += bool(info.get("fact") or info.get("year"))
+            print(f"{tit[:30]:30} → {info}")
+        return 0 if ok >= 3 else 1
 
     if a.cmd == "vocaltest":
         import time
