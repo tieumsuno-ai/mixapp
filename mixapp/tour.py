@@ -17,10 +17,45 @@ def run(w, out: str, playlist: str = "Soirée Disco", search: str = "playa"):
     n = [0]
     log = []
 
+    WIDGETS = ["search_box", "btn_folders", "btn_full", "playlist_list", "table", "btn_play_here",
+               "btn_play_next", "btn_enqueue", "queue_list", "btn_up", "btn_down", "btn_remove",
+               "cover", "now_title", "now_info", "fact_label", "counter", "transition_label",
+               "progress", "remain_label", "btn_play", "btn_stop33", "btn_pullup", "btn_next",
+               "btn_hl", "btn_dj", "volume", "eq", "mix_badge", "status", "tracks_title"]
+
+    def geometry():
+        g = {}
+        for name in WIDGETS:
+            wd = getattr(w, name, None)
+            if wd is None or not wd.isVisible():
+                continue
+            p = wd.mapTo(w, wd.rect().topLeft())
+            g[name] = [p.x(), p.y(), wd.width(), wd.height()]
+        vp = w.table.viewport()
+        for r in range(min(w.table.rowCount(), 6)):
+            rect = w.table.visualRect(w.table.model().index(r, 1)).united(
+                w.table.visualRect(w.table.model().index(r, w.table.columnCount() - 1)))
+            p = vp.mapTo(w, rect.topLeft())
+            g[f"row{r}"] = [p.x(), p.y(), rect.width(), rect.height()]
+        vq = w.queue_list.viewport()
+        for r in range(min(w.queue_list.count(), 4)):
+            rect = w.queue_list.visualItemRect(w.queue_list.item(r))
+            p = vq.mapTo(w, rect.topLeft())
+            g[f"queue{r}"] = [p.x(), p.y(), rect.width(), rect.height()]
+        vpl = w.playlist_list.viewport()
+        for r in range(w.playlist_list.count()):
+            rect = w.playlist_list.visualItemRect(w.playlist_list.item(r))
+            p = vpl.mapTo(w, rect.topLeft())
+            g[f"pl_{w.playlist_list.item(r).text().split(chr(10))[0]}"] = [p.x(), p.y(), rect.width(), rect.height()]
+        return g
+
     def shot(name):
+        import json
         n[0] += 1
         QApplication.processEvents()
-        w.grab().save(str(out_dir / f"{n[0]:02d}_{name}.png"))
+        base = out_dir / f"{n[0]:02d}_{name}"
+        w.grab().save(str(base) + ".png")
+        (Path(str(base) + ".json")).write_text(json.dumps(geometry(), ensure_ascii=False))
         log.append(name)
 
     def analysed():

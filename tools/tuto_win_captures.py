@@ -1,3 +1,4 @@
+# (captures : installateur + premier lancement, puis visite guidée automatique)
 """Captures d'écran réelles de l'installation et de l'utilisation de MixApp
 sous Windows, pour le tutoriel. Lancé par GitHub Actions (windows-latest).
 
