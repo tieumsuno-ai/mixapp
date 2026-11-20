@@ -37,6 +37,7 @@ from collections import deque
 import numpy as np
 
 from . import highlights as HL
+from . import ordering
 from .transitions import (SR, Track, Transition, load_track, lock_point,
                           render_auto, render_echo_out, render_echo_stop)
 
@@ -76,8 +77,11 @@ class Engine:
         self.paused = False            # en pause (reprise possible)
         self._resume: tuple | None = None   # (segment à reprendre, transition prévue)
         self.last_block = np.zeros((0, 2), np.float32)   # pour l'égaliseur animé
-        self.hl_mode: str | None = None        # « temps forts » : None | "court" | "moyen"
+        self.hl_mode: str | None = None        # « temps forts » : None | "on"
+        self.dj_order = False                  # « Ordre DJ » : file réordonnée tempo / clé / énergie
+        self._folder_order: list[int] = []
         self._hl_info: dict[int, dict | None] = {}
+        self.vocal_provider = None     # fonction(track) → activité vocale par trame de 0,25 s (ou None)
         self.stop_requests = 0
         self._thread = None
         self._stop = False
@@ -88,6 +92,10 @@ class Engine:
         rows = [dict(r) for r in rows]
         if not rows:
             raise ValueError("playlist vide")
+        self._folder_order = [r["id"] for r in rows]
+        if self.dj_order:
+            rows = ordering.dj_order(rows, rows[start]["id"])
+            start = 0
         first = self._get_track(rows[start])
         with self.lock:
             self.auto = rows
@@ -161,6 +169,27 @@ class Engine:
             self._set_flat(flat, len(self.priority))
             return target
 
+    # ------------------------------------------------------------ ordre DJ
+    def set_dj_order(self, on: bool):
+        """Réordonne la suite de la playlist (ou revient à l'ordre du dossier)."""
+        with self.lock:
+            self.dj_order = on
+            tr, seg = self.pending, self.cur
+            rest = list(self.auto[self.auto_idx:])
+            if tr is not None and self._cancel_pending(requeue=False):
+                rest.insert(0, dict(tr.b.row.get("_base") or tr.b.row))
+            if on:
+                cur = (seg.track.row.get("_base") or seg.track.row) if seg and seg.track else None
+                if cur is not None:
+                    rest = ordering.dj_order([dict(cur)] + rest, cur["id"])[1:]
+                else:
+                    rest = ordering.dj_order(rest, rest[0]["id"] if rest else None)
+            else:
+                pos = {i: k for k, i in enumerate(self._folder_order)}
+                rest.sort(key=lambda r: pos.get(r["id"], 1e9))
+            self.auto[self.auto_idx:] = rest
+        self.log("Flow DJ activé" if on else "Ordre du dossier")
+
     # ------------------------------------------------------------ temps forts
     def set_highlights(self, mode: str | None):
         """Active / désactive le mode « temps forts » (à tout moment).
@@ -183,7 +212,15 @@ class Engine:
                 self._hl_info[t.id] = HL.find(base)
             except Exception:
                 self._hl_info[t.id] = None
-        return HL.window(base, self.hl_mode, self._hl_info[t.id])
+        vocal = None
+        if self.vocal_provider is not None:
+            try:
+                frames = self.vocal_provider(base)
+                if frames is not None:
+                    vocal = HL.vocal_bars(frames, base)
+            except Exception:
+                vocal = None
+        return HL.window(base, self.hl_mode, self._hl_info[t.id], vocal)
 
     def _view(self, t: Track, now: float | None = None) -> Track:
         return HL.view(t, self.hl_window(t), now)
@@ -286,7 +323,8 @@ class Engine:
                 return seg.track, seg.pos / SR
             tr = seg.trans
             # pendant un mix calé, le morceau entrant devient « en cours » à mi-parcours
-            switch = len(tr.buffer) // 2 if tr.kind == "beatmatch" else tr.b_offset
+            ov = tr.info.get("ov_len", len(tr.buffer))
+            switch = ov // 2 if tr.kind == "beatmatch" else tr.b_offset
             if seg.pos >= switch:
                 return tr.b, (tr.b_start + seg.pos - tr.b_offset) / SR
             return seg.track, (tr.a_end + seg.pos) / SR
@@ -369,7 +407,10 @@ class Engine:
             if seg is None or seg.trans is None:
                 return None
             tr = seg.trans
-            return tr.kind, seg.pos / max(1, len(tr.buffer)), tr.info.get("why", "")
+            ov = tr.info.get("ov_len", len(tr.buffer)) if tr.kind == "beatmatch" else len(tr.buffer)
+            if seg.pos > ov:
+                return None                    # mélange fini (retour en douceur au tempo de b)
+            return tr.kind, seg.pos / max(1, ov), tr.info.get("why", "")
 
     # ------------------------------------------------------------ sortie audio
 
@@ -668,4 +709,4 @@ class Engine:
         return np.concatenate(chunks) if chunks else np.zeros((0, 2), np.float32)
 
 
-_KIND = {"beatmatch": "mix calé", "echo": "écho", "fade": "fondu"}
+_KIND = {"beatmatch": "mix calé", "echo": "écho", "fade": "fondu", "filtre": "filtre + écho", "pullup": "pull-up"}

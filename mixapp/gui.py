@@ -30,7 +30,7 @@ from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QProgressBar,
-                               QPushButton, QSlider, QSplitter, QTableWidget,
+                               QProxyStyle, QPushButton, QSlider, QSplitter, QStyle, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import analysis, covers, db, library, search
@@ -232,7 +232,11 @@ class MainWindow(QMainWindow):
         self._analysis_again = False
         self._hl_cache: dict = {}
         # passages « temps forts » par morceau : {chemin|mtime: {"court": win, "moyen": win}}
-        self._hl_file = db.data_dir() / "highlights.json"
+        self._hl_file = db.data_dir() / "highlights2.json"
+        from . import vocals as V
+        self.vocals_ok = V.available()
+        self.vocal_cache = V.VocalCache(db.data_dir() / "vocals")
+        self._vocal_lock = threading.Lock()
         try:
             self._hl_store = json.loads(self._hl_file.read_text())
         except Exception:
@@ -267,11 +271,14 @@ class MainWindow(QMainWindow):
         # barre du haut
         top = QHBoxLayout()
         self.search_box = QLineEdit()
+        self.search_box.setToolTip("Rechercher un titre ou un artiste (Ctrl/⌘ F), puis Entrée = « Jouer ensuite »\n"
+                                   "Filtres possibles : bpm:120-128  cle:8A  genre:house")
         self.search_box.setPlaceholderText(
             "Rechercher un titre, un artiste…   (filtres : bpm:120-128  cle:8A  genre:house)")
         self.search_box.setClearButtonEnabled(True)
         top.addWidget(self.search_box, 1)
         self.btn_folders = QPushButton("Dossiers de musique…")
+        self.btn_folders.setToolTip("Ajouter un dossier de musique : chaque sous-dossier devient une playlist")
         top.addWidget(self.btn_folders)
         self.btn_full = QPushButton()
         self.btn_full.setObjectName("flat")
@@ -311,6 +318,8 @@ class MainWindow(QMainWindow):
         self.tracks_title.setObjectName("section")
         mv.addWidget(self.tracks_title)
         self.table = QTableWidget(0, 7)
+        self.table.setToolTip("Gras ▶ : en cours · bleu : à venir · gris : déjà joué\n"
+                              "Pastille : vert = s'enchaîne parfaitement, orange = possible, rouge = difficile")
         self.table.setHorizontalHeaderLabels(["", "Titre", "Artiste", "BPM", "Clé", "Durée", ""])
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -332,9 +341,12 @@ class MainWindow(QMainWindow):
         mv.addWidget(self.table, 1)
         actions = QHBoxLayout()
         self.btn_play_here = QPushButton("▶  Lancer la playlist ici")
+        self.btn_play_here.setToolTip("Lance la playlist à partir du morceau sélectionné (Entrée ou double-clic)")
         self.btn_play_here.setObjectName("primary")
         self.btn_play_next = QPushButton("Jouer ensuite")
+        self.btn_play_next.setToolTip("Le morceau sélectionné passera juste après celui en cours (★)")
         self.btn_enqueue = QPushButton("Ajouter à la file")
+        self.btn_enqueue.setToolTip("Ajoute le morceau sélectionné après les autres demandes")
         actions.addWidget(self.btn_play_here)
         actions.addStretch(1)
         actions.addWidget(self.btn_play_next)
@@ -350,6 +362,7 @@ class MainWindow(QMainWindow):
         lab.setObjectName("section")
         rv.addWidget(lab)
         self.queue_list = QListWidget()
+        self.queue_list.setToolTip("Les prochains morceaux : 🔒 déjà préparé · ★ demande prioritaire")
         self.queue_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.queue_list.setTextElideMode(Qt.ElideRight)
         self.queue_list.setUniformItemSizes(True)
@@ -357,8 +370,11 @@ class MainWindow(QMainWindow):
         rv.addWidget(self.queue_list, 1)
         qa = QHBoxLayout()
         self.btn_up = QPushButton("↑")
+        self.btn_up.setToolTip("Monter le morceau choisi dans « À suivre »")
         self.btn_down = QPushButton("↓")
+        self.btn_down.setToolTip("Descendre le morceau choisi dans « À suivre »")
         self.btn_remove = QPushButton("Retirer")
+        self.btn_remove.setToolTip("Retirer le morceau choisi de « À suivre »")
         for b in (self.btn_up, self.btn_down):
             b.setFixedWidth(40)
         qa.addWidget(self.btn_up)
@@ -381,6 +397,7 @@ class MainWindow(QMainWindow):
         pv.setContentsMargins(18, 14, 18, 14)
         row1 = QHBoxLayout()
         self.cover = QLabel()
+        self.cover.setToolTip("Pochette (cherchée sur internet si besoin)")
         self.cover.setFixedSize(84, 84)
         self.cover.setPixmap(self._placeholder(84))
         row1.addWidget(self.cover)
@@ -394,6 +411,7 @@ class MainWindow(QMainWindow):
         col.addWidget(self.now_info)
         row1.addLayout(col, 1)
         self.counter = QLabel("")
+        self.counter.setToolTip("Temps restant de la soirée, nombre de morceaux et heure de fin estimée")
         self.counter.setObjectName("counter")
         self.counter.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.transition_label = QLabel("")
@@ -404,6 +422,7 @@ class MainWindow(QMainWindow):
         row1.addLayout(rcol)
         pv.addLayout(row1)
         self.mix_badge = MixBadge()
+        self.mix_badge.setToolTip("Transition en cours : le curseur va du morceau A au morceau B")
         pv.addWidget(self.mix_badge)
         row2 = QHBoxLayout()
         self.pos_label = QLabel("0:00")
@@ -453,23 +472,27 @@ class MainWindow(QMainWindow):
         self.btn_hl.setToolTip("Ne mixer que les meilleurs moments de chaque morceau (refrain / drop),\n"
                                "sans les longues intros et outros. Activable à tout moment :\n"
                                "s'applique dès le prochain enchaînement. (H)")
-        self.hl_len = QComboBox()
-        self.hl_len.addItems(["Court  ~1 min 30", "Moyen  ~2 min 30"])
-        self.hl_len.setToolTip("Durée de chaque morceau en mode Temps forts")
-        hl_set = self.settings.get("highlights")
-        self.btn_hl.setChecked(bool(hl_set))
-        self.hl_len.setCurrentIndex(1 if hl_set == "moyen" or self.settings.get("hl_len") == "moyen" else 0)
+        self.btn_dj = QPushButton("⇅ Flow DJ")
+        self.btn_dj.setObjectName("hl")
+        self.btn_dj.setCheckable(True)
+        self.btn_dj.setToolTip("Flow DJ : l'appli choisit elle-même l'ordre des morceaux pour des\n"
+                               "enchaînements fluides — tempos proches (≤ 5 %), tonalités compatibles,\n"
+                               "énergie qui monte. Les demandes « Jouer ensuite » restent prioritaires. (D)")
+        self.btn_hl.setChecked(bool(self.settings.get("highlights")))
+        self.btn_dj.setChecked(bool(self.settings.get("dj_order")))
         row3.addWidget(self.btn_hl)
-        row3.addWidget(self.hl_len)
+        row3.addWidget(self.btn_dj)
         row3.addSpacing(14)
         row3.addWidget(QLabel("🔈"))
         self.volume = QSlider(Qt.Horizontal)
+        self.volume.setToolTip("Volume")
         self.volume.setRange(0, 100)
         self.volume.setValue(int(self.settings.get("volume", 0.9) * 100))
         self.volume.setFixedWidth(140)
         row3.addWidget(self.volume)
         row3.addSpacing(16)
         self.eq = Equalizer(lambda: self.engine)
+        self.eq.setToolTip("Égaliseur : la musique en direct")
         row3.addWidget(self.eq)
         row3.addStretch(1)
         self.status = QLabel("")
@@ -500,7 +523,7 @@ class MainWindow(QMainWindow):
         self.btn_next.clicked.connect(self.skip)
         self.btn_full.clicked.connect(self.toggle_fullscreen)
         self.btn_hl.toggled.connect(lambda _: self._on_highlights())
-        self.hl_len.currentIndexChanged.connect(lambda _: self._on_highlights())
+        self.btn_dj.toggled.connect(lambda _: self._on_dj())
         self.volume.valueChanged.connect(self._on_volume)
 
         self.bus.log.connect(self._on_log)
@@ -525,6 +548,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_P), self, activated=lambda: self.styled_stop("pullup"))
         QShortcut(QKeySequence(Qt.Key_Right), self, activated=self.skip)
         QShortcut(QKeySequence(Qt.Key_H), self, activated=self.btn_hl.toggle)
+        QShortcut(QKeySequence(Qt.Key_D), self, activated=self.btn_dj.toggle)
         for seq in (QKeySequence(Qt.Key_F11), QKeySequence("Ctrl+Meta+F")):
             QShortcut(seq, self, activated=self.toggle_fullscreen)
         QShortcut(QKeySequence(Qt.Key_Escape), self,
@@ -811,6 +835,9 @@ class MainWindow(QMainWindow):
         self.mode = "playlist"
         self.current_folder = folder
         rows = [dict(r) for r in library.playlist_tracks(self.conn, folder)]
+        if self.btn_dj.isChecked() and rows:
+            from . import ordering
+            rows = ordering.dj_order(rows, rows[0]["id"])
         self._fill_table(rows, keep_selection)
         self._update_playlist_header()
         self.want_hl(rows)                 # calcule les passages en fond (pour les durées)
@@ -822,7 +849,7 @@ class MainWindow(QMainWindow):
         mode = self._hl_mode()
         if mode:
             total = self.mix_duration(rows, mode)
-            extra = f" EN TEMPS FORTS ({mode.upper()})"
+            extra = " EN TEMPS FORTS"
         else:
             total = sum(effective_duration(r, i == len(rows) - 1) for i, r in enumerate(rows))
             extra = " EN MIX"
@@ -971,6 +998,9 @@ class MainWindow(QMainWindow):
                 eng = Engine(log=self.bus.log.emit, on_analyzed=on_analyzed)
                 eng.volume = self.volume.value() / 100
                 eng.hl_mode = self._hl_mode()
+                eng.dj_order = self.btn_dj.isChecked()
+                if self.vocals_ok:
+                    eng.vocal_provider = self.vocal_map
                 eng.load_playlist(rows, start)
                 self.bus.playback_ready.emit(eng)
             except Exception as e:
@@ -1046,7 +1076,10 @@ class MainWindow(QMainWindow):
             try:
                 tr = load_track(r)
                 info = HL.find(tr)
-                self._hl_store[k] = {m: HL.window(tr, m, info) for m in HL.MODES}
+                vocal = None
+                if self.vocals_ok:
+                    vocal = HL.vocal_bars(self.vocal_map(tr), tr)
+                self._hl_store[k] = {"on": HL.window(tr, "on", info, vocal), "vocal": vocal is not None}
             except Exception:
                 self._hl_store[k] = {}
             dirty += 1
@@ -1064,27 +1097,51 @@ class MainWindow(QMainWindow):
                 end = float(r.get("duration") or 0) if last else w["exit"]
                 total += max(0.0, end - start)
             elif w is None:                        # pas encore calculé : estimation
-                total += min(effective_duration(r, last), {"court": 90.0, "moyen": 160.0}[mode])
+                total += min(effective_duration(r, last), 170.0)
             else:
                 total += effective_duration(r, last)
         return total
 
     def _hl_mode(self):
-        if not self.btn_hl.isChecked():
-            return None
-        return "moyen" if self.hl_len.currentIndex() == 1 else "court"
+        return "on" if self.btn_hl.isChecked() else None
+
+    def vocal_map(self, track):
+        """Carte du chant d'un morceau (calculée une fois, puis gardée sur disque)."""
+        from . import vocals as V
+        r = track.row.get("_base") or track.row
+        key = self._hl_key(r)
+        a = self.vocal_cache.get(key)
+        if a is None:
+            with self._vocal_lock:
+                a = self.vocal_cache.get(key)
+                if a is None:
+                    a = V.activity(track.audio)
+                    self.vocal_cache.put(key, a)
+        return a
+
+    def _on_dj(self):
+        on = self.btn_dj.isChecked()
+        self.settings["dj_order"] = on
+        save_settings(self.settings)
+        if self.engine is not None:
+            threading.Thread(target=self.engine.set_dj_order, args=(on,), daemon=True).start()
+        if self.mode == "playlist" and self.current_folder:
+            self.show_playlist(self.current_folder, keep_selection=True)
+        self._queue_sig = None
+        self.status.setText("Flow DJ : enchaînements au tempo et à la tonalité" if on
+                            else "Ordre du dossier")
 
     def _on_highlights(self):
         mode = self._hl_mode()
         self.settings["highlights"] = mode
-        self.settings["hl_len"] = "moyen" if self.hl_len.currentIndex() == 1 else "court"
         save_settings(self.settings)
         if self.engine is not None:
             threading.Thread(target=self.engine.set_highlights, args=(mode,), daemon=True).start()
         self._update_playlist_header()
-        self.status.setText({None: "Temps forts désactivés : morceaux en entier",
-                             "court": "Temps forts (court) : dès le prochain enchaînement",
-                             "moyen": "Temps forts (moyen) : dès le prochain enchaînement"}[mode])
+        self.status.setText("Temps forts : dès le prochain enchaînement, sans couper les paroles"
+                            if mode else "Temps forts désactivés : morceaux en entier")
+        if mode:
+            self.want_hl(self.shown_rows)
 
     def _on_seek(self, frac):
         eng = self.engine
@@ -1253,10 +1310,10 @@ class MainWindow(QMainWindow):
         elif kind and target is not None and target.id != t.id:
             name = target.row.get("title") or ""
             name = name if len(name) < 40 else name[:38] + "…"
-            self.transition_label.setText({"beatmatch": "⇄ mix calé vers ", "echo": "〰 écho vers ",
+            self.transition_label.setText({"beatmatch": "⇄ mix calé vers ", "echo": "〰 écho vers ", "filtre": "〰 filtre + écho vers ", "pullup": "↺ pull-up vers ",
                                            "fade": "fondu vers "}.get(kind, "") + name)
         else:
-            self.transition_label.setText({"beatmatch": "⇄ mix calé", "echo": "〰 sortie en écho",
+            self.transition_label.setText({"beatmatch": "⇄ mix calé", "echo": "〰 sortie en écho", "filtre": "〰 filtre + écho", "pullup": "↺ pull-up",
                                            "fade": "fondu"}.get(kind, ""))
         self.refresh_queue()
 
@@ -1322,11 +1379,23 @@ class MainWindow(QMainWindow):
         super().closeEvent(e)
 
 
+class _TooltipDelay(QProxyStyle):
+    """Infobulles après 3 s de survol (pour ne pas gêner pendant la soirée)."""
+
+    def styleHint(self, hint, option=None, widget=None, data=None):
+        if hint == QStyle.SH_ToolTip_WakeUpDelay:
+            return 3000
+        if hint == QStyle.SH_ToolTip_FallAsleepDelay:
+            return 3000
+        return super().styleHint(hint, option, widget, data)
+
+
 def main(argv=None):
     # le fil audio récupère la main plus vite quand l'analyse tourne en fond (anti-craquements)
     sys.setswitchinterval(0.001)
     app = QApplication(sys.argv if argv is None else argv)
     app.setApplicationName(APP_NAME)
+    app.setStyle(_TooltipDelay(app.style().name()))
     app.setStyleSheet(STYLE)
     w = MainWindow(os.environ.get("MIXAPP_DB"))
     w.show()

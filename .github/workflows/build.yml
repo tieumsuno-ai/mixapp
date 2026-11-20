@@ -53,6 +53,9 @@ jobs:
           # signature locale (« ad hoc ») de tout le paquet : obligatoire sur Mac Apple
           codesign --force --deep --sign - dist/MixApp.app
           codesign --verify --deep --strict dist/MixApp.app
+      - name: Test de la détection du chant (modèle embarqué)
+        timeout-minutes: 3
+        run: dist/MixApp.app/Contents/MacOS/MixApp --cli vocaltest
       - name: Test des pochettes depuis internet (certificats HTTPS dans l'appli)
         timeout-minutes: 3
         run: dist/MixApp.app/Contents/MacOS/MixApp --cli covertest

@@ -34,7 +34,9 @@ from .audio_io import read_stereo
 from scipy.signal import butter, sosfiltfilt
 
 SR = 44100
-MAX_STRETCH = 0.08       # au-delà de 8 % d'écart de tempo : pas de calage
+MAX_STRETCH = 0.05       # au-delà de 5 % d'écart de tempo : transition à effet, pas de calage
+SYNC_MIN = 0.01          # en dessous de 1 % d'écart : rien à resynchroniser
+SYNC_BARS = 16           # retour au tempo d'origine, en douceur, après l'intro
 MIX_MIN_BARS = 8         # superposition minimale…
 MIX_MAX_BARS = 32        # … et maximale
 BASS_SPLIT_HZ = 180.0    # séparation basses / reste pour l'échange des basses
@@ -331,6 +333,8 @@ def plan_beatmatch(a: Track, b: Track):
     r = b.bpm / a.bpm
     if abs(r - 1) > MAX_STRETCH:
         return None
+    if a.row.get("_hl_echo_out") or b.row.get("_hl_echo_in"):
+        return None          # temps forts : des paroles d'un côté → sortie en écho, pas de mélange
     key = key_match(a, b)
     intro_bars = (b.intro_end - b.first_beat) / b.bar
     L = int(np.clip(_round4(intro_bars), MIX_MIN_BARS, MIX_MAX_BARS))
@@ -372,7 +376,14 @@ def plan_beatmatch(a: Track, b: Track):
     why = {"transposé": f"clé de l'entrant ajustée ({shift:+d} demi-ton) puis rétablie",
            "ok": "clés compatibles", "proche": "clés voisines", "conflit": "clés éloignées : mélange court", "conflit_hl": "clés éloignées",
            "?": "clé inconnue"}[key]
-    return dict(r=r, L=L, ov_a=ov_a, b_start=b_start, key=key, sharp=(sa, sb), shift=shift,
+    # « sync » : b démarre au tempo de a, garde ce tempo pendant le mélange
+    # (a n'est pas touché), puis revient tout doucement au sien après son intro.
+    # Pas en mode temps forts (b entre juste avant son refrain : on ne touche
+    # pas au tempo pendant un refrain).
+    sync = SYNC_MIN <= abs(r - 1) <= MAX_STRETCH and not hl
+    if sync:
+        why = why + ", sync du tempo"
+    return dict(r=r, L=L, ov_a=ov_a, b_start=b_start, key=key, sharp=(sa, sb), shift=shift, sync=sync,
                 why=f"Mix au tempo {a.bpm:.0f}→{b.bpm:.0f} BPM, {why}, {L} mesures")
 
 
@@ -438,9 +449,20 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
     b_ext = _slice(b.audio, b_s - M_, n_b_in + 2 * M_)
     a_in, b_in = a_ext[M_:M_ + n_a_in], b_ext[M_:M_ + n_b_in]
 
-    tempos = _glide(nb, a.bpm, b.bpm)
+    sync = plan.get("sync", False)
+    G = SYNC_BARS if sync else 0
+    if sync:
+        tempos = np.full(nb, a.bpm)                     # pendant le mélange : tempo de a
+        n_b_tail = int(round(G * b.bar * SR))
+        b_ext = _slice(b.audio, b_s - M_, n_b_in + n_b_tail + 2 * M_)
+        tempos_b = np.concatenate([tempos, _glide(4 * G, a.bpm, b.bpm)])
+    else:
+        tempos = _glide(nb, a.bpm, b.bpm)
+        n_b_tail = 0
+        tempos_b = tempos
     out_beats = np.concatenate([[0.0], np.cumsum(60.0 / tempos)])     # s
     ov_len = int(round(out_beats[-1] * SR))
+    full_len = int(round(np.sum(60.0 / tempos_b) * SR))
 
     # Grille réelle de chaque morceau à l'endroit de la transition (les kicks
     # mesurés, pas seulement la grille calculée sur tout le morceau)
@@ -450,16 +472,34 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
     e_a, e_b = local_err(a_in, a.bpm), local_err(b_in, b.bpm)
     rel = int(np.clip(e_b - e_a, -M_ // 2, M_ // 2))     # retard de b sur a, à compenser
 
-    def take(y, start):
-        """ov_len échantillons de y à partir de `start` (toujours de la vraie musique)."""
+    def take(y, start, n=None):
+        """n (ov_len) échantillons de y à partir de `start` (toujours de la vraie musique)."""
+        n = ov_len if n is None else n
         start = max(0, start)
-        seg_ = y[start:start + ov_len]
-        if len(seg_) < ov_len:          # ne devrait pas arriver grâce aux marges
-            seg_ = np.pad(seg_, ((0, ov_len - len(seg_)), (0, 0)), mode="edge")
+        seg_ = y[start:start + n]
+        if len(seg_) < n:               # ne devrait pas arriver grâce aux marges
+            seg_ = np.pad(seg_, ((0, n - len(seg_)), (0, 0)), mode="edge")
         return np.ascontiguousarray(seg_, dtype=np.float32)
 
     shift = plan.get("shift", 0)
-    if abs(r - 1) < 0.002 and not shift:
+    b_tail = None
+    if sync:
+        # a joue tel quel ; seul b est étiré (au tempo de a, puis retour au sien)
+        a_ov = take(a_ext, M_)
+        pitch = None
+        if shift:
+            bar_in = int(round(b.bar * SR))
+            g0, g1 = M_ + (L // 2) * bar_in, M_ + (L - 1) * bar_in
+            k = np.clip((np.arange(len(b_ext)) - g0) / max(g1 - g0, 1), 0, 1)
+            pitch = shift * (0.5 + 0.5 * np.cos(np.pi * k))
+        yb, pb = _stretch_beats(b_ext, b.bpm, tempos_b, M_, M_, pitch)
+        out_b = np.concatenate([[0.0], np.cumsum(60.0 / tempos_b)])
+        d_b = _stretch_offset(b_in, np.arange(nb + 1) * 60.0 / b.bpm,
+                              yb[pb:pb + ov_len + M_], out_beats)
+        b_full = take(yb, pb + d_b + rel, full_len)
+        b_ov, b_tail = b_full[:ov_len], b_full[ov_len:]
+        offs = (0, d_b + rel)
+    elif abs(r - 1) < 0.002 and not shift:
         a_ov, b_ov = take(a_ext, M_), take(b_ext, M_ + rel)
         offs = (0, rel)
     else:
@@ -505,9 +545,12 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
            + b_low * swap[:, None] + b_high * (g_b_high * duck)[:, None]).astype(np.float32)
 
     _declick_join(buf, a.audio[s_ov:s_ov + 1323], 1323)
+    if b_tail is not None and len(b_tail):
+        buf = np.concatenate([buf, b_tail]).astype(np.float32)   # b seul, retour à son tempo
     # Où reprendre b d'origine : on cherche, autour de la position théorique,
     # l'endroit où la fin du tampon (qui n'est plus que b) colle exactement à b.
-    b_end = _match_resume(b_ov, b.audio, b_s + n_b_in + rel)
+    b_end = _match_resume(b_full if b_tail is not None else b_ov, b.audio,
+                          b_s + n_b_in + n_b_tail + rel)
     _declick_tail(buf, _slice(b.audio, b_end - 1323, 1323), 1323)     # fondu de 30 ms
     return Transition("beatmatch", s_ov, buf, b, 0, b_s, b_end=b_end,
                       info=dict(plan, ov_len=ov_len, offsets=offs, bar_pos=bar_pos, grid_err=(e_a, e_b),
@@ -515,7 +558,7 @@ def render_beatmatch(a: Track, b: Track, plan: dict) -> Transition:
 
 
 def render_echo_out(src: np.ndarray, pos: int, bpm: float, b: Track,
-                    tail_bars: int = 2, b_start: float | None = None,
+                    tail_bars: int = 3, b_start: float | None = None,
                     src_start: int | None = None) -> Transition:
     """Sortie en écho à partir de src[pos] (pos doit tomber sur un temps).
 
@@ -547,13 +590,73 @@ def render_echo_out(src: np.ndarray, pos: int, bpm: float, b: Track,
     b_s = int(round(bs * SR)) - pre
     b_off = dry_len - pre
     b_len = tail_len - b_off
-    b_seg = _slice(b.audio, b_s, b_len)
-    fin = np.ones(b_len, np.float32)
-    k = min(int(0.01 * SR), b_len)
-    fin[:k] = np.linspace(0, 1, k)
-    out[b_off:] += b_seg * fin[:, None]
+    b_seg = _soft_entry(_slice(b.audio, b_s, b_len), b)
+    out[b_off:] += b_seg
     return Transition("echo", pos if src_start is None else src_start, out, b, b_off, b_s,
                       info=dict(bpm=bpm))
+
+
+def _soft_entry(seg: np.ndarray, b: Track) -> np.ndarray:
+    """Entrée en douceur du morceau suivant après un effet : le volume monte
+    sur une mesure et les basses n'arrivent qu'au 1er temps de la mesure
+    suivante (comme un DJ qui remonte les basses sur la console)."""
+    n = len(seg)
+    if n == 0:
+        return seg
+    seg = seg.astype(np.float32).copy()
+    bar = int(round(b.bar * SR))
+    t = np.arange(n, dtype=np.float32)
+    k = min(int(0.01 * SR), n)
+    vol = np.clip(0.45 + 0.55 * np.sin(np.pi / 2 * np.clip(t / max(bar, 1), 0, 1)), 0, 1)
+    vol[:k] *= np.linspace(0, 1, k)
+    low, high = _split_bass(seg)
+    lo_g = np.clip((t - bar) / max(int(0.06 * SR), 1), 0, 1)       # basses au temps 1 suivant
+    return (low * (lo_g * vol)[:, None] + high * vol[:, None]).astype(np.float32)
+
+
+def render_filter_echo(a: Track, pos: int, b: Track, b_start=None) -> Transition:
+    """Filtre qui ferme les graves sur les 2 dernières mesures de a, puis écho."""
+    pre = int(round(2 * a.bar * SR))
+    s0 = max(0, pos - pre)
+    swept = _hpf_sweep(a.audio[s0:pos].astype(np.float32), 60.0, 1400.0)
+    _declick_join(swept, a.audio[s0:s0 + 441])
+    tr = render_echo_out(a.audio, pos, a.bpm, b, b_start=b_start)
+    head = _hpf_sweep(tr.buffer[: int(60.0 / a.bpm * SR)].copy(), 1400.0, 1500.0)
+    tr.buffer[: len(head)] = head
+    buf = np.concatenate([swept, tr.buffer]).astype(np.float32)
+    return Transition("filtre", s0, buf, b, tr.b_offset + len(swept), tr.b_start,
+                      info=dict(bpm=a.bpm))
+
+
+def render_pullup_out(a: Track, pos: int, b: Track, b_start=None) -> Transition:
+    """« Pull-up » de DJ (scratch, rembobinage, écho) puis le morceau suivant."""
+    from .effects import render_pullup
+    tail = render_pullup(a.audio, pos, a.bpm)
+    gesture = int((60.0 / a.bpm + 1.1) * SR)           # 2 scratchs d'un demi-temps + rembobinage
+    bs = b.first_beat if b_start is None else b_start
+    b_s = int(round(bs * SR))
+    b_len = max(0, len(tail) - gesture)
+    b_seg = _soft_entry(_slice(b.audio, b_s, b_len), b)
+    out = tail.copy()
+    out[gesture:] = tail[gesture:] * 0.7 + b_seg
+    return Transition("pullup", pos, out.astype(np.float32), b, gesture, b_s, info=dict(bpm=a.bpm))
+
+
+def render_effect_out(a: Track, pos: int, b: Track, b_start=None) -> Transition:
+    """Transition à effet quand le calage est impossible : l'appli varie les
+    effets (écho, filtre + écho, pull-up), le pull-up seulement quand le
+    morceau qui part est énergique."""
+    k = (int(a.id) * 7 + int(b.id) * 3) % 3
+    if k == 2:
+        lv = 20 * np.log10(np.sqrt(np.mean(_slice(a.audio, pos - int(2 * a.bar * SR),
+                                                   int(2 * a.bar * SR)) ** 2)) + 1e-9)
+        if lv < 20 * np.log10(TARGET_RMS) - 3:
+            k = 1
+    if k == 1:
+        return render_filter_echo(a, pos, b, b_start)
+    if k == 2:
+        return render_pullup_out(a, pos, b, b_start)
+    return render_echo_out(a.audio, pos, a.bpm, b, b_start=b_start)
 
 
 def render_echo_stop(src: np.ndarray, pos: int, bpm: float, tail_bars: int = 2) -> np.ndarray:
@@ -605,10 +708,14 @@ def render_auto(a: Track, b: Track) -> Transition:
         # morceau (début d'outro), b démarre proprement sur son 1er temps
         t = min(a.outro_start, a.grid_end - 2 * a.bar)
         pos = int(round(a.next_beat_after(t) * SR))
-        tr = render_echo_out(a.audio, pos, a.bpm, b, b_start=b.row.get("_hl_entry"))
+        tr = render_effect_out(a, pos, b, b_start=b.row.get("_hl_entry"))
         r = b.bpm / a.bpm if b.analyzed else 1
-        tr.info["why"] = (f"Écho : tempos trop éloignés ({a.bpm:.0f}→{b.bpm:.0f} BPM)"
-                          if abs(r - 1) > MAX_STRETCH else "Écho : rythme pas assez net pour caler")
+        tr.info["why"] = ({"filtre": "Filtre + écho", "pullup": "Pull-up"}.get(tr.kind, "Écho")
+                          + " : " + (
+                          "pas de passage instrumental pour mélanger sans couper les paroles"
+                          if (a.row.get("_hl_echo_out") or b.row.get("_hl_echo_in")) else
+                          f"tempos trop éloignés ({a.bpm:.0f}→{b.bpm:.0f} BPM)"
+                          if abs(r - 1) > MAX_STRETCH else "rythme pas assez net pour caler"))
         return tr
     tr = render_fade(a, b)
     tr.info["why"] = "Fondu enchaîné"

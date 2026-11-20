@@ -61,6 +61,7 @@ def main(argv=None):
     s.add_argument("--force", action="store_true", help="réanalyser tous les morceaux")
     sub.add_parser("playlists")
     sub.add_parser("covertest", help="vérifie la recherche de pochettes sur internet")
+    sub.add_parser("vocaltest", help="vérifie la détection du chant (modèle embarqué)")
     s = sub.add_parser("show"); s.add_argument("name")
     s = sub.add_parser("search"); s.add_argument("query", nargs="+")
     s = sub.add_parser("compatible"); s.add_argument("track_id", type=int)
@@ -76,6 +77,17 @@ def main(argv=None):
     s.add_argument("--queue", nargs="*", default=[],
                    help="ID@secondes = jouer ensuite, ID@secondes:a = ajouter à la file")
     a = p.parse_args(args)
+
+    if a.cmd == "vocaltest":
+        import time
+        import numpy as np
+        from . import vocals
+        print("modèle :", vocals.MODEL, vocals.MODEL.exists(), "| disponible :", vocals.available())
+        t0 = time.time()
+        x = (np.random.default_rng(0).standard_normal((44100 * 20, 2)) * 0.05).astype(np.float32)
+        act = vocals.activity(x)
+        print(f"carte du chant : {len(act)} tranches en {time.time() - t0:.1f} s")
+        return 0 if len(act) > 50 else 1
 
     if a.cmd == "covertest":
         from . import covers

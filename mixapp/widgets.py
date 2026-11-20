@@ -155,6 +155,7 @@ class MixBadge(QWidget):
     curseur d'un crossfader qui glisse de A vers B, et ce que fait l'appli."""
 
     KINDS = {"beatmatch": "MIX EN COURS", "echo": "SORTIE EN ÉCHO", "fade": "FONDU ENCHAÎNÉ",
+             "filtre": "FILTRE + ÉCHO", "pullup": "PULL-UP",
              "stop": "ARRÊT", "pause": "PAUSE"}
 
     def __init__(self, parent=None):
@@ -192,7 +193,7 @@ class MixBadge(QWidget):
         p.drawRoundedRect(QRectF(0, 0, w, h), 10, 10)
         # deux disques qui tournent
         r = h * 0.32
-        speed = 200 if self.kind in ("beatmatch", "echo", "fade") else 60
+        speed = 200 if self.kind in ("beatmatch", "echo", "fade", "filtre", "pullup") else 60
         _vinyl(p, 22, h / 2, r, QColor("#d8dce6"), angle=-t * speed)
         _vinyl(p, 22 + 2.4 * r, h / 2, r, accent, angle=-t * speed * 1.03)
         x0 = 22 + 3.6 * r + 8
@@ -222,7 +223,7 @@ class MixBadge(QWidget):
         p.setPen(QColor("#8a90a0"))
         p.drawText(QRectF(cx - 14, cy - 8, 12, 16), Qt.AlignCenter, "A")
         p.drawText(QRectF(cx + cw + 2, cy - 8, 12, 16), Qt.AlignCenter, "B")
-        k = self.progress if self.kind in ("beatmatch", "echo", "fade") else 0.0
+        k = self.progress if self.kind in ("beatmatch", "echo", "fade", "filtre", "pullup") else 0.0
         knob = cx + cw * min(max(k, 0.0), 1.0)
         p.setPen(Qt.NoPen)
         p.setBrush(accent)

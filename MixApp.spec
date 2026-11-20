@@ -7,11 +7,12 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 datas = []
 binaries = []
 hidden = []
-for pkg in ("librosa", "soundfile", "sounddevice", "pedalboard", "soxr"):
+for pkg in ("librosa", "soundfile", "sounddevice", "pedalboard", "soxr", "onnxruntime"):
     datas += collect_data_files(pkg)
     binaries += collect_dynamic_libs(pkg)
 hidden += collect_submodules("librosa") + collect_submodules("scipy.signal")
-hidden += ["sklearn.utils._typedefs", "watchdog.observers"]
+hidden += ["sklearn.utils._typedefs", "watchdog.observers"] + collect_submodules("onnxruntime.capi")
+datas += [("mixapp/models/spleeter2.onnx", "mixapp/models")]   # détection du chant
 
 a = Analysis(
     ["MixApp.pyw"],

@@ -19,10 +19,10 @@ import numpy as np
 from .transitions import SR, Track
 
 MODES = {
-    # entrée (phrases avant le refrain), durée mini / maxi (s)
-    "court": dict(lead=1, min_s=60.0, max_s=110.0, runs=1),
-    "moyen": dict(lead=2, min_s=120.0, max_s=200.0, runs=2),
+    # entrée (phrases avant le refrain), durée mini / maxi visée (s)
+    "on": dict(lead=2, min_s=110.0, max_s=200.0, runs=2),
 }
+MODES["moyen"] = MODES["court"] = MODES["on"]        # anciens réglages
 
 
 def _features(t: Track):
@@ -117,7 +117,8 @@ def find(t: Track) -> dict | None:
                 runs=[(round(ph(a), 3), round(ph(b), 3)) for a, b in runs])
 
 
-def window(t: Track, mode: str, info: dict | None = None) -> dict | None:
+def window(t: Track, mode: str, info: dict | None = None, vocal=None,
+           mix_bars: int = 4) -> dict | None:
     """Passage retenu : entrée, début du refrain et sortie (s)."""
     cfg = MODES.get(mode)
     if cfg is None or not t.analyzed:
@@ -143,7 +144,65 @@ def window(t: Track, mode: str, info: dict | None = None) -> dict | None:
     exit_ = min(exit_, t.outro_start)
     if exit_ - entry < 30:                     # passage introuvable / trop court
         return None
-    return dict(entry=round(entry, 3), highlight=round(hl, 3), exit=round(exit_, 3))
+    win = dict(entry=round(entry, 3), highlight=round(hl, 3), exit=round(exit_, 3))
+    if vocal is not None and len(vocal):
+        win.update(_respect_vocals(t, cfg, hl, entry, exit_, np.asarray(vocal, float), mix_bars))
+    return win
+
+
+SUNG = 0.25          # part d'une mesure chantée au-delà de laquelle on la considère « avec paroles »
+
+
+def _respect_vocals(t: Track, cfg, hl, entry, exit_, vocal, L):
+    """Règle stricte : on ne coupe jamais de paroles.
+
+    - entrée : sur une phrase instrumentale avant le refrain ; s'il n'y en a
+      pas assez près, le morceau démarre à son début (intro) ;
+    - sortie : au début d'une phrase instrumentale (le morceau qui part ne joue
+      plus que de la musique pendant le mélange) ; s'il n'y en a pas, on ne
+      raccourcit pas : sortie normale à l'outro."""
+    phrase = 4 * t.bar
+    bar_of = lambda s: int(round((s - t.first_beat) / t.bar))          # noqa: E731
+
+    def inst(start_s, n=L):
+        b0 = bar_of(start_s)
+        if b0 < 0 or b0 + n > len(vocal):
+            return False
+        seg = vocal[b0:b0 + n]
+        return bool(seg.mean() < 0.15 and seg.max() < 0.4)
+
+    k_max = int((t.outro_start - t.first_beat) / phrase + 1e-6)
+    grid = [t.first_beat + k * phrase for k in range(0, k_max + 1)]
+    out = {"echo_in": False, "echo_out": False}
+
+    starts = [s for s in grid if s + L * t.bar <= hl + 1e-6 and inst(s)]
+    new_entry = starts[-1] if (starts and hl - starts[-1] <= 12 * phrase) else t.first_beat
+    out["entry"] = round(new_entry, 3)
+
+    lo, hi = cfg["min_s"] * 0.8, cfg["max_s"] * 1.3
+    cands = [e for e in grid if e >= hl + 2 * phrase and e <= t.outro_start + 1e-6 and inst(e)]
+    good = [e for e in cands if lo <= e - new_entry <= hi]
+    target = (cfg["min_s"] + cfg["max_s"]) / 2
+    if good:
+        best = min(good, key=lambda e: abs(e - new_entry - target))
+    elif cands:
+        best = min(cands, key=lambda e: abs(e - new_entry - target))
+    else:
+        best = t.outro_start                    # rien d'instrumental : on ne coupe pas
+    out["exit"] = round(best, 3)
+    return out
+
+
+def vocal_bars(frames: np.ndarray, t: Track, hop_s: float = 0.25) -> np.ndarray:
+    """Activité vocale par trame (0/1 ou probabilité) → part chantée de chaque mesure."""
+    n_bars = int((t.grid_end - t.first_beat) / t.bar) + 1
+    out = np.zeros(n_bars)
+    for b in range(n_bars):
+        a = t.first_beat + b * t.bar
+        i0, i1 = int(a / hop_s), int((a + t.bar) / hop_s)
+        seg = frames[i0:i1]
+        out[b] = float(np.mean(seg)) if len(seg) else 0.0
+    return out
 
 
 def view(t: Track, win: dict | None, now: float | None = None, mix_bars: int = 4) -> Track:
@@ -166,4 +225,6 @@ def view(t: Track, win: dict | None, now: float | None = None, mix_bars: int = 4
     row["intro_end"] = win["entry"] + mix_bars * t.bar   # le morceau entre à `entry`
     row["_hl_entry"] = win["entry"]
     row["_hl_mix_bars"] = mix_bars
+    row["_hl_echo_in"] = bool(win.get("echo_in"))
+    row["_hl_echo_out"] = bool(win.get("echo_out")) and win.get("exit") == exit_
     return Track(row=row, audio=t.audio, gain=t.gain, sound_end=t.sound_end)
