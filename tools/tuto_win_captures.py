@@ -155,84 +155,16 @@ main.set_focus()
 snap("fenetre", 1.5)
 
 # ------------------------------------------------------------------ 4. utilisation
-log("== utilisation")
-step("playlist", lambda: click(main, title="Soirée Disco", control_type="ListItem"))
-snap("playlist", 1.5)
-step("lancer", lambda: click(main, title_re=".*Lancer la playlist.*", control_type="Button"))
-snap("lecture", 6.0)
-
-def search():
-    ed = main.child_window(control_type="Edit", found_index=0).wrapper_object()
-    ed.click_input()
-    keyboard.send_keys("playa", with_spaces=True)
-step("recherche", search)
-snap("recherche", 1.5)
-def first_row():
-    cells = [e for e in main.descendants(control_type="DataItem")
-             if "Playa" in (e.window_text() or "")]
-    log("cellules trouvées :", len(cells))
-    if cells:
-        cells[0].click_input()
-    else:
-        r = main.rectangle()
-        mouse.click(coords=(r.left + 600, r.top + 170))
-step("sélection résultat", first_row)
-snap("recherche_selection", 0.8)
-def play_next():
-    b = main.child_window(title="Jouer ensuite", control_type="Button").wrapper_object()
-    log("Jouer ensuite actif :", b.is_enabled())
-    if b.is_enabled():
-        b.click_input()
-    else:                                    # double-clic sur la ligne = « Jouer ensuite »
-        cells = [e for e in main.descendants(control_type="DataItem")
-                 if "Playa" in (e.window_text() or "")]
-        if cells:
-            cells[0].double_click_input()
-step("jouer ensuite", play_next)
-snap("jouer_ensuite", 1.5)
-step("effacer recherche", lambda: (main.child_window(control_type="Edit", found_index=0)
-                                   .wrapper_object().click_input(),
-                                   keyboard.send_keys("^a{BACKSPACE}")))
-step("playlist 2", lambda: click(main, title="Soirée Disco", control_type="ListItem"))
-snap("file_attente", 1.5)
-
-# temps forts
-step("temps forts", lambda: click(main, title_re=".*Temps forts.*", found_index=0))
-snap("temps_forts", 1.5)
-step("menu durée", lambda: click(main, control_type="ComboBox"))
-snap("temps_forts_menu", 1.0)
-step("fermer menu", lambda: keyboard.send_keys("{ESC}"))
-step("temps forts off", lambda: click(main, title_re=".*Temps forts.*", found_index=0))
-
-# timeline : on avance vers la fin pour voir un enchaînement
-def seek():
-    bar = None
-    for el in main.descendants(control_type="ProgressBar"):
-        bar = el
-    r = bar.rectangle()
-    snap("timeline_avant", 0.5)
-    mouse.click(coords=(int(r.left + 0.58 * (r.right - r.left)), int((r.top + r.bottom) / 2)))
-step("timeline", seek)
-snap("timeline_apres", 1.0)
-for k in range(12):                     # l'enchaînement arrive ~20 s plus tard
-    snap(f"vers_mix_{k:02d}", 3.0)
-time.sleep(5)
-
-# boutons du lecteur
-step("pause", lambda: click(main, title_re=".*Pause.*", control_type="Button"))
-snap("pause_echo", 0.8)
-time.sleep(5)
-snap("en_pause", 0)
-step("reprise", lambda: click(main, title_re=".*Lecture.*", control_type="Button"))
-snap("reprise", 3.0)
-step("suivant", lambda: click(main, title_re=".*Suivant.*", control_type="Button"))
-snap("suivant_echo", 0.8)
-time.sleep(10)
-step("stop 33", lambda: click(main, title_re=".*Stop 33.*", control_type="Button"))
-snap("stop_33", 0.7)
-time.sleep(5)
-snap("arrete", 0)
-
-(OUT / "journal.txt").write_text("\n".join(LOG), encoding="utf-8")
+# visite guidée automatique : l'appli se pilote toute seule et capture sa fenêtre
+log("== visite guidée")
 subprocess.run(["taskkill", "/IM", "MixApp.exe", "/F"], capture_output=True)
+time.sleep(3)
+exe = Path(os.environ["LOCALAPPDATA"]) / "Programs" / "MixApp" / "MixApp.exe"
+p = subprocess.Popen([str(exe)], env=dict(env, MIXAPP_TOUR=str((OUT / "tour").resolve())))
+try:
+    p.wait(timeout=600)
+except subprocess.TimeoutExpired:
+    log("⚠ visite trop longue")
+    p.kill()
+(OUT / "journal.txt").write_text("\n".join(LOG), encoding="utf-8")
 log("terminé")

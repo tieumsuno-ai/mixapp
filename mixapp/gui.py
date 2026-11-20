@@ -1454,6 +1454,9 @@ def main(argv=None):
     app.setStyleSheet(STYLE)
     w = MainWindow(os.environ.get("MIXAPP_DB"))
     w.show()
+    if os.environ.get("MIXAPP_TOUR"):              # captures pour les tutoriels
+        from . import tour
+        tour.run(w, os.environ["MIXAPP_TOUR"])
     return app.exec()
 
 

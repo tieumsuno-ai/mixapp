@@ -1,0 +1,46 @@
+name: Captures du tutoriel Mac
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mixapp/tour.py"
+      - ".github/workflows/tuto-mac.yml"
+
+jobs:
+  captures:
+    runs-on: macos-15-intel
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliothèques
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pillow "numba==0.62.1" "llvmlite==0.45.1"
+      - name: Musique de démonstration et réglages
+        run: |
+          python tools/make_demo_tracks.py "$HOME/Music/Mes playlists"
+          mkdir -p "$HOME/Library/Application Support/MixApp"
+          printf '{"roots": ["%s"], "covers_online": false, "volume": 0.9}' "$HOME/Music/Mes playlists" > "$HOME/Library/Application Support/MixApp/settings.json"
+      - name: Visite guidée (captures de la fenêtre)
+        timeout-minutes: 20
+        env:
+          MIXAPP_FAKE_AUDIO: "1"
+          MIXAPP_TOUR: captures
+        run: python -c "from mixapp.gui import main; main()"
+      - name: Publication des captures (branche tuto-captures-mac)
+        if: always()
+        run: |
+          mkdir -p /tmp/pub && cp -r captures/* /tmp/pub/ 2>/dev/null || true
+          cd /tmp/pub
+          git init -q -b tuto-captures-mac
+          git config user.name "MixApp"
+          git config user.email "mixapp@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Captures Mac (run ${{ github.run_number }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" tuto-captures-mac
