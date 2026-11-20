@@ -1,0 +1,36 @@
+name: Publier une construction (sans attendre les autres)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Numéro (id) du run « Installateurs MixApp » dont publier les fichiers déjà prêts"
+        required: true
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: fichiers
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Page de téléchargement
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la fichiers
+          N=$(gh api repos/${{ github.repository }}/actions/runs/${{ inputs.run_id }} --jq .run_number)
+          TAG="v0.4.$N"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" fichiers/* --clobber --repo "${{ github.repository }}"
+          else
+            gh release create "$TAG" fichiers/* --repo "${{ github.repository }}" --latest \
+              --title "MixApp 0.4 (version $N)" \
+              --notes "Mac (puce Apple) : MixApp-Mac-AppleSilicon.dmg (ajouté dès qu'il est construit). Mac Intel : MixApp-Mac-Intel.dmg. Windows : MixApp-Setup-Windows.exe."
+          fi
