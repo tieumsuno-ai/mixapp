@@ -24,7 +24,7 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QItemSelectionModel, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QPainter,
                            QPainterPath, QPixmap, QShortcut)
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame,
@@ -35,10 +35,13 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFile
 
 from . import analysis, covers, db, library, search
 from .engine import Engine
-from .widgets import Equalizer, MixBadge, SeekBar, make_icon
+from . import theme
+from .theme import c as tc
+from .widgets import Equalizer, MixBadge, SeekBar, ThemeSwitch, make_icon
 from .transitions import SR
 
 APP_NAME = "MixApp"
+MOD = "⌘" if sys.platform == "darwin" else "Ctrl"
 COMPAT_COLORS = {"vert": "#3ecf6e", "orange": "#f0a43a", "rouge": "#e5534b", "inconnu": "#555"}
 
 STYLE = """
@@ -46,7 +49,7 @@ STYLE = """
 QMainWindow, QWidget { background: #15171c; color: #e6e6e6; }
 QLabel { background: transparent; }
 QLineEdit { background: #22252d; border: 1px solid #333844; border-radius: 8px;
-            padding: 8px 12px; font-size: 14px; color: #fff; }
+            padding: 8px 12px; font-size: 14px; color: #f2f2f2; }
 QLineEdit:focus { border-color: #6c8cff; }
 QListWidget, QTableWidget { background: #1b1e24; border: none; border-radius: 8px;
             alternate-background-color: #1f2229; outline: 0; }
@@ -85,7 +88,8 @@ QLabel#fact { color: #aab0bf; font-size: 12px; padding: 0 14px; }
 QLabel#remain { color: #e6e6e6; font-weight: 600; min-width: 52px; }
 QLabel#counter { color: #c8cdd8; font-size: 13px; }
 QLabel#section { color: #8a90a0; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
-QLabel#nowTitle { font-size: 20px; font-weight: 700; color: #fff; }
+QLabel#nowTitle { font-size: 20px; font-weight: 700; color: #f2f2f2; }
+QLabel#mixlen { color: #c8cdd8; font-weight: 600; min-width: 34px; }
 QLabel#nowInfo { color: #9aa3b5; font-size: 13px; }
 QLabel#transition { color: #f0a43a; font-weight: 600; }
 QFrame#player { background: #1b1e24; border-radius: 12px; }
@@ -259,8 +263,11 @@ class MainWindow(QMainWindow):
         self._cover_event = threading.Event()
         threading.Thread(target=self._cover_worker, daemon=True).start()
 
+        theme.set_light(self.settings.get("theme") == "clair")
         self._build_ui()
         self._connect()
+        if theme.is_light():
+            self.apply_theme()
         self.refresh_playlists()
         QTimer.singleShot(200, self._startup)
 
@@ -287,10 +294,13 @@ class MainWindow(QMainWindow):
         top.addWidget(self.btn_folders)
         self.btn_full = QPushButton()
         self.btn_full.setObjectName("flat")
-        self.btn_full.setIcon(make_icon("fullscreen", 18, "#c8cdd8"))
+        self.btn_full.setIcon(make_icon("fullscreen", 18, tc("#c8cdd8")))
         self.btn_full.setIconSize(QSize(18, 18))
         self.btn_full.setToolTip("Plein écran (F11 · ⌃⌘F sur Mac) — Échap pour sortir")
         top.addWidget(self.btn_full)
+        self.theme_switch = ThemeSwitch(theme.is_light())
+        self.theme_switch.setToolTip("Thème clair ☀ / sombre ☾ (T)")
+        top.addWidget(self.theme_switch)
         v.addLayout(top)
 
         # trois colonnes
@@ -312,7 +322,7 @@ class MainWindow(QMainWindow):
         self.playlist_list.setTextElideMode(Qt.ElideRight)
         lv.addWidget(self.playlist_list, 1)
         drop_hint = QLabel("↧ glisse un dossier de MP3 ici")
-        drop_hint.setStyleSheet("color:#6f7686; font-size:11px;")
+        self._ss(drop_hint, "color:#6f7686; font-size:11px;")
         lv.addWidget(drop_hint)
         split.addWidget(left)
 
@@ -330,7 +340,7 @@ class MainWindow(QMainWindow):
         self.table.setHorizontalHeaderLabels(["", "Titre", "Artiste", "BPM", "Clé", "Durée", ""])
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
@@ -351,9 +361,11 @@ class MainWindow(QMainWindow):
         self.btn_play_here.setToolTip("Lance la playlist à partir du morceau sélectionné (Entrée ou double-clic)")
         self.btn_play_here.setObjectName("primary")
         self.btn_play_next = QPushButton("Jouer ensuite")
-        self.btn_play_next.setToolTip("Le morceau sélectionné passera juste après celui en cours (★)")
+        self.btn_play_next.setToolTip("Les morceaux sélectionnés passeront juste après celui en cours (★)\n"
+                                      f"Sélection multiple : {MOD}+clic ou Maj+clic")
         self.btn_enqueue = QPushButton("Ajouter à la file")
-        self.btn_enqueue.setToolTip("Ajoute le morceau sélectionné après les autres demandes")
+        self.btn_enqueue.setToolTip("Ajoute les morceaux sélectionnés après les autres demandes\n"
+                                    f"Sélection multiple : {MOD}+clic ou Maj+clic")
         actions.addWidget(self.btn_play_here)
         actions.addStretch(1)
         actions.addWidget(self.btn_play_next)
@@ -374,15 +386,17 @@ class MainWindow(QMainWindow):
         self.queue_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.queue_list.setTextElideMode(Qt.ElideRight)
         self.queue_list.setUniformItemSizes(True)
+        self.queue_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.queue_list.setIconSize(QSize(38, 38))
         rv.addWidget(self.queue_list, 1)
         qa = QHBoxLayout()
         self.btn_up = QPushButton("↑")
-        self.btn_up.setToolTip("Monter le morceau choisi dans « À suivre »")
+        self.btn_up.setToolTip("Monter les morceaux choisis dans « À suivre »")
         self.btn_down = QPushButton("↓")
-        self.btn_down.setToolTip("Descendre le morceau choisi dans « À suivre »")
+        self.btn_down.setToolTip("Descendre les morceaux choisis dans « À suivre »")
         self.btn_remove = QPushButton("Retirer")
-        self.btn_remove.setToolTip("Retirer le morceau choisi de « À suivre »")
+        self.btn_remove.setToolTip("Retirer les morceaux choisis de « À suivre » (Suppr)\n"
+                                   f"Sélection multiple : {MOD}+clic ou Maj+clic")
         for b in (self.btn_up, self.btn_down):
             b.setFixedWidth(40)
         qa.addWidget(self.btn_up)
@@ -390,8 +404,8 @@ class MainWindow(QMainWindow):
         qa.addStretch(1)
         qa.addWidget(self.btn_remove)
         rv.addLayout(qa)
-        hint = QLabel("🔒 déjà préparé   ★ file prioritaire   ↑↓ / Retirer : tous les morceaux")
-        hint.setStyleSheet("color:#6f7686; font-size:11px;")
+        hint = QLabel(f"🔒 déjà préparé   ★ prioritaire   {MOD}/Maj+clic : plusieurs à la fois")
+        self._ss(hint, "color:#6f7686; font-size:11px;")
         rv.addWidget(hint)
         split.addWidget(right)
 
@@ -448,7 +462,7 @@ class MainWindow(QMainWindow):
         self.progress.setToolTip("Clique ou glisse pour avancer / reculer dans le morceau")
         self.progress.seek.connect(self._on_seek)
         self.len_label = QLabel("0:00")
-        self.len_label.setStyleSheet("color:#8a90a0;")
+        self._ss(self.len_label, "color:#8a90a0;")
         self.remain_label = QLabel("-0:00")
         self.remain_label.setObjectName("remain")
         self.remain_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -500,6 +514,27 @@ class MainWindow(QMainWindow):
         row3.addWidget(self.btn_hl)
         row3.addWidget(self.btn_dj)
         row3.addSpacing(14)
+        mix_lab = QLabel("⇄")
+        mix_lab.setObjectName("mixlen")
+        mix_lab.setToolTip("Durée des transitions")
+        row3.addWidget(mix_lab)
+        self.mix_len = QSlider(Qt.Horizontal)
+        self.mix_len.setRange(1, 15)            # 1 = Auto, puis 2 à 15 secondes
+        ms = self.settings.get("mix_seconds")
+        self.mix_len.setValue(int(ms) if ms else 1)
+        self.mix_len.setFixedWidth(110)
+        self.mix_len.setPageStep(1)
+        tip = ("Durée des transitions : Auto (l'appli choisit selon les morceaux)\n"
+               "ou de 2 à 15 secondes. L'appli garde des mesures entières pour rester\n"
+               "dans le rythme, et raccourcit si des clés frottent ou s'il y a des paroles.")
+        self.mix_len.setToolTip(tip)
+        row3.addWidget(self.mix_len)
+        self.mix_len_label = QLabel("")
+        self.mix_len_label.setObjectName("mixlen")
+        self.mix_len_label.setToolTip(tip)
+        row3.addWidget(self.mix_len_label)
+        self._show_mix_len(self.mix_len.value())
+        row3.addSpacing(14)
         row3.addWidget(QLabel("🔈"))
         self.volume = QSlider(Qt.Horizontal)
         self.volume.setToolTip("Volume")
@@ -513,7 +548,7 @@ class MainWindow(QMainWindow):
         row3.addWidget(self.eq)
         row3.addStretch(1)
         self.status = QLabel("")
-        self.status.setStyleSheet("color:#8a90a0;")
+        self._ss(self.status, "color:#8a90a0;")
         row3.addWidget(self.status)
         pv.addLayout(row3)
         v.addWidget(player)
@@ -542,6 +577,12 @@ class MainWindow(QMainWindow):
         self.btn_hl.toggled.connect(lambda _: self._on_highlights())
         self.btn_dj.toggled.connect(lambda _: self._on_dj())
         self.volume.valueChanged.connect(self._on_volume)
+        self._mix_len_timer = QTimer(self, singleShot=True, interval=350)
+        self._mix_len_timer.timeout.connect(self._apply_mix_len)
+        self.mix_len.valueChanged.connect(self._on_mix_len)
+        self.theme_switch.toggled.connect(self._on_theme)
+        QShortcut(QKeySequence(Qt.Key_T), self,
+                  activated=lambda: self.theme_switch.setLight(not self.theme_switch.light))
 
         self.bus.log.connect(self._on_log)
         self.bus.library_changed.connect(self._on_library_changed)
@@ -632,6 +673,9 @@ class MainWindow(QMainWindow):
                 return True
             if ev.key() == Qt.Key_Right:
                 self.skip()
+                return True
+            if obj is self.queue_list and ev.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+                self.remove_from_queue()
                 return True
         if obj is self.playlist_list.viewport():
             t = ev.type()
@@ -734,8 +778,8 @@ class MainWindow(QMainWindow):
         p.setRenderHint(QPainter.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(0, 0, size, size, size * 0.12, size * 0.12)
-        p.fillPath(path, QColor("#2a2e38"))
-        p.setPen(QColor("#5c6375"))
+        p.fillPath(path, QColor(tc("#2a2e38")))
+        p.setPen(QColor(tc("#5c6375")))
         f = QFont()
         f.setPixelSize(int(size * 0.45))
         p.setFont(f)
@@ -839,6 +883,9 @@ class MainWindow(QMainWindow):
 
     def _on_cover_ready(self, track_id, data):
         pm = self._rounded(data, 168) if data else None
+        if pm is None:
+            self._ph_ids = getattr(self, "_ph_ids", set())
+            self._ph_ids.add(track_id)            # pochette introuvable : vignette ♪ (suit le thème)
         self.cover_pix[track_id] = pm or self._placeholder(168)
         self._queue_sig = None            # forcer le rafraîchissement des icônes
         self._show_current_cover()
@@ -947,8 +994,7 @@ class MainWindow(QMainWindow):
         return t.row if t else None
 
     def _fill_table(self, rows, keep_selection=False):
-        sel = self._selected_row()
-        sel_id = sel["id"] if (sel and keep_selection) else None
+        sel_ids = {r["id"] for r in self._selected_rows()} if keep_selection else set()
         self.shown_rows = rows
         cur = self._current_track_row()
         cur_id = cur["id"] if cur else None
@@ -980,10 +1026,10 @@ class MainWindow(QMainWindow):
                 title_col, artist_col, info_col = "#646a78", "#585e6b", "#555b67"
             else:
                 title_col, artist_col, info_col = "#8fb3ff", "#7891c9", "#9aa3b5"
-            cells[1].setForeground(QColor(title_col))
-            cells[2].setForeground(QColor(artist_col))
+            cells[1].setForeground(QColor(tc(title_col)))
+            cells[2].setForeground(QColor(tc(artist_col)))
             for c in (3, 4, 5):
-                cells[c].setForeground(QColor(info_col))
+                cells[c].setForeground(QColor(tc(info_col)))
             if is_cur:
                 for c in range(1, 6):
                     cells[c].setFont(bold)
@@ -994,9 +1040,17 @@ class MainWindow(QMainWindow):
             cells[1].setIcon(QIcon(pm))
             for c, it in enumerate(cells):
                 self.table.setItem(i, c, it)
-            if sel_id == r["id"]:
-                self.table.selectRow(i)
+            if r["id"] in sel_ids:
+                self.table.selectionModel().select(
+                    self.table.model().index(i, 0),
+                    QItemSelectionModel.Select | QItemSelectionModel.Rows)
         self._update_buttons()
+
+    def _selected_rows(self):
+        """Morceaux sélectionnés dans la liste, dans l'ordre de la liste."""
+        sm = self.table.selectionModel()
+        idx = sorted({i.row() for i in sm.selectedRows()}) if sm else []
+        return [self.shown_rows[i] for i in idx if i < len(self.shown_rows)]
 
     def _selected_row(self):
         idx = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
@@ -1067,6 +1121,7 @@ class MainWindow(QMainWindow):
                 eng.volume = self.volume.value() / 100
                 eng.hl_mode = self._hl_mode()
                 eng.dj_order = self.btn_dj.isChecked()
+                eng.mix_seconds = self._mix_seconds()
                 if self.vocals_ok:
                     eng.vocal_provider = self.vocal_map
                 eng.load_playlist(rows, start)
@@ -1280,12 +1335,16 @@ class MainWindow(QMainWindow):
             self.engine.skip()
 
     def queue_selected(self, front: bool):
-        sel = self._selected_row()
-        if not (sel and self.engine):
+        rows = self._selected_rows()
+        if not (rows and self.engine):
             return
-        (self.engine.play_next if front else self.engine.enqueue)(sel)
-        self.status.setText(f"« {sel.get('title')} » " +
-                            ("jouera ensuite" if front else "ajouté à la file"))
+        (self.engine.play_next_many if front else self.engine.enqueue_many)(rows)
+        if len(rows) == 1:
+            self.status.setText(f"« {rows[0].get('title') or rows[0]['filename']} » " +
+                                ("jouera ensuite" if front else "ajouté à la file"))
+        else:
+            self.status.setText(f"{len(rows)} morceaux " +
+                                ("joueront ensuite" if front else "ajoutés à la file"))
         self.refresh_queue()
 
     def _queue_pos(self):
@@ -1299,25 +1358,91 @@ class MainWindow(QMainWindow):
         return self._queue_pos()
 
     def remove_from_queue(self):
-        i = self._queue_pos()
-        if i is None or self.engine is None:
-            self.status.setText("Choisis d'abord un morceau dans « À suivre »")
+        pos = self._queue_positions()
+        if not pos or self.engine is None:
+            self.status.setText("Choisis d'abord un ou plusieurs morceaux dans « À suivre »")
             return
-        if not self.engine.remove_upcoming(i):
-            self.status.setText("Ce morceau est déjà en train de s'enchaîner")
+        n = self.engine.remove_upcoming_many(pos)
+        if n < len(pos):
+            self.status.setText("Un morceau est déjà en train de s'enchaîner : il reste")
+        elif n > 1:
+            self.status.setText(f"{n} morceaux retirés de « À suivre »")
         self._queue_sig = None
-        self.refresh_queue(select_pos=min(i, self.queue_list.count() - 2))
+        self.refresh_queue(select_pos=[max(0, min(min(pos), self.queue_list.count() - 1 - n))])
 
     def move_in_queue(self, delta):
-        i = self._queue_pos()
-        if i is None or self.engine is None:
-            self.status.setText("Choisis d'abord un morceau dans « À suivre »")
+        pos = self._queue_positions()
+        if not pos or self.engine is None:
+            self.status.setText("Choisis d'abord un ou plusieurs morceaux dans « À suivre »")
             return
-        j = self.engine.move_upcoming(i, delta)
-        if j == i and 0 <= i + delta < self.queue_list.count():
+        new = self.engine.move_upcoming_many(pos, delta)
+        if new == sorted(pos) and 0 <= (min(pos) if delta < 0 else max(pos)) + delta < self.queue_list.count():
             self.status.setText("Ce morceau est déjà en train de s'enchaîner")
         self._queue_sig = None
-        self.refresh_queue(select_pos=j)
+        self.refresh_queue(select_pos=new)
+
+    def _queue_positions(self):
+        out = []
+        for it in self.queue_list.selectedItems():
+            data = it.data(Qt.UserRole)
+            if data:
+                out.append(data[1])
+        if not out and self._queue_pos() is not None:
+            out = [self._queue_pos()]
+        return sorted(out)
+
+    # ------------------------------------------------------- durée des transitions
+
+    def _mix_seconds(self):
+        v = self.mix_len.value()
+        return None if v <= 1 else float(v)
+
+    def _show_mix_len(self, v):
+        self.mix_len_label.setText("Auto" if v <= 1 else f"{v} s")
+
+    def _on_mix_len(self, v):
+        self._show_mix_len(v)
+        self._mix_len_timer.start()
+
+    def _apply_mix_len(self):
+        secs = self._mix_seconds()
+        self.settings["mix_seconds"] = secs
+        save_settings(self.settings)
+        if self.engine:
+            self.engine.set_mix_seconds(secs)
+        self.status.setText("Transitions : durée choisie par l'appli" if secs is None
+                            else f"Transitions d'environ {secs:.0f} s (dès le prochain enchaînement)")
+
+    # ------------------------------------------------------------------ thème
+
+    def _ss(self, w, sheet: str):
+        """Feuille de style d'un élément, adaptée au thème (et réappliquée s'il change)."""
+        w.setProperty("css0", sheet)
+        w.setStyleSheet(theme.css(sheet))
+
+    def _on_theme(self, light: bool):
+        self.settings["theme"] = "clair" if light else "sombre"
+        save_settings(self.settings)
+        self.apply_theme()
+
+    def apply_theme(self):
+        theme.set_light(self.theme_switch.light)
+        QApplication.instance().setStyleSheet(theme.css(STYLE))
+        for w in self.findChildren(QWidget):
+            sheet = w.property("css0")
+            if sheet:
+                w.setStyleSheet(theme.css(sheet))
+        self.btn_full.setIcon(make_icon("fullscreen", 18, tc("#c8cdd8")))
+        if hasattr(self, "_small_ph"):
+            del self._small_ph
+        for tid in getattr(self, "_ph_ids", ()):
+            self.cover_pix[tid] = self._placeholder(168)
+        if self.shown_rows:
+            self._fill_table(self.shown_rows, keep_selection=True)
+        self._show_current_cover()
+        self._queue_sig = None
+        self.refresh_queue()
+        self.mix_badge.update()
 
     def _on_volume(self, v):
         if self.engine:
@@ -1445,7 +1570,11 @@ class MainWindow(QMainWindow):
         if getattr(self, "_queue_sig", None) == sig and select_pos is None:
             return
         self._queue_sig = sig
-        cur_sel = self._queue_pos() if select_pos is None else select_pos
+        if select_pos is None:
+            cur_sel = set(self._queue_positions())
+        else:
+            cur_sel = set(select_pos) if isinstance(select_pos, (list, tuple, set)) else {select_pos}
+        self.queue_list.blockSignals(True)
         self.queue_list.clear()
         for pos, (kind, r) in enumerate(items):
             label = f"{r.get('title') or r['filename']}\n{r.get('artist') or ''}"
@@ -1457,10 +1586,18 @@ class MainWindow(QMainWindow):
                 pm = self._placeholder(76)
             it.setIcon(QIcon(pm))
             it.setData(Qt.UserRole, (kind, pos))
-            it.setForeground(QColor("#ffd479" if kind == "prioritaire" else "#8fb3ff"))
+            it.setForeground(QColor(tc("#ffd479" if kind == "prioritaire" else "#8fb3ff")))
             self.queue_list.addItem(it)
-            if cur_sel == pos:
+        first = True
+        for pos in sorted(cur_sel):
+            it = self.queue_list.item(pos)
+            if it is None:
+                continue
+            if first:
                 self.queue_list.setCurrentItem(it)
+                first = False
+            it.setSelected(True)
+        self.queue_list.blockSignals(False)
 
     def closeEvent(self, e):
         self.stop()

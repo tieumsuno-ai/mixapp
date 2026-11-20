@@ -11,6 +11,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QProgressBar, QWidget
 
+from .theme import c as tc
+
 
 # ------------------------------------------------------------------ icônes
 
@@ -209,18 +211,18 @@ class MixBadge(QWidget):
         f2 = QFont()
         f2.setPixelSize(12)
         p.setFont(f2)
-        p.setPen(QColor("#c8cdd8"))
+        p.setPen(QColor(tc("#c8cdd8")))
         p.drawText(QRectF(x0, h / 2 - 2, w - x0 - 170, h / 2), Qt.AlignVCenter | Qt.AlignLeft,
                    p.fontMetrics().elidedText(self.text, Qt.ElideRight, int(w - x0 - 175)))
         # crossfader A → B
         cw, cx = 140, w - 154
         cy = h / 2
-        p.setPen(QPen(QColor("#596074"), 3, Qt.SolidLine, Qt.RoundCap))
+        p.setPen(QPen(QColor(tc("#596074")), 3, Qt.SolidLine, Qt.RoundCap))
         p.drawLine(QPointF(cx, cy), QPointF(cx + cw, cy))
         f3 = QFont()
         f3.setPixelSize(10)
         p.setFont(f3)
-        p.setPen(QColor("#8a90a0"))
+        p.setPen(QColor(tc("#8a90a0")))
         p.drawText(QRectF(cx - 14, cy - 8, 12, 16), Qt.AlignCenter, "A")
         p.drawText(QRectF(cx + cw + 2, cy - 8, 12, 16), Qt.AlignCenter, "B")
         k = self.progress if self.kind in ("beatmatch", "echo", "fade", "filtre", "pullup") else 0.0
@@ -281,3 +283,70 @@ class SeekBar(QProgressBar):
             self.dragging = False
             self.dragging_changed.emit(False)
             self.seek.emit(self._frac(ev))
+
+
+# ------------------------------------------------------------------ thème
+
+class ThemeSwitch(QWidget):
+    """Petit interrupteur discret : lune (sombre) / soleil (clair)."""
+
+    toggled = Signal(bool)          # True = clair
+
+    def __init__(self, light=False, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(46, 24)
+        self.setCursor(Qt.PointingHandCursor)
+        self.light = bool(light)
+        self._pos = 1.0 if self.light else 0.0
+        self._anim = QTimer(self, interval=16)
+        self._anim.timeout.connect(self._step)
+
+    def setLight(self, on: bool):
+        on = bool(on)
+        if on == self.light:
+            return
+        self.light = on
+        self._anim.start()
+        self.toggled.emit(on)
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.LeftButton and self.rect().contains(ev.position().toPoint()):
+            self.setLight(not self.light)
+
+    def _step(self):
+        target = 1.0 if self.light else 0.0
+        self._pos += (target - self._pos) * 0.35
+        if abs(target - self._pos) < 0.02:
+            self._pos = target
+            self._anim.stop()
+        self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        k = self._pos
+        track = QColor("#2a2e38") if k < 0.5 else QColor("#d6dbe5")
+        p.setPen(Qt.NoPen)
+        p.setBrush(track)
+        p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), h / 2, h / 2)
+        r = h / 2 - 3
+        cx = 3 + r + k * (w - 6 - 2 * r)
+        cy = h / 2
+        if k >= 0.5:                                    # soleil
+            sun = QColor("#f0a43a")
+            p.setBrush(sun)
+            p.drawEllipse(QPointF(cx, cy), r * 0.5, r * 0.5)
+            p.setPen(QPen(sun, 1.4, Qt.SolidLine, Qt.RoundCap))
+            for i in range(8):
+                a = i * math.pi / 4
+                p.drawLine(QPointF(cx + math.cos(a) * r * 0.72, cy + math.sin(a) * r * 0.72),
+                           QPointF(cx + math.cos(a) * r * 0.98, cy + math.sin(a) * r * 0.98))
+        else:                                           # lune
+            path = QPainterPath()
+            path.addEllipse(QPointF(cx, cy), r * 0.8, r * 0.8)
+            cut = QPainterPath()
+            cut.addEllipse(QPointF(cx + r * 0.42, cy - r * 0.3), r * 0.7, r * 0.7)
+            p.setBrush(QColor("#c8cdd8"))
+            p.drawPath(path.subtracted(cut))
+        p.end()

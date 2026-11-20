@@ -78,6 +78,7 @@ class Engine:
         self._resume: tuple | None = None   # (segment à reprendre, transition prévue)
         self.last_block = np.zeros((0, 2), np.float32)   # pour l'égaliseur animé
         self.hl_mode: str | None = None        # « temps forts » : None | "on"
+        self.mix_seconds: float | None = None  # durée des transitions (réglette) ; None = auto
         self.dj_order = False                  # « Ordre DJ » : file réordonnée tempo / clé / énergie
         self._folder_order: list[int] = []
         self._hl_info: dict[int, dict | None] = {}
@@ -115,6 +116,41 @@ class Engine:
         """« Ajouter à la file » : en fin de file prioritaire."""
         with self.lock:
             self.priority.append(dict(row))
+
+    def play_next_many(self, rows: list[dict]):
+        """« Jouer ensuite » sur plusieurs morceaux : ils passent juste après
+        celui en cours, dans l'ordre donné."""
+        with self.lock:
+            for r in reversed(rows):
+                self.priority.appendleft(dict(r))
+
+    def enqueue_many(self, rows: list[dict]):
+        with self.lock:
+            for r in rows:
+                self.priority.append(dict(r))
+
+    def remove_upcoming_many(self, positions) -> int:
+        """Retire plusieurs morceaux de « À suivre » d'un coup ; renvoie combien."""
+        n = 0
+        with self.lock:
+            for pos in sorted(set(positions), reverse=True):
+                n += bool(self.remove_upcoming(pos))
+        return n
+
+    def move_upcoming_many(self, positions, delta: int) -> list[int]:
+        """Déplace d'un cran un groupe de morceaux (sélection multiple) ;
+        renvoie leurs nouvelles places. Le groupe garde son ordre."""
+        with self.lock:
+            out, taken = [], set()
+            for pos in sorted(set(positions), reverse=delta > 0):
+                if pos + delta in taken:          # bloqué par le voisin du groupe
+                    out.append(pos)
+                    taken.add(pos)
+                    continue
+                j = self.move_upcoming(pos, delta)
+                out.append(j)
+                taken.add(j)
+            return sorted(out)
 
     def _cancel_pending(self, requeue: bool) -> bool:
         """Annule la transition déjà préparée (si elle n'a pas commencé).
@@ -209,6 +245,16 @@ class Engine:
             self._cancel_pending(requeue=True)
         self.log({None: "Temps forts désactivés", "court": "Temps forts : court",
                   "moyen": "Temps forts : moyen"}.get(mode, ""))
+
+    def set_mix_seconds(self, seconds: float | None):
+        """Durée des transitions choisie à la réglette (None = l'appli décide).
+        L'enchaînement déjà préparé est recalculé s'il n'a pas commencé."""
+        seconds = None if not seconds else float(seconds)
+        with self.lock:
+            if seconds == self.mix_seconds:
+                return
+            self.mix_seconds = seconds
+            self._cancel_pending(requeue=True)
 
     def hl_window(self, t: Track, quick: bool = False) -> dict | None:
         """Passage retenu pour ce morceau dans le mode actuel (ou None)."""
@@ -602,7 +648,7 @@ class Engine:
         if row is None:
             return
         b = self._view(self._get_track(row))
-        tr = render_auto(a, b)
+        tr = render_auto(a, b, self.mix_seconds)
         with self.lock:
             still = (self.cur is seg and self.pending is None and not self.stopping
                      and not self.skip_requests and self.peek_next() is not None

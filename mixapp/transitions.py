@@ -321,7 +321,14 @@ def key_shift_for(a: Track, b: Track, max_st: int = 2):
 GRID_SHARP_MIN = 1.3     # en dessous, les kicks ne sont pas assez nets pour caler
 
 
-def plan_beatmatch(a: Track, b: Track):
+def bars_for(seconds: float | None, bar: float) -> int | None:
+    """Nombre de mesures entières le plus proche d'une durée choisie (réglette)."""
+    if not seconds:
+        return None
+    return int(max(1, round(seconds / max(bar, 0.5))))
+
+
+def plan_beatmatch(a: Track, b: Track, seconds: float | None = None):
     """Calcule où et comment enchaîner a → b en calant les tempos. None si impossible.
 
     Comme un DJ : tempos proches + clés compatibles → long mélange ;
@@ -356,16 +363,23 @@ def plan_beatmatch(a: Track, b: Track):
         # mode « temps forts » : on entre en plein morceau (souvent chanté) →
         # superposition courte, pas de transposition
         L, shift = int(hl), 0
+    want = bars_for(seconds, a.bar)
+    if want:
+        # durée choisie par l'utilisateur (réglette), en mesures entières ;
+        # on ne l'allonge jamais au-delà de ce qui est sûr (clés qui frottent,
+        # passage instrumental en mode temps forts)
+        L = min(want, L) if (key == "conflit" and not shift) or hl else want
     ov_a = _overlap_start(a, L)
     # le « drop » de b (fin de son intro) tombe à la fin de la superposition
     b_start = max(b.first_beat, b.intro_end - L * b.bar)
     if b.row.get("_hl_entry") is not None:
         b_start = float(b.row["_hl_entry"])
     # les kicks sont-ils assez nets aux deux endroits pour un calage propre ?
-    n = 4 * L
-    sa = _grid_phase(_slice(a.audio, int(ov_a * SR), int(L * a.bar * SR)),
+    Lc = max(L, 4)            # mélange très court : on juge la netteté sur 4 mesures
+    n = 4 * Lc
+    sa = _grid_phase(_slice(a.audio, int(ov_a * SR), int(Lc * a.bar * SR)),
                      np.arange(n + 1) * 60.0 / a.bpm)[1]
-    sb = _grid_phase(_slice(b.audio, int(b_start * SR), int(L * b.bar * SR)),
+    sb = _grid_phase(_slice(b.audio, int(b_start * SR), int(Lc * b.bar * SR)),
                      np.arange(n + 1) * 60.0 / b.bpm)[1]
     if min(sa, sb) < GRID_SHARP_MIN:
         return None
@@ -605,6 +619,9 @@ def _soft_entry(seg: np.ndarray, b: Track) -> np.ndarray:
         return seg
     seg = seg.astype(np.float32).copy()
     bar = int(round(b.bar * SR))
+    # transition très courte : tout (volume et basses) doit être en place avant
+    # la fin du tampon, sinon les basses reviendraient d'un coup au raccord
+    bar = max(1, min(bar, n - int(0.08 * SR)))
     t = np.arange(n, dtype=np.float32)
     k = min(int(0.01 * SR), n)
     vol = np.clip(0.45 + 0.55 * np.sin(np.pi / 2 * np.clip(t / max(bar, 1), 0, 1)), 0, 1)
@@ -614,13 +631,13 @@ def _soft_entry(seg: np.ndarray, b: Track) -> np.ndarray:
     return (low * (lo_g * vol)[:, None] + high * vol[:, None]).astype(np.float32)
 
 
-def render_filter_echo(a: Track, pos: int, b: Track, b_start=None) -> Transition:
+def render_filter_echo(a: Track, pos: int, b: Track, b_start=None, tail_bars: int = 3) -> Transition:
     """Filtre qui ferme les graves sur les 2 dernières mesures de a, puis écho."""
-    pre = int(round(2 * a.bar * SR))
+    pre = int(round(min(2, max(1, tail_bars - 1)) * a.bar * SR))
     s0 = max(0, pos - pre)
     swept = _hpf_sweep(a.audio[s0:pos].astype(np.float32), 60.0, 1400.0)
     _declick_join(swept, a.audio[s0:s0 + 441])
-    tr = render_echo_out(a.audio, pos, a.bpm, b, b_start=b_start)
+    tr = render_echo_out(a.audio, pos, a.bpm, b, tail_bars=tail_bars, b_start=b_start)
     head = _hpf_sweep(tr.buffer[: int(60.0 / a.bpm * SR)].copy(), 1400.0, 1500.0)
     tr.buffer[: len(head)] = head
     buf = np.concatenate([swept, tr.buffer]).astype(np.float32)
@@ -642,7 +659,7 @@ def render_pullup_out(a: Track, pos: int, b: Track, b_start=None) -> Transition:
     return Transition("pullup", pos, out.astype(np.float32), b, gesture, b_s, info=dict(bpm=a.bpm))
 
 
-def render_effect_out(a: Track, pos: int, b: Track, b_start=None) -> Transition:
+def render_effect_out(a: Track, pos: int, b: Track, b_start=None, tail_bars: int = 3) -> Transition:
     """Transition à effet quand le calage est impossible : l'appli varie les
     effets (écho, filtre + écho, pull-up), le pull-up seulement quand le
     morceau qui part est énergique."""
@@ -653,10 +670,10 @@ def render_effect_out(a: Track, pos: int, b: Track, b_start=None) -> Transition:
         if lv < 20 * np.log10(TARGET_RMS) - 3:
             k = 1
     if k == 1:
-        return render_filter_echo(a, pos, b, b_start)
+        return render_filter_echo(a, pos, b, b_start, tail_bars)
     if k == 2:
         return render_pullup_out(a, pos, b, b_start)
-    return render_echo_out(a.audio, pos, a.bpm, b, b_start=b_start)
+    return render_echo_out(a.audio, pos, a.bpm, b, tail_bars=tail_bars, b_start=b_start)
 
 
 def render_echo_stop(src: np.ndarray, pos: int, bpm: float, tail_bars: int = 2) -> np.ndarray:
@@ -695,10 +712,11 @@ def render_fade(a: Track, b: Track, seconds: float = 6.0) -> Transition:
     return Transition("fade", s0, buf, b, 0, b_s)
 
 
-def render_auto(a: Track, b: Track) -> Transition:
+def render_auto(a: Track, b: Track, seconds: float | None = None) -> Transition:
     """Choisit la meilleure transition propre possible entre a et b :
-    calage tempo + clé si possible, sinon écho sur le temps, sinon fondu."""
-    plan = plan_beatmatch(a, b)
+    calage tempo + clé si possible, sinon écho sur le temps, sinon fondu.
+    `seconds` : durée voulue (réglette), None = l'appli décide."""
+    plan = plan_beatmatch(a, b, seconds)
     if plan:
         tr = render_beatmatch(a, b, plan)
         tr.info["why"] = plan["why"]
@@ -708,7 +726,8 @@ def render_auto(a: Track, b: Track) -> Transition:
         # morceau (début d'outro), b démarre proprement sur son 1er temps
         t = min(a.outro_start, a.grid_end - 2 * a.bar)
         pos = int(round(a.next_beat_after(t) * SR))
-        tr = render_effect_out(a, pos, b, b_start=b.row.get("_hl_entry"))
+        tr = render_effect_out(a, pos, b, b_start=b.row.get("_hl_entry"),
+                               tail_bars=int(np.clip(bars_for(seconds, a.bar) or 3, 1, 8)))
         r = b.bpm / a.bpm if b.analyzed else 1
         tr.info["why"] = ({"filtre": "Filtre + écho", "pullup": "Pull-up"}.get(tr.kind, "Écho")
                           + " : " + (
@@ -717,6 +736,6 @@ def render_auto(a: Track, b: Track) -> Transition:
                           f"tempos trop éloignés ({a.bpm:.0f}→{b.bpm:.0f} BPM)"
                           if abs(r - 1) > MAX_STRETCH else "rythme pas assez net pour caler"))
         return tr
-    tr = render_fade(a, b)
+    tr = render_fade(a, b, seconds or 6.0)
     tr.info["why"] = "Fondu enchaîné"
     return tr
