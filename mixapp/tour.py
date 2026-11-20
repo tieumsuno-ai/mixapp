@@ -55,7 +55,7 @@ def run(w, out: str, playlist: str = "Soirée Disco", search: str = "playa"):
         QApplication.processEvents()
         base = out_dir / f"{n[0]:02d}_{name}"
         w.grab().save(str(base) + ".png")
-        (Path(str(base) + ".json")).write_text(json.dumps(geometry(), ensure_ascii=False))
+        (Path(str(base) + ".json")).write_text(json.dumps(geometry(), ensure_ascii=False), encoding="utf-8")
         log.append(name)
 
     def analysed():
