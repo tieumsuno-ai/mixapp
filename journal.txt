@@ -1,0 +1,16 @@
+fenetre
+playlist
+lecture
+recherche
+recherche_selection
+jouer_ensuite
+flow_dj
+temps_forts
+timeline
+mix_en_cours
+mix_en_cours_2
+pause_echo
+en_pause
+reprise
+stop_33
+arrete
