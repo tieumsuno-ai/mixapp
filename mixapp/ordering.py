@@ -63,24 +63,52 @@ def path_cost(rows) -> float:
     return sum(cost(a, b) for a, b in zip(rows, rows[1:]))
 
 
+_memo: dict = {}
+
+
 def dj_order(rows: list[dict], first_id=None) -> list[dict]:
-    """Ordre qui minimise la difficulté des enchaînements (glouton + 2-opt)."""
+    """Ordre qui minimise la difficulté des enchaînements (glouton + 2-opt).
+    Rapide (matrice des coûts, gain de chaque inversion calculé en O(1)) et
+    mémorisé : redemander le même ordre ne coûte rien."""
     if len(rows) < 3:
         return list(rows)
-    rest = list(rows)
-    start = next((r for r in rest if r["id"] == first_id), rest[0])
-    rest.remove(start)
+    key = (tuple((r["id"], r.get("bpm"), r.get("camelot")) for r in rows), first_id)
+    if key in _memo:
+        by_id = {r["id"]: r for r in rows}
+        return [by_id[i] for i in _memo[key]]
+    n = len(rows)
+    C = [[cost(a, b) if a is not b else 0.0 for b in rows] for a in rows]
+    start = next((k for k, r in enumerate(rows) if r["id"] == first_id), 0)
+    rest = set(range(n)) - {start}
     path = [start]
     while rest:                                       # plus proche voisin
-        nxt = min(rest, key=lambda r: cost(path[-1], r))
+        cur = path[-1]
+        nxt = min(rest, key=lambda k: C[cur][k])
         rest.remove(nxt)
         path.append(nxt)
-    improved, n = True, len(path)
-    while improved:                                   # 2-opt (le 1er reste fixe)
-        improved = False
+    for _ in range(50):                               # 2-opt (le 1er reste fixe)
+        fwd = [0.0]
+        bwd = [0.0]
+        for k in range(n - 1):
+            fwd.append(fwd[-1] + C[path[k]][path[k + 1]])
+            bwd.append(bwd[-1] + C[path[k + 1]][path[k]])
+        best, best_ij = -1e-9, None
         for i in range(1, n - 1):
+            a_prev = path[i - 1]
             for j in range(i + 1, n):
-                new = path[:i] + path[i:j + 1][::-1] + path[j + 1:]
-                if path_cost(new) + 1e-9 < path_cost(path):
-                    path, improved = new, True
-    return path
+                old = C[a_prev][path[i]] + (fwd[j] - fwd[i])
+                new = C[a_prev][path[j]] + (bwd[j] - bwd[i])
+                if j + 1 < n:
+                    old += C[path[j]][path[j + 1]]
+                    new += C[path[i]][path[j + 1]]
+                gain = old - new
+                if gain > best + 1e-9:
+                    best, best_ij = gain, (i, j)
+        if best_ij is None:
+            break
+        i, j = best_ij
+        path[i:j + 1] = path[i:j + 1][::-1]
+    _memo[key] = [rows[k]["id"] for k in path]
+    if len(_memo) > 50:
+        _memo.pop(next(iter(_memo)))
+    return [rows[k] for k in path]

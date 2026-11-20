@@ -34,8 +34,13 @@ def _features(t: Track):
     if n_frames < 8:
         return None
     win = np.hanning(n_fft).astype(np.float32)
-    idx = np.arange(n_fft)[None, :] + hop * np.arange(n_frames)[:, None]
-    spec = np.abs(np.fft.rfft(y[idx] * win, axis=1))           # (frames, bins)
+    import time
+    spec = np.empty((n_frames, n_fft // 2 + 1), np.float32)
+    base = np.arange(n_fft)[None, :]
+    for i0 in range(0, n_frames, 256):                          # petits blocs (interface fluide)
+        idx = base + hop * np.arange(i0, min(i0 + 256, n_frames))[:, None]
+        spec[i0:i0 + 256] = np.abs(np.fft.rfft(y[idx] * win, axis=1))
+        time.sleep(0)
     freqs = np.fft.rfftfreq(n_fft, 1 / sr)
     band = (freqs >= 110) & (freqs <= 4000)
     pc = (np.round(12 * np.log2(freqs[band] / 440.0)) % 12).astype(int)

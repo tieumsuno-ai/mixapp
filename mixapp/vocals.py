@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -51,9 +52,10 @@ def _stft_mag(x: np.ndarray) -> np.ndarray:
     out = np.empty((n, F_BINS, 2), np.float32)
     for c in range(2):
         idx = np.arange(N_FFT)[None, :] + HOP * np.arange(n)[:, None]
-        for i0 in range(0, n, 2048):                  # par blocs (mémoire)
-            fr = pad[idx[i0:i0 + 2048], c] * win
-            out[i0:i0 + 2048, :, c] = np.abs(np.fft.rfft(fr, axis=1))[:, :F_BINS]
+        for i0 in range(0, n, 256):                   # petits blocs : l'interface reste fluide
+            fr = pad[idx[i0:i0 + 256], c] * win
+            out[i0:i0 + 256, :, c] = np.abs(np.fft.rfft(fr, axis=1))[:, :F_BINS]
+            time.sleep(0)
     return out
 
 
@@ -62,20 +64,20 @@ def activity(stereo: np.ndarray) -> np.ndarray:
     mag = _stft_mag(stereo.astype(np.float32))
     n = len(mag)
     n_seg = -(-n // T_SEG)
-    padded = np.zeros((n_seg * T_SEG, F_BINS, 2), np.float32)
-    padded[:n] = mag
+    padded = mag if n == n_seg * T_SEG else np.concatenate(
+        [mag, np.zeros((n_seg * T_SEG - n, F_BINS, 2), np.float32)])
     sess = _session()
-    voc = np.zeros_like(padded)
-    acc = np.zeros_like(padded)
-    for s in range(n_seg):
-        seg = padded[s * T_SEG:(s + 1) * T_SEG][None]
-        v, a = sess.run(None, {"mix:0": seg})
-        voc[s * T_SEG:(s + 1) * T_SEG] = v[0]
-        acc[s * T_SEG:(s + 1) * T_SEG] = a[0]
-    voc, acc = voc[:n], acc[:n]
-    mask = voc ** 2 / (voc ** 2 + acc ** 2 + 1e-10)
-    e_voc = ((mask * mag) ** 2).sum(axis=(1, 2))
-    e_mix = (mag ** 2).sum(axis=(1, 2))
+    e_voc = np.zeros(n_seg * T_SEG)
+    e_mix = np.zeros(n_seg * T_SEG)
+    for s_ in range(n_seg):
+        seg = padded[s_ * T_SEG:(s_ + 1) * T_SEG]
+        v, a = sess.run(None, {"mix:0": seg[None]})
+        v, a = v[0], a[0]
+        mask = v * v / (v * v + a * a + 1e-10)
+        e_voc[s_ * T_SEG:(s_ + 1) * T_SEG] = ((mask * seg) ** 2).sum(axis=(1, 2))
+        e_mix[s_ * T_SEG:(s_ + 1) * T_SEG] = (seg ** 2).sum(axis=(1, 2))
+        time.sleep(0.002)
+    e_voc, e_mix = e_voc[:n], e_mix[:n]
     # frames STFT (décalées de N_FFT par le remplissage) → tranches de 0,25 s
     t = (np.arange(n) * HOP - N_FFT + N_FFT / 2) / SR
     k = int(np.ceil(t[-1] / HOP_S)) + 1

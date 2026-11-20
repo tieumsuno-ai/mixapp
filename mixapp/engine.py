@@ -171,23 +171,27 @@ class Engine:
 
     # ------------------------------------------------------------ ordre DJ
     def set_dj_order(self, on: bool):
-        """Réordonne la suite de la playlist (ou revient à l'ordre du dossier)."""
+        """Réordonne la suite de la playlist (ou revient à l'ordre du dossier).
+        Le calcul se fait hors verrou : le son et l'interface ne sont jamais bloqués."""
         with self.lock:
             self.dj_order = on
             tr, seg = self.pending, self.cur
-            rest = list(self.auto[self.auto_idx:])
             if tr is not None and self._cancel_pending(requeue=False):
-                rest.insert(0, dict(tr.b.row.get("_base") or tr.b.row))
-            if on:
-                cur = (seg.track.row.get("_base") or seg.track.row) if seg and seg.track else None
-                if cur is not None:
-                    rest = ordering.dj_order([dict(cur)] + rest, cur["id"])[1:]
-                else:
-                    rest = ordering.dj_order(rest, rest[0]["id"] if rest else None)
+                self.auto.insert(self.auto_idx, dict(tr.b.row.get("_base") or tr.b.row))
+            rest = list(self.auto[self.auto_idx:])
+            cur = (seg.track.row.get("_base") or seg.track.row) if seg and seg.track else None
+            snapshot = [r["id"] for r in rest]
+        if on:
+            if cur is not None:
+                new = ordering.dj_order([dict(cur)] + rest, cur["id"])[1:]
             else:
-                pos = {i: k for k, i in enumerate(self._folder_order)}
-                rest.sort(key=lambda r: pos.get(r["id"], 1e9))
-            self.auto[self.auto_idx:] = rest
+                new = ordering.dj_order(rest, rest[0]["id"] if rest else None)
+        else:
+            pos = {i: k for k, i in enumerate(self._folder_order)}
+            new = sorted(rest, key=lambda r: pos.get(r["id"], 1e9))
+        with self.lock:
+            if [r["id"] for r in self.auto[self.auto_idx:]] == snapshot:   # rien n'a bougé entre-temps
+                self.auto[self.auto_idx:] = new
         self.log("Flow DJ activé" if on else "Ordre du dossier")
 
     # ------------------------------------------------------------ temps forts

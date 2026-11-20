@@ -246,6 +246,7 @@ class MainWindow(QMainWindow):
         except Exception:
             self._hl_store = {}
         self._hl_queue: list = []
+        self._hl_queued: set = set()
         self._hl_lock = threading.Lock()
         self._hl_event = threading.Event()
         threading.Thread(target=self._hl_worker, daemon=True).start()
@@ -1100,12 +1101,27 @@ class MainWindow(QMainWindow):
             return None
         return e.get(mode) or False
 
-    def want_hl(self, rows):
+    def want_hl(self, rows, urgent=False):
+        """Demande le calcul (en fond) des passages « temps forts ». Les morceaux
+        « À suivre » passent devant ; une même demande n'est jamais dupliquée."""
+        if not self._hl_mode():
+            return
+        added = False
         with self._hl_lock:
-            for r in rows:
-                if r.get("bpm") and self._hl_key(r) not in self._hl_store:
-                    self._hl_queue.append(r)
-        self._hl_event.set()
+            for r in rows[:3] if urgent else rows:
+                k = self._hl_key(r)
+                if not r.get("bpm") or k in self._hl_store:
+                    continue
+                if k in self._hl_queued:
+                    if urgent:                         # remonter en tête de file
+                        self._hl_queue = [x for x in self._hl_queue if self._hl_key(x) != k]
+                        self._hl_queue.insert(0, r)
+                    continue
+                self._hl_queued.add(k)
+                (self._hl_queue.insert(0, r) if urgent else self._hl_queue.append(r))
+                added = True
+        if added or urgent:
+            self._hl_event.set()
 
     def _hl_worker(self):
         from . import highlights as HL
@@ -1127,6 +1143,7 @@ class MainWindow(QMainWindow):
             k = self._hl_key(r)
             if k in self._hl_store:
                 continue
+            time.sleep(0.3)                          # laisser respirer l'interface entre deux morceaux
             try:
                 tr = load_track(r)
                 info = HL.find(tr)
@@ -1137,6 +1154,8 @@ class MainWindow(QMainWindow):
             except Exception:
                 self._hl_store[k] = {}
             dirty += 1
+            with self._hl_lock:
+                self._hl_queued.discard(k)
             self.bus.hl_ready.emit()
 
     def mix_duration(self, rows, mode, first_index_plays_from_start=True):
@@ -1386,7 +1405,8 @@ class MainWindow(QMainWindow):
         else:
             cur_end = t.outro_start if t.analyzed else t.length
         cur_left = max(0.0, cur_end - pos)
-        self.want_hl(upcoming)
+        if mode:
+            self.want_hl(upcoming, urgent=True)
         if mode:
             left = cur_left + self.mix_duration(upcoming, mode, first_index_plays_from_start=False)
         else:
