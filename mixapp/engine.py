@@ -79,6 +79,8 @@ class Engine:
         self.last_block = np.zeros((0, 2), np.float32)   # pour l'égaliseur animé
         self.hl_mode: str | None = None        # « temps forts » : None | "on"
         self.mix_seconds: float | None = None  # durée des transitions (réglette) ; None = auto
+        self.next_style: str | None = None     # pad : transition imposée pour le prochain enchaînement
+        self.style_events: list[str] = []      # messages pour l'interface (pad utilisé, repli…)
         self.dj_order = False                  # « Ordre DJ » : file réordonnée tempo / clé / énergie
         self._folder_order: list[int] = []
         self._hl_info: dict[int, dict | None] = {}
@@ -245,6 +247,57 @@ class Engine:
             self._cancel_pending(requeue=True)
         self.log({None: "Temps forts désactivés", "court": "Temps forts : court",
                   "moyen": "Temps forts : moyen"}.get(mode, ""))
+
+    def set_next_style(self, style: str | None):
+        """Pad : impose le style du prochain enchaînement (un seul coup) ;
+        None / "auto" = l'appli choisit. Le mix déjà préparé est refait
+        s'il n'a pas commencé."""
+        style = None if style in (None, "auto") else style
+        with self.lock:
+            if style == self.next_style:
+                return
+            self.next_style = style
+            self._cancel_pending(requeue=True)
+
+    def next_transition(self):
+        """Prochain enchaînement prévu : (secondes avant le début, type, explication,
+        repli éventuel), ou None s'il n'est pas encore préparé."""
+        with self.lock:
+            seg, tr = self.cur, self.pending
+            if seg is None or tr is None or seg.trans is not None or self.stopping:
+                return None
+            if seg.track is None or seg.audio is not seg.track.audio:
+                return None
+            return ((tr.a_end - seg.pos) / SR, tr.kind, tr.info.get("why", ""),
+                    tr.info.get("fallback"))
+
+    def deck_state(self):
+        """Ce que montrent les platines : morceau et position (s) de chaque côté,
+        position du crossfader (0 = A, 1 = B) et type de transition en cours."""
+        with self.lock:
+            seg = self.cur
+            if seg is None:
+                return None
+            tr = seg.trans
+            if tr is None:
+                a = seg.track
+                pos = seg.pos / SR
+                if seg.next is not None and seg.next.track is a and a is not None \
+                        and seg.audio is not a.audio:
+                    pos = seg.next.pos / SR
+                nb = self.pending.b if self.pending is not None else None
+                b_pos = self.pending.b_start / SR if self.pending is not None else 0.0
+                return {"a": a, "a_pos": pos, "b": nb, "b_pos": b_pos, "x": 0.0, "kind": None}
+            n = len(tr.buffer)
+            ov = tr.info.get("ov_len", n) if tr.kind == "beatmatch" else n
+            p = seg.pos
+            if tr.kind in ("beatmatch", "fade"):
+                x = min(1.0, p / max(1, ov))
+            else:                                   # effets : b entre à b_offset
+                x = 0.0 if p < tr.b_offset else min(1.0, 0.5 + (p - tr.b_offset) / max(1, n - tr.b_offset))
+            return {"a": seg.track, "a_pos": (tr.a_end + p) / SR, "b": tr.b,
+                    "b_pos": max(0.0, (tr.b_start + p - tr.b_offset) / SR), "x": x,
+                    "kind": tr.kind if p <= ov else None}
 
     def set_mix_seconds(self, seconds: float | None):
         """Durée des transitions choisie à la réglette (None = l'appli décide).
@@ -546,6 +599,9 @@ class Engine:
         elif self.pending is not None:                    # fin de A → transition prévue
             tr, self.pending = self.pending, None
             self.cur = Segment(tr.buffer, 0, len(tr.buffer), track=seg.track, trans=tr)
+            if tr.info.get("forced") and self.next_style == tr.info["forced"]:
+                self.next_style = None             # pad « un coup » : retour en Auto
+                self.style_events.append("auto")
             if not self.history or self.history[-1].get("id") != tr.b.id:
                 self.history.append(tr.b.row)
             self.log(f"⇄ {tr.b.label}  ({_KIND[tr.kind]})")
@@ -648,9 +704,11 @@ class Engine:
         if row is None:
             return
         b = self._view(self._get_track(row))
-        tr = render_auto(a, b, self.mix_seconds)
+        style = self.next_style
+        tr = render_auto(a, b, self.mix_seconds, style)
         with self.lock:
             still = (self.cur is seg and self.pending is None and not self.stopping
+                     and self.next_style == style
                      and not self.skip_requests and self.peek_next() is not None
                      and self.peek_next()["id"] == row["id"])
             if not still:

@@ -712,10 +712,53 @@ def render_fade(a: Track, b: Track, seconds: float = 6.0) -> Transition:
     return Transition("fade", s0, buf, b, 0, b_s)
 
 
-def render_auto(a: Track, b: Track, seconds: float | None = None) -> Transition:
+def render_fade_at(a: Track, pos: int, b: Track, b_start=None,
+                   seconds: float | None = None) -> Transition:
+    """Fondu enchaîné posé sur le temps : a baisse, b monte (puissance constante),
+    sur une durée en mesures entières, b démarrant sur son premier temps."""
+    bars = int(np.clip(bars_for(seconds or 6.0, a.bar) or 3, 1, 16))
+    n = int(round(bars * a.bar * SR))
+    n = max(int(0.5 * SR), min(n, len(a.audio) - pos))
+    if b_start is not None:
+        b_s = int(round(b_start * SR))
+    else:
+        b_s = int(round(b.first_beat * SR)) if b.analyzed else 0
+    a_seg = _slice(a.audio, pos, n)
+    b_seg = _slice(b.audio, b_s, n)
+    w = np.linspace(0, np.pi / 2, n, dtype=np.float32)[:, None]
+    buf = (a_seg * np.cos(w) + b_seg * np.sin(w)).astype(np.float32)
+    _declick_join(buf, a.audio[pos:pos + 441])
+    return Transition("fade", pos, buf, b, 0, b_s)
+
+
+STYLES = {"auto": "Auto", "cale": "Mix calé", "echo": "Écho", "filtre": "Filtre",
+          "pullup": "Pull-up", "fondu": "Fondu"}
+
+
+def _effect_pos(a: Track) -> int:
+    t = min(a.outro_start, a.grid_end - 2 * a.bar)
+    return int(round(a.next_beat_after(t) * SR))
+
+
+def render_auto(a: Track, b: Track, seconds: float | None = None,
+                style: str | None = None) -> Transition:
     """Choisit la meilleure transition propre possible entre a et b :
     calage tempo + clé si possible, sinon écho sur le temps, sinon fondu.
-    `seconds` : durée voulue (réglette), None = l'appli décide."""
+    `seconds` : durée voulue (réglette), None = l'appli décide.
+    `style` : transition imposée par un pad (cale, echo, filtre, pullup, fondu) ;
+    si elle est impossible, l'appli prend la solution propre la plus proche
+    et l'explique dans info["fallback"]."""
+    if style and style != "auto":
+        tr = _render_forced(a, b, seconds, style)
+        if tr is not None:
+            tr.info["forced"] = style
+            return tr
+        tr = render_auto(a, b, seconds)
+        tr.info["forced"] = style
+        tr.info["fallback"] = (f"{STYLES.get(style, style)} impossible ici"
+                               + (f" ({tr.info['why'].split(' : ', 1)[1]})" if " : " in tr.info.get("why", "") else "")
+                               + f" : {_KIND_FR.get(tr.kind, tr.kind)} à la place")
+        return tr
     plan = plan_beatmatch(a, b, seconds)
     if plan:
         tr = render_beatmatch(a, b, plan)
@@ -738,4 +781,41 @@ def render_auto(a: Track, b: Track, seconds: float | None = None) -> Transition:
         return tr
     tr = render_fade(a, b, seconds or 6.0)
     tr.info["why"] = "Fondu enchaîné"
+    return tr
+
+
+_KIND_FR = {"beatmatch": "mix calé", "echo": "écho", "filtre": "filtre", "pullup": "pull-up",
+            "fade": "fondu"}
+
+
+def _render_forced(a: Track, b: Track, seconds, style) -> Transition | None:
+    """Transition choisie au pad ; None si elle est impossible pour ces deux morceaux."""
+    if not a.analyzed:
+        return None if style != "fondu" else _named(render_fade(a, b, seconds or 6.0), "Fondu (choisi)")
+    b_start = b.row.get("_hl_entry")
+    if style == "cale":
+        plan = plan_beatmatch(a, b, seconds)
+        if not plan:
+            return None
+        tr = render_beatmatch(a, b, plan)
+        return _named(tr, "Mix calé (choisi) : " + plan["why"])
+    pos = _effect_pos(a)
+    tail = int(np.clip(bars_for(seconds, a.bar) or 3, 1, 8))
+    if style == "echo":
+        tr = render_echo_out(a.audio, pos, a.bpm, b, tail_bars=tail, b_start=b_start)
+    elif style == "filtre":
+        tr = render_filter_echo(a, pos, b, b_start, tail)
+    elif style == "pullup":
+        tr = render_pullup_out(a, pos, b, b_start)
+    elif style == "fondu":
+        if a.row.get("_hl_echo_out") or b.row.get("_hl_echo_in"):
+            return None                     # un fondu superposerait des paroles
+        tr = render_fade_at(a, pos, b, b_start, seconds)
+    else:
+        return None
+    return _named(tr, f"{STYLES[style]} (choisi au pad)")
+
+
+def _named(tr: Transition, why: str) -> Transition:
+    tr.info["why"] = why
     return tr

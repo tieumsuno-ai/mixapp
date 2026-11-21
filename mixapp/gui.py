@@ -24,19 +24,20 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QPainter,
+from PySide6.QtCore import QItemSelectionModel, QObject, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QLinearGradient, QPainter,
                            QPainterPath, QPixmap, QShortcut)
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QProgressBar,
-                               QProxyStyle, QPushButton, QSlider, QSplitter, QStyle, QTableWidget,
+                               QProxyStyle, QPushButton, QSlider, QSplitter, QStackedWidget, QStyle, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import analysis, covers, db, library, search
 from .engine import Engine
 from . import theme
 from .theme import c as tc
+from .deckview import DeckView, dominant_color
 from .widgets import Equalizer, MixBadge, SeekBar, ThemeSwitch, make_icon
 from .transitions import SR
 
@@ -207,6 +208,38 @@ class AudioOutput:
 
 # ------------------------------------------------------------------ signaux inter-fils
 
+class AmbientFrame(QFrame):
+    """Cadre du lecteur teinté de la couleur de la pochette en cours
+    (couleur calculée une fois par morceau, dessin d'un simple dégradé)."""
+
+    def __init__(self):
+        super().__init__()
+        self.color = None
+        self.track_id = None
+
+    def set_color(self, color, track_id=None):
+        self.color, self.track_id = color, track_id
+        self.update()
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self.color is None:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        g = QLinearGradient(0, 0, self.width(), 0)
+        c0 = QColor(self.color)
+        c0.setAlpha(70 if not theme.is_light() else 45)
+        c1 = QColor(self.color)
+        c1.setAlpha(0)
+        g.setColorAt(0, c0)
+        g.setColorAt(0.6, c1)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 12, 12)
+        p.fillPath(path, g)
+        p.end()
+
+
 class Bus(QObject):
     log = Signal(str)
     library_changed = Signal()
@@ -292,6 +325,11 @@ class MainWindow(QMainWindow):
         self.btn_folders = QPushButton("Dossiers de musique…")
         self.btn_folders.setToolTip("Ajouter un dossier de musique : chaque sous-dossier devient une playlist")
         top.addWidget(self.btn_folders)
+        self.btn_view = QPushButton("◎  Platines")
+        self.btn_view.setCheckable(True)
+        self.btn_view.setToolTip("Vue Platines : pochettes, formes d'onde, platines, table de mixage\n"
+                                 "et pads pour choisir la prochaine transition (V)")
+        top.addWidget(self.btn_view)
         self.btn_full = QPushButton()
         self.btn_full.setObjectName("flat")
         self.btn_full.setIcon(make_icon("fullscreen", 18, tc("#c8cdd8")))
@@ -410,11 +448,17 @@ class MainWindow(QMainWindow):
         split.addWidget(right)
 
         split.setSizes([230, 700, 330])
-        v.addWidget(split, 1)
+        self.stack = QStackedWidget()
+        self.stack.addWidget(split)
+        self.deck = DeckView(self._deck_cover, lambda t: self.vocal_map(t, compute=False),
+                             self.settings.get("animations", "fluides"))
+        self.stack.addWidget(self.deck)
+        v.addWidget(self.stack, 1)
 
         # lecteur
-        player = QFrame()
+        player = AmbientFrame()
         player.setObjectName("player")
+        self.player_frame = player
         pv = QVBoxLayout(player)
         pv.setContentsMargins(18, 14, 18, 14)
         row1 = QHBoxLayout()
@@ -573,6 +617,13 @@ class MainWindow(QMainWindow):
         self.btn_stop33.clicked.connect(lambda: self.styled_stop("turntable"))
         self.btn_pullup.clicked.connect(lambda: self.styled_stop("pullup"))
         self.btn_next.clicked.connect(self.skip)
+        self.btn_view.toggled.connect(self._on_view)
+        QShortcut(QKeySequence(Qt.Key_V), self, activated=self.btn_view.toggle)
+        self.deck.style_chosen.connect(self._on_pad_style)
+        self.deck.action.connect(self._on_pad_action)
+        self.deck.mode_changed.connect(self._on_anim_mode)
+        if self.settings.get("view") == "platines":
+            self.btn_view.setChecked(True)
         self.btn_full.clicked.connect(self.toggle_fullscreen)
         self.btn_hl.toggled.connect(lambda _: self._on_highlights())
         self.btn_dj.toggled.connect(lambda _: self._on_dj())
@@ -1144,9 +1195,60 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, APP_NAME, f"Sortie audio impossible :\n{e}")
             return
         eng.start_worker()
+        self.deck.set_engine(eng)
         self._update_buttons()
         self.refresh_player()
         self._refill_dots()
+
+    # ------------------------------------------------------------ vue Platines et pads
+
+    def _deck_cover(self, track):
+        pm = self.cover_pix.get(track.id)
+        if pm is None:
+            self.want_cover(track.row)
+            return None
+        if track.id in getattr(self, "_ph_ids", ()):
+            return None
+        return pm
+
+    def _on_view(self, on):
+        self.stack.setCurrentIndex(1 if on else 0)
+        # les platines ont leur propre vumètre : le petit égaliseur se repose
+        (self.eq.timer.stop if on else self.eq.timer.start)()
+        if on:
+            self.eq.levels[:] = 0
+            self.eq.update()
+        self.settings["view"] = "platines" if on else "liste"
+        save_settings(self.settings)
+
+    def _on_anim_mode(self, mode):
+        self.settings["animations"] = mode
+        save_settings(self.settings)
+
+    def _on_pad_style(self, style):
+        names = {"auto": "Auto", "cale": "Mix calé", "echo": "Écho", "filtre": "Filtre",
+                 "pullup": "Pull-up", "fondu": "Fondu"}
+        if self.engine is None:
+            self.deck.set_style_state(None)
+            self.status.setText("Lance d'abord une playlist")
+            return
+        self.engine.set_next_style(style)
+        self.status.setText("L'appli choisit les transitions" if style == "auto" else
+                            f"Prochain enchaînement : {names[style]} (une fois, puis retour en Auto)")
+
+    def _on_pad_action(self, k):
+        if k == "stop33":
+            self.btn_stop33.click()
+        elif k == "pullup":
+            self.btn_pullup.click()
+        elif k == "pause":
+            self.play_pause()
+        elif k == "next":
+            self.skip()
+        elif k == "hl":
+            self.btn_hl.click()
+        elif k == "dj":
+            self.btn_dj.click()
 
     def play_pause(self):
         eng = self.engine
@@ -1317,6 +1419,9 @@ class MainWindow(QMainWindow):
         if self.engine:
             self.engine.stop()
             self.engine = None
+        self.deck.set_engine(None)
+        self.deck.set_style_state(None)
+        self.player_frame.set_color(None)
         self.now_title.setText("Rien en cours")
         self.now_info.setText("")
         self.transition_label.setText("")
@@ -1462,6 +1567,11 @@ class MainWindow(QMainWindow):
             self.now_info.setText("Arrêté" if stopped else "Fin de la playlist")
             return
         self._update_play_icon()
+        if eng.style_events:
+            eng.style_events.clear()
+            self.status.setText("Pad utilisé : retour en Auto pour les enchaînements suivants")
+        self.deck.set_style_state(eng.next_style)
+        self.deck.set_toggles(self.btn_hl.isChecked(), self.btn_dj.isChecked())
         st = eng.transition_state()
         if eng.paused:
             self.mix_badge.set_state(None)
@@ -1491,6 +1601,10 @@ class MainWindow(QMainWindow):
             self._refill_dots()
             self._show_current_cover()
             self._show_info(t.row.get("_base") or t.row)
+        if self.player_frame.track_id != t.id or self.player_frame.color is None:
+            pm = self.cover_pix.get(t.id)
+            if pm is not None and t.id not in getattr(self, "_ph_ids", ()):
+                self.player_frame.set_color(dominant_color(pm), t.id)
         self._update_counter(eng, t, pos)
         info = t.row.get("artist") or ""
         if t.analyzed:
@@ -1526,9 +1640,21 @@ class MainWindow(QMainWindow):
             name = name if len(name) < 40 else name[:38] + "…"
             self.transition_label.setText({"beatmatch": "⇄ mix calé vers ", "echo": "〰 écho vers ", "filtre": "〰 filtre + écho vers ", "pullup": "↺ pull-up vers ",
                                            "fade": "fondu vers "}.get(kind, "") + name)
-        else:
+        elif kind:
             self.transition_label.setText({"beatmatch": "⇄ mix calé", "echo": "〰 sortie en écho", "filtre": "〰 filtre + écho", "pullup": "↺ pull-up",
                                            "fade": "fondu"}.get(kind, ""))
+        else:
+            nt = eng.next_transition()
+            if nt is not None:
+                secs, k, _why, fb = nt
+                m, sec = divmod(int(max(0, secs)), 60)
+                self.transition_label.setText(
+                    f"prochain enchaînement dans {m}:{sec:02d} · " +
+                    {"beatmatch": "mix calé", "echo": "écho", "filtre": "filtre + écho",
+                     "pullup": "pull-up", "fade": "fondu"}.get(k, k) + (" ⚠" if fb else ""))
+                self.transition_label.setToolTip(fb or _why)
+            else:
+                self.transition_label.setText("")
         self.refresh_queue()
 
     def _update_counter(self, eng, t, pos):
