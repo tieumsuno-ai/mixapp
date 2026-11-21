@@ -31,7 +31,7 @@ from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QLinearG
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QProgressBar,
-                               QProxyStyle, QPushButton, QSlider, QSplitter, QStackedWidget, QStyle, QTableWidget,
+                               QProxyStyle, QPushButton, QSizePolicy, QSlider, QSplitter, QStackedWidget, QStyle, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import analysis, covers, db, library, search
@@ -209,6 +209,24 @@ class AudioOutput:
 
 
 # ------------------------------------------------------------------ signaux inter-fils
+
+class ElideLabel(QLabel):
+    """Texte sur une ligne qui se termine par « … » s'il manque de place
+    (au lieu d'élargir la fenêtre ou d'être coupé net)."""
+
+    def __init__(self, text=""):
+        super().__init__(text)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setMinimumWidth(40)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setPen(self.palette().color(self.foregroundRole()))
+        p.setFont(self.font())
+        txt = p.fontMetrics().elidedText(self.text(), Qt.ElideRight, self.width())
+        p.drawText(self.rect(), int(self.alignment()) | Qt.AlignVCenter, txt)
+        p.end()
+
 
 class AmbientFrame(QFrame):
     """Cadre du lecteur teinté de la couleur de la pochette en cours
@@ -524,6 +542,10 @@ class MainWindow(QMainWindow):
         pv.addLayout(row1)
         self.mix_badge = MixBadge()
         self.mix_badge.setToolTip("Transition en cours : le curseur va du morceau A au morceau B")
+        # place toujours réservée : la fenêtre ne change plus de taille quand un mix commence
+        sp = self.mix_badge.sizePolicy()
+        sp.setRetainSizeWhenHidden(True)
+        self.mix_badge.setSizePolicy(sp)
         pv.addWidget(self.mix_badge)
         row2 = QHBoxLayout()
         self.pos_label = QLabel("0:00")
@@ -616,10 +638,15 @@ class MainWindow(QMainWindow):
         self.eq = Equalizer(lambda: self.engine)
         self.eq.setToolTip("Égaliseur : la musique en direct")
         row3.addWidget(self.eq)
-        row3.addStretch(1)
-        self.status = QLabel("")
+        self.status = ElideLabel("")
+        self.status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._ss(self.status, "color:#8a90a0;")
-        row3.addWidget(self.status)
+        # les textes longs se coupent au lieu d'élargir la fenêtre (plein écran sur portable)
+        for lab in (self.now_title, self.now_info, self.fact_label):
+            lab.setSizePolicy(QSizePolicy.Ignored, lab.sizePolicy().verticalPolicy())
+            lab.setMinimumWidth(60)
+        row3.addSpacing(12)
+        row3.addWidget(self.status, 1)
         pv.addLayout(row3)
         v.addWidget(player)
 
@@ -1003,6 +1030,13 @@ class MainWindow(QMainWindow):
         return self._small_ph
 
     def _on_cover_ready(self, track_id, data):
+        full = self.__dict__.setdefault("cover_full", {})
+        if data:                                  # pleine définition (vue Platines)
+            big = QPixmap()
+            if big.loadFromData(data) and not big.isNull():
+                if max(big.width(), big.height()) > 900:
+                    big = big.scaled(900, 900, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                full[track_id] = big
         pm = self._rounded(data, 168) if data else None
         if pm is None:                            # aucune image : pochette créée par l'appli
             row = self._row_of(track_id) or {"id": track_id, "title": "", "artist": ""}
@@ -1410,6 +1444,41 @@ class MainWindow(QMainWindow):
         self.btn_pullup.setEnabled(playing)
         self._update_play_icon()
 
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._set_compact(self._want_compact())
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._set_compact(self._want_compact())
+
+    def _want_compact(self) -> bool:
+        scr = self.screen()
+        small_screen = scr is not None and scr.availableGeometry().width() < 1600
+        return self.width() < 1460 or small_screen
+
+    def _set_compact(self, on: bool):
+        """Fenêtre étroite (portable) : boutons du lecteur en icônes seules
+        (leur nom reste en info-bulle), égaliseur masqué."""
+        if getattr(self, "_compact", None) == on:
+            return
+        self._compact = on
+        full = {self.btn_stop33: "  Stop 33 tours", self.btn_pullup: "  Stop pull-up",
+                self.btn_next: "  Suivant", self.btn_hl: "★ Temps forts", self.btn_dj: "⇅ Flow DJ"}
+        short = {self.btn_stop33: "", self.btn_pullup: "", self.btn_next: "",
+                 self.btn_hl: "★", self.btn_dj: "⇅"}
+        for b, t in full.items():
+            b.setText(short[b] if on else t)
+            if on and not b.property("tip0"):
+                b.setProperty("tip0", b.toolTip())
+                b.setToolTip(t.strip() + "\n" + b.toolTip())
+            elif not on and b.property("tip0"):
+                b.setToolTip(b.property("tip0"))
+                b.setProperty("tip0", None)
+        self.eq.setVisible(not on)
+        self._play_icon = None
+        self._update_play_icon()
+
     def _update_play_icon(self):
         eng = self.engine
         running = eng is not None and not eng.paused and not eng.pausing
@@ -1417,7 +1486,8 @@ class MainWindow(QMainWindow):
         if getattr(self, "_play_icon", None) != want:
             self._play_icon = want
             self.btn_play.setIcon(make_icon(want, 18))
-            self.btn_play.setText("  Pause" if running else "  Lecture")
+            self.btn_play.setText("" if getattr(self, "_compact", False) else
+                                  ("  Pause" if running else "  Lecture"))
 
     # ---------------------------------------------------------------- lecture
 
@@ -1492,10 +1562,16 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ vue Platines et pads
 
     def _deck_cover(self, track):
-        pm = self.cover_pix.get(track.id)
-        if pm is None:
+        full = self.__dict__.get("cover_full", {}).get(track.id)
+        if full is not None:
+            return full
+        if self.cover_pix.get(track.id) is None:
             self.want_cover(track.row)
-            return self._generated(track.row, 168)
+        cache = self.__dict__.setdefault("_gen_big", {})
+        pm = cache.get(track.id)
+        if pm is None:                            # pochette créée, en grand et carrée (la vue arrondit)
+            pm = cache[track.id] = artwork.generate(track.row.get("title") or track.row.get("filename") or "",
+                                                    track.row.get("artist") or "", 600, radius=0.0)
         return pm
 
     def _on_view(self, on):
