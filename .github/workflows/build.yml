@@ -50,7 +50,12 @@ jobs:
           if [ "${{ matrix.label }}" = "Catalina" ]; then
             # versions figées dont les binaires tournent encore sur macOS 10.15
             # (Qt 6.4, onnxruntime 1.16, numpy 1.26) : aucune compilation locale
-            python -m pip install --only-binary=:all: -r requirements-catalina.txt
+            # (on télécharge les variantes « 10.x » : sinon pip prendrait les
+            #  variantes macOS 14 de numpy / scipy, plus rapides mais refusées par Catalina)
+            T=""; for v in 10_15 10_14 10_13 10_12 10_10 10_9; do T="$T --platform macosx_${v}_x86_64 --platform macosx_${v}_universal2"; done
+            python -m pip download --only-binary=:all: $T --platform macosx_10_6_intel --python-version 3.11 \
+              -r requirements-catalina.txt -d /tmp/roues
+            python -m pip install --no-index --find-links /tmp/roues -r requirements-catalina.txt
           elif [ "${{ matrix.label }}" = "Intel" ]; then
             # dernières versions encore fournies toutes prêtes pour les Mac Intel
             python -m pip install "numba==0.62.1" "llvmlite==0.45.1"
