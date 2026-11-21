@@ -287,6 +287,11 @@ class Engine:
                     pos = seg.next.pos / SR
                 nb = self.pending.b if self.pending is not None else None
                 b_pos = self.pending.b_start / SR if self.pending is not None else 0.0
+                if nb is None:                       # pas encore préparé : le suivant, s'il est chargé
+                    row = self.peek_next()
+                    nb = self.cache.get(row["id"]) if row is not None else None
+                    if nb is not None and nb.analyzed:
+                        b_pos = nb.first_beat
                 return {"a": a, "a_pos": pos, "b": nb, "b_pos": b_pos, "x": 0.0, "kind": None}
             n = len(tr.buffer)
             ov = tr.info.get("ov_len", n) if tr.kind == "beatmatch" else n

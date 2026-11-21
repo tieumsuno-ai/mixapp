@@ -446,13 +446,28 @@ class MainWindow(QMainWindow):
         self._ss(hint, "color:#6f7686; font-size:11px;")
         rv.addWidget(hint)
         split.addWidget(right)
+        self.queue_panel = right
+        self.split = split
 
         split.setSizes([230, 700, 330])
         self.stack = QStackedWidget()
         self.stack.addWidget(split)
         self.deck = DeckView(self._deck_cover, lambda t: self.vocal_map(t, compute=False),
                              self.settings.get("animations", "fluides"))
-        self.stack.addWidget(self.deck)
+        # page Platines : la vue + le volet « À suivre » (le même panneau que la
+        # vue liste, déplacé ici : sélection multiple, Retirer, ↑↓ marchent pareil)
+        page = QWidget()
+        ph = QHBoxLayout(page)
+        ph.setContentsMargins(0, 0, 0, 0)
+        ph.setSpacing(12)
+        ph.addWidget(self.deck, 1)
+        self.drawer = QWidget()
+        self.drawer.setFixedWidth(330)
+        self.drawer_layout = QVBoxLayout(self.drawer)
+        self.drawer_layout.setContentsMargins(0, 0, 0, 0)
+        ph.addWidget(self.drawer)
+        self.drawer.setVisible(self.settings.get("drawer", True))
+        self.stack.addWidget(page)
         v.addWidget(self.stack, 1)
 
         # lecteur
@@ -622,6 +637,7 @@ class MainWindow(QMainWindow):
         self.deck.style_chosen.connect(self._on_pad_style)
         self.deck.action.connect(self._on_pad_action)
         self.deck.mode_changed.connect(self._on_anim_mode)
+        self.deck.drawer_btn.toggled.connect(self._on_drawer)
         if self.settings.get("view") == "platines":
             self.btn_view.setChecked(True)
         self.btn_full.clicked.connect(self.toggle_fullscreen)
@@ -1212,6 +1228,19 @@ class MainWindow(QMainWindow):
         return pm
 
     def _on_view(self, on):
+        if on:
+            self._split_sizes = self.split.sizes()
+            self.drawer_layout.addWidget(self.queue_panel)
+        else:
+            self.split.insertWidget(2, self.queue_panel)
+            if getattr(self, "_split_sizes", None):
+                self.split.setSizes(self._split_sizes)
+        self.queue_panel.show()
+        self.btn_view.setText("☰  Playlists" if on else "◎  Platines")
+        self.btn_view.setToolTip("Revenir aux playlists et aux morceaux (V)" if on else
+                                 "Vue Platines : pochettes, formes d'onde, platines, table de mixage\n"
+                                 "et pads pour choisir la prochaine transition (V)")
+        self.deck.drawer_btn.setChecked(self.settings.get("drawer", True))
         self.stack.setCurrentIndex(1 if on else 0)
         # les platines ont leur propre vumètre : le petit égaliseur se repose
         (self.eq.timer.stop if on else self.eq.timer.start)()
@@ -1219,6 +1248,11 @@ class MainWindow(QMainWindow):
             self.eq.levels[:] = 0
             self.eq.update()
         self.settings["view"] = "platines" if on else "liste"
+        save_settings(self.settings)
+
+    def _on_drawer(self, on):
+        self.drawer.setVisible(on)
+        self.settings["drawer"] = on
         save_settings(self.settings)
 
     def _on_anim_mode(self, mode):

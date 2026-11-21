@@ -336,6 +336,15 @@ class DeckView(QWidget):
         self.next_label.setStyleSheet("color:#c9ccd6; font-size:13px; background:transparent;")
         self.next_label.setAlignment(Qt.AlignCenter)
         info.addWidget(self.next_label, 1)
+        self.drawer_btn = QPushButton("À suivre")
+        self.drawer_btn.setCheckable(True)
+        self.drawer_btn.setChecked(True)
+        self.drawer_btn.setCursor(Qt.PointingHandCursor)
+        self.drawer_btn.setToolTip("Afficher / cacher le volet « À suivre » à droite")
+        self.drawer_btn.setStyleSheet("QPushButton { background:#2a2c34; color:#c9ccd6; border:none;"
+                                      " border-radius:6px; padding:4px 12px; }"
+                                      "QPushButton:checked { background:#3a3f55; color:#fff; }")
+        info.addWidget(self.drawer_btn)
         self.mode_box = QComboBox()
         self.mode_box.addItems(["Animations fluides", "Animations légères", "Sans animation"])
         self.mode_box.setCurrentIndex(list(MODES).index(self.mode))
