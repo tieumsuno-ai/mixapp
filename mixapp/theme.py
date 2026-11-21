@@ -48,6 +48,7 @@ LIGHT = {
     "#585e6b": "#6e7480",
     "#555b67": "#6e7480",
     "#ffd479": "#8a5400",   # prioritaire
+    "#e0b341": "#8a5400",   # « le saviez-vous ? »
 }
 
 # en clair, des bordures fines pour bien détacher listes, champs et boutons

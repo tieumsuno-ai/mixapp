@@ -226,6 +226,29 @@ def search_artist_picture(artist: str, fetch=_get_json) -> str | None:
     return None
 
 
+def search_caa(artist: str, title: str, fetch=_get_json, accept=None) -> str | None:
+    """Pochette du disque d'origine via MusicBrainz + Cover Art Archive (gratuit,
+    sans compte). Seulement si le titre ET l'artiste correspondent."""
+    t = clean_title(title)
+    if not (artist and t):
+        return None
+    q = f'recording:"{t}" AND artist:"{artist}"'
+    url = "https://musicbrainz.org/ws/2/recording?" + urllib.parse.urlencode(
+        {"query": q, "fmt": "json", "limit": 10})
+    wanted = accept or [artist]
+    for rec in fetch(url).get("recordings", []):
+        if int(rec.get("score", 0)) < 85:
+            continue
+        credit = " ".join(c.get("name", "") for c in rec.get("artist-credit", []) if isinstance(c, dict))
+        if not (_any_artist_ok(wanted, credit) and _title_ok(title, rec.get("title", ""))):
+            continue
+        rels = sorted(rec.get("releases", []), key=lambda r: r.get("date") or "9999")
+        for rel in rels[:3]:
+            if rel.get("id"):
+                return f"https://coverartarchive.org/release/{rel['id']}/front-250"
+    return None
+
+
 def search_online(artist: str, title: str, fetch=_get_json) -> str | None:
     tries = errors = 0
     qs = _queries(artist, title)
@@ -247,6 +270,16 @@ def search_online(artist: str, title: str, fetch=_get_json) -> str | None:
         try:
             tries += 1
             url = search_itunes("", t, fetch, accept)
+            if url:
+                return url
+        except Exception:
+            errors += 1
+    for a, t, accept in qs[:2]:                 # disque d'origine (Cover Art Archive)
+        if not (a and t):
+            continue
+        tries += 1
+        try:
+            url = search_caa(a, t, fetch, accept)
             if url:
                 return url
         except Exception:

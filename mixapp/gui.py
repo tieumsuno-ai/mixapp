@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -37,6 +38,7 @@ from . import analysis, covers, db, library, search
 from .engine import Engine
 from . import theme
 from .theme import c as tc
+from . import artwork
 from .deckview import DeckView, dominant_color
 from .widgets import Equalizer, MixBadge, SeekBar, ThemeSwitch, make_icon
 from .transitions import SR
@@ -370,7 +372,16 @@ class MainWindow(QMainWindow):
         mv.setContentsMargins(0, 0, 0, 0)
         self.tracks_title = QLabel("MORCEAUX")
         self.tracks_title.setObjectName("section")
-        mv.addWidget(self.tracks_title)
+        th = QHBoxLayout()
+        th.addWidget(self.tracks_title, 1)
+        self.dupes_btn = QPushButton("")
+        self.dupes_btn.setObjectName("flat")
+        self.dupes_btn.setCursor(Qt.PointingHandCursor)
+        self.dupes_btn.setToolTip("Morceaux en double dans tes playlists : rien n'est supprimé de ton\n"
+                                  "ordinateur, l'appli les masque seulement (tu peux tout réafficher)")
+        self.dupes_btn.hide()
+        th.addWidget(self.dupes_btn)
+        mv.addLayout(th)
         self.table = QTableWidget(0, 7)
         self.table.installEventFilter(self)
         self.table.setToolTip("Gras ▶ : en cours · bleu : à venir · gris : déjà joué\n"
@@ -644,6 +655,10 @@ class MainWindow(QMainWindow):
         self.btn_hl.toggled.connect(lambda _: self._on_highlights())
         self.btn_dj.toggled.connect(lambda _: self._on_dj())
         self.volume.valueChanged.connect(self._on_volume)
+        self._dupes_timer = QTimer(self, singleShot=True, interval=1500)
+        self._dupes_timer.timeout.connect(self.check_dupes)
+        self.dupes_btn.clicked.connect(self.show_dupes)
+        QTimer.singleShot(2500, self.check_dupes)
         self._mix_len_timer = QTimer(self, singleShot=True, interval=350)
         self._mix_len_timer.timeout.connect(self._apply_mix_len)
         self.mix_len.valueChanged.connect(self._on_mix_len)
@@ -827,6 +842,7 @@ class MainWindow(QMainWindow):
             self._on_library_changed()
 
     def _on_library_changed(self):
+        self._dupes_timer.start()
         self.refresh_playlists(keep=True)
         if self.mode == "search":
             self.run_search()
@@ -911,7 +927,7 @@ class MainWindow(QMainWindow):
         if e is not None:
             self._render_info(r, e)
             return
-        self.fact_label.setText("")
+        self._render_info(r, {})          # tout de suite : la fiche du morceau (jamais vide)
         if not self.settings.get("covers_online", True):
             return
 
@@ -931,17 +947,55 @@ class MainWindow(QMainWindow):
             self._render_info(*payload)
 
     def _render_info(self, r, e):
+        """« Le saviez-vous ? » : jamais vide, jamais inventé. Dans l'ordre :
+        anecdote Wikipédia sur le morceau, sinon sur l'artiste, sinon la fiche
+        du morceau tirée de l'analyse de MixApp."""
         import html
-        parts = []
+        from . import trackinfo
+        src_css = f'style="color:{tc("#6f7686")}; font-size:11px;"'
+        link = lambda: (f'<a style="color:{tc("#6c8cff")};" href="{e.get("url", "")}">'
+                        f'{html.escape(e.get("source", "Wikipédia"))}</a>')
+        parts = [f'<span style="color:{tc("#e0b341")}; font-size:11px; font-weight:700; letter-spacing:1px;">'
+                 'LE SAVIEZ-VOUS ?</span>']
         if e.get("year"):
             parts.append(f"<b>{html.escape(r.get('artist') or '')}</b> · sorti en {e['year']}")
-        fact = e.get("fact")
+        fact = e.get("fact") or e.get("artist_fact")
         if fact:
             if len(fact) > 230:
                 fact = fact[:227].rsplit(" ", 1)[0] + "…"
-            src = f' <a style="color:#6c8cff;" href="{e.get("url", "")}">{e.get("source", "Wikipédia")}</a>'
-            parts.append(f"<i>{html.escape(fact)}</i>{src}")
+            lead = "" if e.get("fact") else "Sur l'artiste : "
+            parts.append(f"<i>{lead}{html.escape(fact)}</i> {link()}")
+        else:
+            rows = list(self.engine.auto) if self.engine is not None else list(self.shown_rows)
+            base = r.get("_base") or r
+            live = next((x for x in rows if x.get("id") == base.get("id")), base)
+            txt = trackinfo.fiche(live, rows)
+            if txt is None:
+                d = live.get("duration") or 0
+                folder = self._display_name(Path(live.get("folder") or ".").name) if live.get("folder") else ""
+                txt = (f"Morceau de la playlist {folder}" if folder else "Morceau") + \
+                       (f", durée {int(d // 60)}:{int(d % 60):02d}" if d else "") + \
+                       ". Analyse du tempo et de la clé en cours…"
+            parts.append(html.escape(txt))
+            parts.append(f'<span {src_css}>Source : analyse du morceau par MixApp</span>')
         self.fact_label.setText("<br>".join(parts))
+
+    def _generated(self, row: dict, size: int) -> QPixmap:
+        """Pochette créée par l'appli (en attendant la vraie, ou si elle n'existe pas)."""
+        cache = self.__dict__.setdefault("_gen_pix", {})
+        k = (row["id"], size)
+        pm = cache.get(k)
+        if pm is None:
+            pm = cache[k] = artwork.generate(row.get("title") or row.get("filename") or "",
+                                             row.get("artist") or "", size, radius=0.12)
+        return pm
+
+    def _row_of(self, track_id):
+        for r in self.shown_rows:
+            if r["id"] == track_id:
+                return r
+        t = self.engine.cache.get(track_id) if self.engine else None
+        return t.row if t is not None else None
 
     def _small_placeholder(self):
         if not hasattr(self, "_small_ph"):
@@ -950,10 +1004,10 @@ class MainWindow(QMainWindow):
 
     def _on_cover_ready(self, track_id, data):
         pm = self._rounded(data, 168) if data else None
-        if pm is None:
-            self._ph_ids = getattr(self, "_ph_ids", set())
-            self._ph_ids.add(track_id)            # pochette introuvable : vignette ♪ (suit le thème)
-        self.cover_pix[track_id] = pm or self._placeholder(168)
+        if pm is None:                            # aucune image : pochette créée par l'appli
+            row = self._row_of(track_id) or {"id": track_id, "title": "", "artist": ""}
+            pm = self._generated(row, 168)
+        self.cover_pix[track_id] = pm
         self._queue_sig = None            # forcer le rafraîchissement des icônes
         self._show_current_cover()
         for i, r in enumerate(self.shown_rows):      # vignette dans la liste des morceaux
@@ -970,7 +1024,7 @@ class MainWindow(QMainWindow):
         pm = self.cover_pix.get(t.id)
         if pm is None:
             self.want_cover(t.row, urgent=True)
-            self.cover.setPixmap(self._placeholder(84))
+            self.cover.setPixmap(self._generated(t.row, 84))
         else:
             self.cover.setPixmap(pm.scaled(84, 84, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
@@ -1016,13 +1070,232 @@ class MainWindow(QMainWindow):
     def show_playlist(self, folder, keep_selection=False):
         self.mode = "playlist"
         self.current_folder = folder
-        rows = [dict(r) for r in library.playlist_tracks(self.conn, folder)]
+        rows = self._visible_rows(folder)
         if self.btn_dj.isChecked() and rows:
             from . import ordering
             rows = ordering.dj_order(rows, rows[0]["id"])
         self._fill_table(rows, keep_selection)
         self._update_playlist_header()
         self.want_hl(rows)                 # calcule les passages en fond (pour les durées)
+
+    # ------------------------------------------------------------ doublons
+
+    def _visible_rows(self, folder):
+        """Morceaux d'une playlist, sans ceux masqués comme doublons."""
+        hidden = set(self.settings.get("hidden", {}).get(folder, []))
+        return [dict(r) for r in library.playlist_tracks(self.conn, folder) if r["path"] not in hidden]
+
+    def check_dupes(self):
+        """Cherche les doublons ; masque d'office les copies identiques ; affiche
+        le lien « doublons à vérifier » s'il reste des choix à faire."""
+        from . import dupes
+        try:
+            rows = [dict(r) for r in self.conn.execute("SELECT * FROM tracks")]
+        except Exception:
+            return
+        hidden = self.settings.setdefault("hidden", {})
+        done = set(self.settings.get("dupes_done", []))
+        res = dupes.analyse(rows, hidden, done)
+        changed = False
+        for a in res["auto"]:
+            lst = hidden.setdefault(a["folder"], [])
+            for r in a["hide"]:
+                if r["path"] not in lst:
+                    lst.append(r["path"])
+                    changed = True
+        if changed:
+            save_settings(self.settings)
+            if self.current_folder and self.mode == "playlist":
+                self.show_playlist(self.current_folder, keep_selection=True)
+        self._dupes = res
+        todo = len(res["versions"]) + len(res["cross"])
+        if todo:
+            self.dupes_btn.setText(f"⚠  {todo} doublon{'s' if todo > 1 else ''} à vérifier")
+            self.dupes_btn.setStyleSheet("color:#e0a84a; font-weight:600;")
+            self.dupes_btn.show()
+        elif res["auto"]:
+            n = sum(len(a["hide"]) for a in res["auto"])
+            self.dupes_btn.setText(f"{n} doublon{'s' if n > 1 else ''} masqué{'s' if n > 1 else ''}")
+            self.dupes_btn.setStyleSheet("")
+            self.dupes_btn.show()
+        else:
+            self.dupes_btn.hide()
+
+    def show_dupes(self):
+        from PySide6.QtWidgets import QButtonGroup, QCheckBox, QDialog, QRadioButton, QScrollArea
+        from . import dupes
+        res = getattr(self, "_dupes", None)
+        if res is None:
+            self.check_dupes()
+            res = self._dupes
+        dlg = QDialog(self)
+        dlg.setWindowTitle(APP_NAME)
+        dlg.setModal(True)
+        dlg.setStyleSheet(theme.css("""
+            QDialog { background:#15171c; }
+            QFrame#card { background:#1f2229; border-radius:10px; }
+            QFrame#card QLabel, QRadioButton, QCheckBox { background: transparent; }
+            QLabel#h { font-size:15px; font-weight:700; color:#f2f2f2; }
+            QLabel#tag { font-size:11px; font-weight:700; letter-spacing:1px; }
+            QLabel#sub { color:#9aa3b5; }
+            QLabel#hint { color:#e0a84a; font-size:12px; }
+            QRadioButton, QCheckBox { spacing:8px; padding:3px 0; color:#e6e6e6; }
+            QRadioButton::indicator, QCheckBox::indicator { width:14px; height:14px;
+                border:2px solid #6f7686; background:#15171c; }
+            QRadioButton::indicator { border-radius:9px; }
+            QCheckBox::indicator { border-radius:4px; }
+            QRadioButton::indicator:checked, QCheckBox::indicator:checked {
+                background:#6c8cff; border-color:#6c8cff; }"""))
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(24, 22, 24, 20)
+        t = QLabel("Doublons trouvés dans tes playlists")
+        t.setObjectName("nowTitle")
+        outer.addWidget(t)
+        sub = QLabel("Rien n'est supprimé de ton ordinateur : l'appli masque seulement les morceaux "
+                     "en double.\nTu peux tout réafficher plus tard.")
+        sub.setObjectName("sub")
+        outer.addWidget(sub)
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(0, 6, 8, 6)
+        v.setSpacing(12)
+        area.setWidget(inner)
+        outer.addWidget(area, 1)
+        name = lambda f: self._display_name(Path(f).name)
+        short = lambda t: re.sub(r"\s*[\(\[].*", "", t or "").strip() or (t or "")
+        dur = lambda r: _fmt(r.get("duration") or 0)
+
+        def card(tag, color, title, where):
+            f = QFrame()
+            f.setObjectName("card")
+            l = QVBoxLayout(f)
+            l.setContentsMargins(16, 12, 16, 12)
+            l.setSpacing(4)
+            for txt, obj, css in ((tag, "tag", f"color:{color};"), (title, "h", ""), (where, "sub", "")):
+                lab = QLabel(txt)
+                lab.setObjectName(obj)
+                if css:
+                    lab.setStyleSheet(css)
+                lab.setWordWrap(True)
+                l.addWidget(lab)
+            v.addWidget(f)
+            return l
+
+        def hint(layout, widget, txt):
+            row = QHBoxLayout()
+            row.addWidget(widget)
+            if txt:
+                h = QLabel("★ " + txt)
+                h.setObjectName("hint")
+                row.addWidget(h)
+            row.addStretch(1)
+            layout.addLayout(row)
+
+        actions = []          # fonctions appelées sur « Appliquer mes choix »
+        unhide = []
+        for a in res["auto"]:
+            k = a["keep"]
+            l = card("COPIES IDENTIQUES · MASQUÉES AUTOMATIQUEMENT", "#7f8aa3",
+                     (k.get("title") or k.get("filename") or "") + " — " + (k.get("artist") or ""),
+                     f"{name(a['folder'])} · {len(a['hide']) + 1} fichiers identiques")
+            row = QHBoxLayout()
+            kb = dupes.bitrate_kbps(k)
+            row.addWidget(QLabel("On garde la meilleure copie : " + (f"{kb} kbps, " if kb else "") + dur(k)))
+            row.addStretch(1)
+            b = QPushButton("Réafficher l'autre" if len(a["hide"]) == 1 else "Réafficher les autres")
+            b.setCheckable(True)
+            b.toggled.connect(lambda on, b=b: b.setText("Sera réaffiché" if on else "Réafficher"))
+            row.addWidget(b)
+            l.addLayout(row)
+            unhide.append((a, b))
+        for g in res["versions"]:
+            r0 = g["suggest"]
+            l = card("PLUSIEURS VERSIONS · À TOI DE CHOISIR", "#f0a43a",
+                     short(r0.get("title")) + " — " + (r0.get("artist") or ""),
+                     f"{name(g['folder'])} · {len(g['rows'])} versions")
+            grp = QButtonGroup(dlg)
+            opts = []
+            for r in sorted(g["rows"], key=lambda r: r is not g["suggest"]):
+                rb = QRadioButton(f"{dupes.version_name(r.get('title') or '')} · {dur(r)}")
+                rb.setChecked(r is g["suggest"])
+                grp.addButton(rb)
+                hint(l, rb, g["reason"] if r is g["suggest"] else "")
+                opts.append((rb, r))
+            both = QRadioButton("Garder toutes les versions" if len(g["rows"]) > 2 else "Garder les deux")
+            grp.addButton(both)
+            hint(l, both, "")
+
+            def act(g=g, opts=opts, both=both):
+                if both.isChecked():
+                    return
+                keep = next(r for rb, r in opts if rb.isChecked())
+                lst = self.settings.setdefault("hidden", {}).setdefault(g["folder"], [])
+                for rb, r in opts:
+                    if r is not keep and r["path"] not in lst:
+                        lst.append(r["path"])
+            actions.append((g["key"], act))
+        for c in res["cross"]:
+            l = card("DANS PLUSIEURS PLAYLISTS · À VALIDER", "#5aa9ff",
+                     short(c["title"]) + " — " + (c["artist"] or ""),
+                     f"présent dans {len(c['folders'])} playlists · coche celles où il reste")
+            boxes = []
+            for f in sorted(c["folders"], key=lambda f: f != c["suggest"]):
+                cb = QCheckBox(name(f))
+                cb.setChecked(f == c["suggest"])
+                hint(l, cb, c["reason"] if f == c["suggest"] else "")
+                boxes.append((cb, f))
+
+            def act(c=c, boxes=boxes):
+                if not any(cb.isChecked() for cb, _ in boxes):
+                    return                                    # tout décoché : on ne masque rien
+                for cb, f in boxes:
+                    if not cb.isChecked():
+                        lst = self.settings.setdefault("hidden", {}).setdefault(f, [])
+                        for r in c["folders"][f]:
+                            if r["path"] not in lst:
+                                lst.append(r["path"])
+            actions.append((c["key"], act))
+        if not (res["auto"] or res["versions"] or res["cross"]):
+            v.addWidget(QLabel("Aucun doublon dans tes playlists."))
+        v.addStretch(1)
+        btns = QHBoxLayout()
+        btns.addStretch(1)
+        later = QPushButton("Plus tard")
+        ok = QPushButton("Appliquer mes choix")
+        ok.setObjectName("primary")
+        later.clicked.connect(dlg.reject)
+        ok.clicked.connect(dlg.accept)
+        btns.addWidget(later)
+        btns.addWidget(ok)
+        outer.addSpacing(6)
+        outer.addLayout(btns)
+        dlg.resize(640, min(760, 220 + 150 * (len(res["auto"]) + len(res["versions"]) + len(res["cross"]))))
+        self._dupes_dialog = dlg
+        accepted = dlg.exec() == QDialog.Accepted
+        self._dupes_dialog = None
+        if not accepted:
+            return
+        done = self.settings.setdefault("dupes_done", [])
+        for key, act in actions:
+            act()
+            if key not in done:
+                done.append(key)
+        for a, b in unhide:
+            if b.isChecked():
+                lst = self.settings.setdefault("hidden", {}).get(a["folder"], [])
+                for r in a["hide"]:
+                    if r["path"] in lst:
+                        lst.remove(r["path"])
+                if a["key"] not in done:
+                    done.append(a["key"])
+        save_settings(self.settings)
+        self.check_dupes()
+        if self.current_folder and self.mode == "playlist":
+            self.show_playlist(self.current_folder, keep_selection=True)
+        self.status.setText("Doublons mis à jour (aucun fichier supprimé)")
 
     def _update_playlist_header(self):
         if self.mode != "playlist" or not self.current_folder:
@@ -1103,7 +1376,7 @@ class MainWindow(QMainWindow):
             pm = self.cover_pix.get(r["id"])
             if pm is None:
                 self.want_cover(r)                 # chargée au fil de l'eau (internet)
-                pm = self._small_placeholder()
+                pm = self._generated(r, 52)
             cells[1].setIcon(QIcon(pm))
             for c, it in enumerate(cells):
                 self.table.setItem(i, c, it)
@@ -1157,11 +1430,11 @@ class MainWindow(QMainWindow):
     def play_from_selection(self):
         sel = self._selected_row()
         if self.mode == "playlist" and self.current_folder:
-            rows = [dict(r) for r in library.playlist_tracks(self.conn, self.current_folder)]
+            rows = self._visible_rows(self.current_folder)
             start = next((i for i, r in enumerate(rows) if sel and r["id"] == sel["id"]), 0)
         elif sel:
             # depuis une recherche : on lance la playlist (dossier) du morceau choisi
-            rows = [dict(r) for r in library.playlist_tracks(self.conn, sel["folder"])]
+            rows = self._visible_rows(sel["folder"])
             start = next((i for i, r in enumerate(rows) if r["id"] == sel["id"]), 0)
         else:
             return
@@ -1222,9 +1495,7 @@ class MainWindow(QMainWindow):
         pm = self.cover_pix.get(track.id)
         if pm is None:
             self.want_cover(track.row)
-            return None
-        if track.id in getattr(self, "_ph_ids", ()):
-            return None
+            return self._generated(track.row, 168)
         return pm
 
     def _on_view(self, on):
@@ -1455,6 +1726,7 @@ class MainWindow(QMainWindow):
             self.engine = None
         self.deck.set_engine(None)
         self.deck.set_style_state(None)
+        self._shown_track_id = None
         self.player_frame.set_color(None)
         self.now_title.setText("Rien en cours")
         self.now_info.setText("")
@@ -1574,14 +1846,15 @@ class MainWindow(QMainWindow):
         self.btn_full.setIcon(make_icon("fullscreen", 18, tc("#c8cdd8")))
         if hasattr(self, "_small_ph"):
             del self._small_ph
-        for tid in getattr(self, "_ph_ids", ()):
-            self.cover_pix[tid] = self._placeholder(168)
         if self.shown_rows:
             self._fill_table(self.shown_rows, keep_selection=True)
         self._show_current_cover()
         self._queue_sig = None
         self.refresh_queue()
         self.mix_badge.update()
+        t = self.engine.now_playing()[0] if self.engine else None
+        if t is not None:
+            self._show_info(t.row.get("_base") or t.row)
 
     def _on_volume(self, v):
         if self.engine:
@@ -1629,7 +1902,9 @@ class MainWindow(QMainWindow):
             hist = [r["id"] for r in eng.history]
         new_played = set(hist) - {t.id}
         title = t.row.get("title") or Path(t.row["path"]).stem
-        if self.now_title.text() != title or not new_played <= self.played_ids:
+        if (self.now_title.text() != title or not new_played <= self.played_ids
+                or getattr(self, "_shown_track_id", None) != t.id):
+            self._shown_track_id = t.id
             self.played_ids |= new_played
             self.now_title.setText(title)
             self._refill_dots()
@@ -1637,7 +1912,7 @@ class MainWindow(QMainWindow):
             self._show_info(t.row.get("_base") or t.row)
         if self.player_frame.track_id != t.id or self.player_frame.color is None:
             pm = self.cover_pix.get(t.id)
-            if pm is not None and t.id not in getattr(self, "_ph_ids", ()):
+            if pm is not None:
                 self.player_frame.set_color(dominant_color(pm), t.id)
         self._update_counter(eng, t, pos)
         info = t.row.get("artist") or ""
@@ -1713,7 +1988,7 @@ class MainWindow(QMainWindow):
             left = cur_left + sum(effective_duration(r, i == len(upcoming) - 1)
                                   for i, r in enumerate(upcoming))
         end = time.localtime(time.time() + left)
-        self.counter.setText(f"Reste ≈ {_fmt_long(left)} · {len(upcoming)} morceaux · "
+        self.counter.setText(f"Reste ≈ {_fmt_long(left)} · {len(upcoming)} morceau{'x' if len(upcoming) > 1 else ''} · "
                              f"fin vers {end.tm_hour}:{end.tm_min:02d}")
 
     def _refill_dots(self):
@@ -1743,7 +2018,7 @@ class MainWindow(QMainWindow):
             pm = self.cover_pix.get(r["id"])
             if pm is None:
                 self.want_cover(r)
-                pm = self._placeholder(76)
+                pm = self._generated(r, 76)
             it.setIcon(QIcon(pm))
             it.setData(Qt.UserRole, (kind, pos))
             it.setForeground(QColor(tc("#ffd479" if kind == "prioritaire" else "#8fb3ff")))

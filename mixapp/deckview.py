@@ -18,7 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-from PySide6.QtCore import QPointF, QRect, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPointF, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QImage, QLinearGradient, QPainter, QPainterPath, QPen,
                            QPixmap, QRadialGradient)
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPushButton,
@@ -112,7 +112,19 @@ def dominant_color(pm: QPixmap | None) -> QColor:
 
 # ------------------------------------------------------------------ éléments dessinés
 
-class WaveStrip(QWidget):
+class _Opaque:
+    """Ces éléments peignent eux-mêmes tout leur fond : on le dit à Qt (la feuille
+    de style « transparente » de la vue Platines retire ce réglage) pour qu'il ne
+    redessine pas le décor derrière à chaque image."""
+
+    def event(self, ev):
+        r = QWidget.event(self, ev)
+        if ev.type() in (QEvent.Polish, QEvent.StyleChange, QEvent.Show):
+            self.setAttribute(Qt.WA_OpaquePaintEvent, True)
+        return r
+
+
+class WaveStrip(_Opaque, QWidget):
     """Les deux formes d'onde côte à côte, calées sur le même trait de lecture."""
 
     def __init__(self, parent=None):
@@ -166,7 +178,7 @@ class WaveStrip(QWidget):
         self.cost = time.perf_counter() - t0
 
 
-class Jog(QWidget):
+class Jog(_Opaque, QWidget):
     """Platine : image fixe (plateau + pochette) préparée une fois, seul le
     repère blanc tourne."""
 
@@ -290,7 +302,7 @@ class Jog(QWidget):
         self.cost = time.perf_counter() - t0
 
 
-class Mixer(QWidget):
+class Mixer(_Opaque, QWidget):
     """Vumètre, faders des deux voies et crossfader (positions réelles)."""
 
     def __init__(self, parent=None):
@@ -556,15 +568,21 @@ class DeckView(QWidget):
             self._pool.submit(work)
         return None
 
+    def _ck(self, tr):
+        """Clé de la pochette affichée (change quand la vraie remplace la provisoire)."""
+        pm = self.cover_for(tr) if tr is not None else None
+        return (tr.id, pm.cacheKey()) if pm is not None else (tr.id if tr is not None else None, 0)
+
     def _color(self, tr):
         if tr is None:
             return QColor("#2a2e3a")
-        c = self._colors.get(tr.id)
+        k = self._ck(tr)
+        c = self._colors.get(k)
         if c is None:
             pm = self.cover_for(tr)
             if pm is None:
                 return QColor("#3a4058")
-            c = self._colors[tr.id] = dominant_color(pm)
+            c = self._colors[k] = dominant_color(pm)
         return c
 
     # ------------------------------------------------------------ une image
@@ -602,14 +620,14 @@ class DeckView(QWidget):
         key = (tuple((s[0].id if s and s[0] is not None else None) for s in show),
                side_a, self.width(), self.height(), round(wts[0] * 6),
                tuple(self._color(s[0]).name() if s and s[0] is not None else "" for s in show),
-               tuple(bool(s and s[0] is not None and self.cover_for(s[0]) is not None) for s in show))
+               tuple(self._ck(s[0]) if s and s[0] is not None else None for s in show))
         if key != self._bg_key:
             self._bg_key = key
             self._bg = None
             self._show = show
             for i, s in enumerate(show):
                 tr = s[0] if s else None
-                self.jogs[i].set_cover(tr.id if tr is not None else None,
+                self.jogs[i].set_cover(self._ck(tr) if tr is not None else None,
                                        self.cover_for(tr) if tr is not None else None)
             self.update()
         # formes d'onde
@@ -641,12 +659,26 @@ class DeckView(QWidget):
             if s is not None and not paused and self.mode != "aucune":
                 j.angle = (s[1] * RPM / 60.0 * 360.0) % 360.0
         # pochettes : taille / éclat selon qui mène, battement → on ne repeint que leur zone
-        cov = tuple((round(wts[i], 2), round(pulse if i == side_a else 0.0, 2)) for i in range(2))
+        cov = tuple((round(wts[i], 2), round(pulse if i == side_a else 0.0, 1)) for i in range(2))
         if cov != self._cov_state and self._cov_rects:
+            old = self._cov_state
             self._cov_state = cov
-            for r in self._cov_rects:
-                if r is not None:
-                    self.update(r.adjusted(-10, -10, 10, 10).toAlignedRect())
+            for i, r in enumerate(self._cov_rects):
+                if r is None:
+                    continue
+                if old is None or old[i][0] != cov[i][0]:
+                    self.update(r.adjusted(-10, -10, 10, 10).toAlignedRect())   # taille / éclat
+                elif old[i][1] != cov[i][1]:
+                    # battement : on ne repeint que la fine bande du halo autour de la pochette
+                    sc = 0.84 + 0.16 * cov[i][0]
+                    cr = QRectF(r.center().x() - r.width() * sc / 2, r.center().y() - r.height() * sc / 2,
+                                r.width() * sc, r.height() * sc)
+                    outer = cr.adjusted(-10, -10, 10, 10).toAlignedRect()
+                    m = 14
+                    self.update(QRect(outer.left(), outer.top(), outer.width(), m))
+                    self.update(QRect(outer.left(), outer.bottom() - m, outer.width(), m + 1))
+                    self.update(QRect(outer.left(), outer.top(), m, outer.height()))
+                    self.update(QRect(outer.right() - m, outer.top(), m + 1, outer.height()))
         self._frame += 1
         slow = self._frame % 2 == 0 or self.mode != "fluides" or self.auto_light
         # table de mixage et texte : 15 images/s suffisent
@@ -717,12 +749,13 @@ class DeckView(QWidget):
     def _blur_of(self, tr):
         if tr is None:
             return None
-        a = self._blur.get(tr.id)
+        k = self._ck(tr)
+        a = self._blur.get(k)
         if a is None:
             pm = self.cover_for(tr)
             if pm is None:
                 return None
-            a = self._blur[tr.id] = blurred(pm)
+            a = self._blur[k] = blurred(pm)
         return a
 
     def _layout_covers(self):
@@ -737,6 +770,21 @@ class DeckView(QWidget):
             rects[i] = QRectF(cx - side / 2, y, side, side)
         self._cov_rects = rects
         return rects
+
+    def _scaled_cover(self, tr, pm, size):
+        """Pochette déjà mise à la bonne taille (calculée une fois par taille)."""
+        dpr = self.devicePixelRatioF()
+        w = int(round(size.width() * dpr))
+        k = (self._ck(tr), w)
+        c = self.__dict__.setdefault("_scaled", {})
+        out = c.get(k)
+        if out is None:
+            if len(c) > 40:
+                c.clear()
+            out = pm.scaled(w, w, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            out.setDevicePixelRatio(dpr)
+            c[k] = out
+        return out
 
     def _make_bg(self):
         """Décor : pochettes floutées en fond (côté qui mène plus lumineux) et titres.
@@ -858,11 +906,17 @@ class DeckView(QWidget):
                 p.drawRoundedRect(cr.adjusted(-4, -4, 4, 4), 8, 8)
             p.setOpacity(0.5 + 0.5 * wgt)
             cov = self.cover_for(s[0])
+            core = cr.adjusted(16, 16, -16, -16).toAlignedRect()
+            if not e.region().intersects(core):      # seule la bande du halo est à repeindre
+                cov = "skip"
             path = QPainterPath()
             path.addRoundedRect(cr, 6, 6)
             p.setClipPath(path)
-            if cov is not None:
-                p.drawPixmap(cr, cov, QRectF(cov.rect()))
+            if cov == "skip":
+                pass
+            elif cov is not None:
+                pm = self._scaled_cover(s[0], cov, cr.size())
+                p.drawPixmap(cr.topLeft(), pm)
             else:
                 p.fillRect(cr, QColor("#2a2e38"))
                 p.setPen(QColor("#5c6375"))
