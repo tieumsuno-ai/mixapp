@@ -32,37 +32,66 @@ RPM = 100.0 / 3.0         # 33 tours ⅓
 PEACH = (255, 212, 168)
 VOCAL = (110, 168, 255)
 
+PAD_COLORS = {"cale": "#f0a43a", "echo": "#5aa9ff", "filtre": "#a978ff",
+              "pullup": "#ff5d5d", "fondu": "#46c58a"}
+
 MODES = {"fluides": 33, "légères": 66, "aucune": 500}   # intervalle de l'horloge (ms)
 
 
 # ------------------------------------------------------------------ calculs (hors interface)
 
+LOW_C = (255, 106, 61)      # basses
+MID_C = (255, 210, 90)      # médiums
+HIGH_C = (90, 215, 255)     # aigus
+
+
 def build_strip(audio: np.ndarray, vocal=None) -> tuple[QImage, float]:
-    """Forme d'onde verticale d'un morceau (le temps monte vers le haut),
-    en image. Calculée une fois ; le chant détecté est teinté en bleu."""
+    """Forme d'onde verticale en couleurs (basses orange, médiums jaunes,
+    aigus bleus) ; le temps monte vers le haut. Calculée une fois par morceau,
+    hors du fil de l'interface."""
+    from scipy.signal import butter, sosfilt
     dur = len(audio) / SR
     pxs = min(PX_PER_S, 30000.0 / max(dur, 1.0))
-    hop = max(1, int(SR / pxs))
-    mono = np.abs(audio[:, 0]) + np.abs(audio[:, 1]) if audio.ndim == 2 else np.abs(audio)
-    n = len(mono) // hop
-    blk = mono[:n * hop].reshape(n, hop)
-    env = np.sqrt(np.mean(np.square(blk), 1))                  # énergie de chaque ligne
-    env = np.convolve(env, np.ones(3) / 3, "same")
-    env = env / max(1e-6, np.percentile(env, 99.7))
-    half = np.clip(env, 0.0, 1.0) ** 1.8 * (STRIP_W / 2 - 1) + 0.5   # contraste : les coups ressortent
+    mono = audio.mean(1) if audio.ndim == 2 else audio
+    k = 4                                                   # 11 kHz suffisent pour l'image
+    m4 = mono[:len(mono) // k * k].reshape(-1, k).mean(1).astype(np.float32)
+    fs = SR / k
+    lo = sosfilt(butter(2, 180, "low", fs=fs, output="sos"), m4)
+    hi = sosfilt(butter(2, 2200, "high", fs=fs, output="sos"), m4)
+    mid = m4 - lo - hi
+    hop = max(1, int(fs / pxs))
+    n = len(m4) // hop
+
+    def env(x):
+        e = np.sqrt(np.mean(np.square(x[:n * hop].reshape(n, hop)), 1))
+        return np.convolve(e, np.ones(3) / 3, "same")
+    # même référence pour les trois bandes : chacune garde son vrai poids
+    e_all = env(m4)
+    ref = max(1e-6, np.percentile(e_all, 99.7))
+    full = (STRIP_W / 2 - 1)
+    widths = [(np.clip(e_all / ref, 0, 1) ** 1.6 * full, LOW_C),
+              (np.clip(env(mid) / ref * 1.6, 0, 1) ** 1.6 * full * 0.8, MID_C),
+              (np.clip(env(hi) / ref * 2.6, 0, 1) ** 1.6 * full * 0.5, HIGH_C)]
     col = np.abs(np.arange(STRIP_W) - (STRIP_W - 1) / 2)
-    mask = col[None, :] <= half[:, None]
     img = np.zeros((n, STRIP_W, 4), np.uint8)
-    img[..., :3] = PEACH
-    if vocal is not None and len(vocal):
-        t = np.arange(n) / pxs
-        vi = np.clip((t / 0.25).astype(int), 0, len(vocal) - 1)
-        vrow = np.asarray(vocal)[vi] > 0.5
-        img[vrow, :, :3] = VOCAL
-    img[..., 3] = np.where(mask, 255, 0)
+    for half, c in widths:
+        mask = col[None, :] <= (half[:, None] + 0.5)
+        img[mask, 0], img[mask, 1], img[mask, 2], img[mask, 3] = c[0], c[1], c[2], 255
     img = np.ascontiguousarray(img[::-1])                     # le temps monte
     q = QImage(img.data, STRIP_W, n, STRIP_W * 4, QImage.Format_RGBA8888).copy()
     return q, pxs
+
+
+def blurred(pm: QPixmap | None, size: int = 40) -> np.ndarray | None:
+    """Pochette réduite et floutée (calcul instantané sur 40 × 40 pixels)."""
+    if pm is None or pm.isNull():
+        return None
+    from scipy.ndimage import gaussian_filter
+    im = pm.toImage().scaled(size, size, Qt.IgnoreAspectRatio, Qt.SmoothTransformation) \
+        .convertToFormat(QImage.Format_RGB888)
+    a = np.frombuffer(im.constBits(), np.uint8, im.bytesPerLine() * size) \
+        .reshape(size, im.bytesPerLine())[:, :size * 3].reshape(size, size, 3).astype(np.float32)
+    return gaussian_filter(a, (3.5, 3.5, 0))
 
 
 def dominant_color(pm: QPixmap | None) -> QColor:
@@ -147,11 +176,14 @@ class Jog(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAttribute(Qt.WA_OpaquePaintEvent)     # se peint seul : rien à redessiner derrière
         self.angle = 0.0
+        self.pulse = 0.0
         self.active = False
         self._cover = None
         self._cover_key = None
         self._base = None
         self._base_key = None
+        self._frames = None
+        self.spin = True
         self.cost = 0.0
 
     def set_cover(self, key, pm: QPixmap | None):
@@ -182,24 +214,51 @@ class Jog(QWidget):
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(QColor("#1d1f26"), c * 0.10))
         p.drawEllipse(QPointF(c, c), c * 0.62, c * 0.62)
-        r = c * 0.44
-        if self._cover is not None and not self._cover.isNull():
-            path = QPainterPath()
-            path.addEllipse(QPointF(c, c), r, r)
-            p.setClipPath(path)
-            p.drawPixmap(QRectF(c - r, c - r, 2 * r, 2 * r), self._cover, QRectF(self._cover.rect()))
-            p.setClipping(False)
-        else:
-            p.setBrush(QColor("#2a2e38"))
-            p.setPen(Qt.NoPen)
-            p.drawEllipse(QPointF(c, c), r, r)
-        p.setBrush(QColor("#e8e8ea"))
-        p.setPen(Qt.NoPen)
-        p.drawEllipse(QPointF(c, c), c * 0.04, c * 0.04)
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(QColor("#e08a2c") if active else QColor("#3a2a18"), 2))
         p.drawEllipse(QPointF(c, c), c - 2, c - 2)
         p.end()
+        # rond central (la pochette) : 72 positions tournées, préparées une fois
+        r = c * 0.46
+        dl = int(2 * r * dpr) + 2
+        lab = QPixmap(dl, dl)
+        lab.fill(Qt.transparent)
+        q = QPainter(lab)
+        q.setRenderHint(QPainter.Antialiasing)
+        q.setRenderHint(QPainter.SmoothPixmapTransform)
+        path = QPainterPath()
+        path.addEllipse(QPointF(dl / 2, dl / 2), dl / 2 - 1, dl / 2 - 1)
+        q.setClipPath(path)
+        if self._cover is not None and not self._cover.isNull():
+            q.drawPixmap(QRectF(0, 0, dl, dl), self._cover, QRectF(self._cover.rect()))
+        else:
+            q.fillRect(0, 0, dl, dl, QColor("#2a2e38"))
+            q.setPen(QColor("#5c6375"))
+            f = QFont(self.font())
+            f.setPixelSize(int(dl * 0.4))
+            q.setFont(f)
+            q.drawText(QRectF(0, 0, dl, dl), Qt.AlignCenter, "♪")
+        q.setClipping(False)
+        q.setBrush(QColor("#0c0d11"))
+        q.setPen(Qt.NoPen)
+        q.drawEllipse(QPointF(dl / 2, dl / 2), dl * 0.06, dl * 0.06)
+        q.setBrush(QColor("#e8e8ea"))
+        q.drawEllipse(QPointF(dl / 2, dl / 2), dl * 0.025, dl * 0.025)
+        q.end()
+        frames = []
+        for k in range(72):
+            fr = QPixmap(dl, dl)
+            fr.fill(Qt.transparent)
+            q = QPainter(fr)
+            q.setRenderHint(QPainter.SmoothPixmapTransform)
+            q.translate(dl / 2, dl / 2)
+            q.rotate(k * 5)
+            q.translate(-dl / 2, -dl / 2)
+            q.drawPixmap(0, 0, lab)
+            q.end()
+            fr.setDevicePixelRatio(dpr)
+            frames.append(fr)
+        self._frames = frames
         return img
 
     def paintEvent(self, _e):
@@ -213,8 +272,16 @@ class Jog(QWidget):
         if x0 > 0 or y0 > 0:
             p.fillRect(self.rect(), QColor("#1c1d23"))
         p.drawPixmap(QPointF(x0, y0), self._base)
-        p.setRenderHint(QPainter.Antialiasing)
         c = d / 2
+        if self._frames:
+            fr = self._frames[int(self.angle / 5) % 72 if self.spin else 0]
+            fw = fr.width() / fr.devicePixelRatio()
+            p.drawPixmap(QPointF(x0 + c - fw / 2, y0 + c - fw / 2), fr)
+        p.setRenderHint(QPainter.Antialiasing)
+        if self.pulse > 0.02:                                  # battement sur le temps
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(QColor(224, 138, 44, int(200 * self.pulse)), 5))
+            p.drawEllipse(QPointF(x0 + c, y0 + c), c - 4, c - 4)
         a = math.radians(self.angle - 90)
         p.setPen(QPen(QColor("#f2f2f2"), 3, Qt.SolidLine, Qt.RoundCap))
         p.drawLine(QPointF(x0 + c + math.cos(a) * c * 0.66, y0 + c + math.sin(a) * c * 0.66),
@@ -303,6 +370,10 @@ class DeckView(QWidget):
         self._show = [None, None]
         self._costs: list[float] = []
         self._frame = 0
+        self._wts = [1.0, 0.0]
+        self._cov_state = None
+        self._cov_rects = [None, None]
+        self._blur: dict[int, np.ndarray] = {}
         self.setAttribute(Qt.WA_OpaquePaintEvent)
         self._build()
         self.timer = QTimer(self)
@@ -364,53 +435,45 @@ class DeckView(QWidget):
         self.jogs = [Jog(), Jog()]
         self.mixer = Mixer()
         g.addWidget(self.jogs[0], 0, 0)
-        g.addWidget(self.mixer, 0, 1, 2, 1)
+        g.addWidget(self.mixer, 0, 1)
         g.addWidget(self.jogs[1], 0, 2)
 
-        left = QGridLayout()
-        left.setSpacing(5)
+        left = QHBoxLayout()
+        left.setSpacing(6)
         self.style_pads = {}
         tips = {"auto": "L'appli choisit la meilleure transition (réglage normal)",
                 "cale": "Tempo et clé calés : la transition longue de DJ",
                 "echo": "Le morceau part dans un écho sur le temps",
                 "filtre": "Filtre qui balaie + écho",
-                "pullup": "Le disque est tiré en arrière, l'autre démarre",
+                "pullup": "Transition : le disque est tiré en arrière, l'autre démarre",
                 "fondu": "Fondu enchaîné sur le temps"}
         names = [("auto", "Auto"), ("cale", "Mix calé"), ("echo", "Écho"),
                  ("filtre", "Filtre"), ("pullup", "Pull-up"), ("fondu", "Fondu")]
-        for i, (k, label) in enumerate(names):
+        lab = QLabel("Prochaine transition")
+        lab.setStyleSheet("color:#8a90a0; font-size:12px;")
+        left.addStretch(1)
+        left.addWidget(lab)
+        left.addSpacing(6)
+        for k, label in names:
             b = QPushButton(label)
             b.setCheckable(True)
             b.setCursor(Qt.PointingHandCursor)
+            b.setMinimumWidth(96)
             if k == "auto":
                 b.setObjectName("auto")
+            else:
+                c = PAD_COLORS[k]
+                b.setStyleSheet(f"QPushButton {{ border-bottom: 3px solid {c}; }}"
+                                f"QPushButton:checked {{ background: {c}; color: #14161b; }}")
             b.setToolTip(tips[k] + ("" if k == "auto" else
                                     "\nVaut pour le prochain enchaînement seulement, puis retour en Auto"))
             b.clicked.connect(lambda _=False, k=k: self._on_style(k))
-            left.addWidget(b, i // 3, i % 3)
+            left.addWidget(b)
             self.style_pads[k] = b
+        left.addStretch(1)
         self.style_pads["auto"].setChecked(True)
-        g.addLayout(left, 1, 0)
-
-        right = QGridLayout()
-        right.setSpacing(5)
+        g.addLayout(left, 1, 0, 1, 3)
         self.action_pads = {}
-        acts = [("stop33", "Stop 33", "Arrêt : le disque ralentit comme une platine coupée (S)"),
-                ("pullup", "Pull-up", "Arrêt : le disque est tiré en arrière (P)"),
-                ("pause", "Pause", "Pause en écho / reprise (Espace)"),
-                ("next", "Suivant", "Morceau suivant, en écho sur le temps (→)"),
-                ("hl", "Temps forts", "Ne jouer que les meilleurs moments (H)"),
-                ("dj", "Flow DJ", "Ordre automatique tempo / clé / énergie (D)")]
-        for i, (k, label, tip) in enumerate(acts):
-            b = QPushButton(label)
-            b.setCursor(Qt.PointingHandCursor)
-            b.setToolTip(tip)
-            if k in ("hl", "dj"):
-                b.setCheckable(True)
-            b.clicked.connect(lambda _=False, k=k: self.action.emit(k))
-            right.addWidget(b, i // 3, i % 3)
-            self.action_pads[k] = b
-        g.addLayout(right, 1, 2)
         g.setRowStretch(0, 1)
         v.addWidget(ctl, 4)
 
@@ -435,8 +498,7 @@ class DeckView(QWidget):
                 b.setChecked(kk == k)
 
     def set_toggles(self, hl: bool, dj: bool):
-        self.action_pads["hl"].setChecked(hl)
-        self.action_pads["dj"].setChecked(dj)
+        pass
 
     # ------------------------------------------------------------ horloge
 
@@ -532,8 +594,13 @@ class DeckView(QWidget):
         if b is not None:
             show[1 - side_a] = (b, st["b_pos"])
         # fond (pochettes, couleurs, titres) : redessiné seulement s'il change
+        x0 = st["x"] if st["kind"] else 0.0
+        wts = [0.0, 0.0]
+        wts[side_a] = 1.0 - x0
+        wts[1 - side_a] = x0 if b is not None else 0.0
+        self._wts = wts
         key = (tuple((s[0].id if s and s[0] is not None else None) for s in show),
-               side_a, self.width(), self.height(),
+               side_a, self.width(), self.height(), round(wts[0] * 6),
                tuple(self._color(s[0]).name() if s and s[0] is not None else "" for s in show),
                tuple(bool(s and s[0] is not None and self.cover_for(s[0]) is not None) for s in show))
         if key != self._bg_key:
@@ -558,12 +625,28 @@ class DeckView(QWidget):
             self.wave.label = f"mesure {int(k // 4) + 1}.{int(k % 4) + 1}" if k >= 0 else ""
         else:
             self.wave.label = ""
+        # battement sur le temps (morceau qui mène)
+        lead = show[side_a][0] if show[side_a] else None
+        pulse = 0.0
+        if (lead is not None and lead.analyzed and not paused and self.mode == "fluides"
+                and not self.auto_light):
+            ph = ((show[side_a][1] - lead.first_beat) / (60.0 / lead.bpm)) % 1.0
+            pulse = max(0.0, 1.0 - ph * 3.5)
         # platines
         for i, s in enumerate(show):
             j = self.jogs[i]
             j.active = s is not None and i == side_a and not paused
+            j.pulse = pulse if i == side_a else 0.0
+            j.spin = self.mode != "aucune"
             if s is not None and not paused and self.mode != "aucune":
                 j.angle = (s[1] * RPM / 60.0 * 360.0) % 360.0
+        # pochettes : taille / éclat selon qui mène, battement → on ne repeint que leur zone
+        cov = tuple((round(wts[i], 2), round(pulse if i == side_a else 0.0, 2)) for i in range(2))
+        if cov != self._cov_state and self._cov_rects:
+            self._cov_state = cov
+            for r in self._cov_rects:
+                if r is not None:
+                    self.update(r.adjusted(-10, -10, 10, 10).toAlignedRect())
         self._frame += 1
         slow = self._frame % 2 == 0 or self.mode != "fluides" or self.auto_light
         # table de mixage et texte : 15 images/s suffisent
@@ -631,68 +714,108 @@ class DeckView(QWidget):
         self._bg = None
         super().resizeEvent(e)
 
+    def _blur_of(self, tr):
+        if tr is None:
+            return None
+        a = self._blur.get(tr.id)
+        if a is None:
+            pm = self.cover_for(tr)
+            if pm is None:
+                return None
+            a = self._blur[tr.id] = blurred(pm)
+        return a
+
+    def _layout_covers(self):
+        rects = [None, None]
+        for i, sp in enumerate(self.cover_space):
+            r = sp.geometry()
+            if r.width() < 40:
+                continue
+            side = int(min(r.width() * 0.62, (r.height() - 70) * 0.92, 300))
+            cx = r.center().x()
+            y = r.top() + max(4, int((r.height() - side - 70) / 2))
+            rects[i] = QRectF(cx - side / 2, y, side, side)
+        self._cov_rects = rects
+        return rects
+
     def _make_bg(self):
+        """Décor : pochettes floutées en fond (côté qui mène plus lumineux) et titres.
+        Refait seulement quand un morceau change, ou 6 fois pendant une transition."""
         w, h = self.width(), self.height()
         dpr = self.devicePixelRatioF()
         pm = QPixmap(int(w * dpr), int(h * dpr))
         pm.setDevicePixelRatio(dpr)
+        pm.fill(QColor("#0d0e12"))
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
-        ca = self._color(self._show[0][0]) if self._show[0] else QColor("#2a2e3a")
-        cb = self._color(self._show[1][0]) if self._show[1] else QColor("#2a2e3a")
-        g = QLinearGradient(0, 0, w, 0)
-        g.setColorAt(0.0, ca.darker(115))
-        g.setColorAt(0.42, ca.darker(320))
-        g.setColorAt(0.58, cb.darker(320))
-        g.setColorAt(1.0, cb.darker(115))
-        p.fillRect(0, 0, w, h, g)
+        # 1. fond flou : un calque par platine, fondus l'un dans l'autre au milieu
+        for i in range(2):
+            s = self._show[i]
+            tr = s[0] if s else None
+            layer = QPixmap(int(w * dpr), int(h * dpr))
+            layer.setDevicePixelRatio(dpr)
+            layer.fill(Qt.transparent)
+            q = QPainter(layer)
+            q.setRenderHint(QPainter.SmoothPixmapTransform)
+            arr = self._blur_of(tr)
+            if arr is not None:
+                a8 = np.ascontiguousarray(np.clip(arr, 0, 255).astype(np.uint8))
+                img = QImage(a8.data, a8.shape[1], a8.shape[0], a8.shape[1] * 3, QImage.Format_RGB888)
+                q.drawImage(QRectF(-w * 0.1, -h * 0.25, w * 1.2, h * 1.5), img)
+            else:
+                q.fillRect(0, 0, w, h, self._color(tr).darker(200) if tr is not None else QColor("#1a1c22"))
+            bright = 0.42 + 0.38 * self._wts[i]                     # le côté qui mène s'éclaire
+            q.fillRect(0, 0, w, h, QColor(8, 9, 12, int(255 * (1 - bright))))
+            q.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+            g = QLinearGradient(0, 0, w, 0)
+            if i == 0:
+                g.setColorAt(0.0, QColor(0, 0, 0, 255)); g.setColorAt(0.38, QColor(0, 0, 0, 255))
+                g.setColorAt(0.62, QColor(0, 0, 0, 0)); g.setColorAt(1.0, QColor(0, 0, 0, 0))
+            else:
+                g.setColorAt(0.0, QColor(0, 0, 0, 0)); g.setColorAt(0.38, QColor(0, 0, 0, 0))
+                g.setColorAt(0.62, QColor(0, 0, 0, 255)); g.setColorAt(1.0, QColor(0, 0, 0, 255))
+            q.fillRect(0, 0, w, h, g)
+            q.end()
+            p.drawPixmap(0, 0, layer)
         shade = QLinearGradient(0, 0, 0, h)
-        shade.setColorAt(0.0, QColor(0, 0, 0, 40))
-        shade.setColorAt(0.75, QColor(8, 9, 12, 150))
+        shade.setColorAt(0.0, QColor(0, 0, 0, 30))
+        shade.setColorAt(0.6, QColor(8, 9, 12, 120))
         shade.setColorAt(1.0, QColor(8, 9, 12, 235))
         p.fillRect(0, 0, w, h, shade)
-        for i, sp in enumerate(self.cover_space):
+        # 2. titres en capitales, teintés de la couleur de la pochette
+        for i, rect in enumerate(self._layout_covers()):
             s = self._show[i]
-            r = sp.geometry()
-            if s is None or s[0] is None or r.width() < 40:
+            if s is None or s[0] is None or rect is None:
                 continue
             tr = s[0]
-            side = int(min(r.width() * 0.62, r.height() * 0.62, 260))
-            cx = r.center().x()
-            y = r.top() + max(4, int((r.height() - side - 70) / 2))
-            cov = self.cover_for(tr)
-            rect = QRectF(cx - side / 2, y, side, side)
-            if cov is not None:
-                p.drawPixmap(rect, cov, QRectF(cov.rect()))
-            else:
-                p.fillRect(rect, QColor("#2a2e38"))
-                p.setPen(QColor("#5c6375"))
-                f = QFont(self.font())
-                f.setPixelSize(int(side * 0.4))
-                p.setFont(f)
-                p.drawText(rect, Qt.AlignCenter, "♪")
-            p.setPen(QPen(self._color(tr).lighter(130), 2))
-            p.setBrush(Qt.NoBrush)
-            p.drawRect(rect)
-            title = tr.row.get("title") or tr.label
+            r = self.cover_space[i].geometry()
+            cx, tw = rect.center().x(), int(r.width() - 10)
+            col = self._color(tr)
+            hh, ss, _vv, _ = col.getHsv()
+            tint = QColor.fromHsv(max(hh, 0), min(ss, 170), 255)
+            title = (tr.row.get("title") or tr.label).upper()
             f = QFont(self.font())
-            f.setPixelSize(20)
+            f.setPixelSize(26)
             f.setBold(True)
+            f.setLetterSpacing(QFont.PercentageSpacing, 104)
             p.setFont(f)
-            fm = p.fontMetrics()
-            tw = int(r.width() - 10)
-            p.setPen(QColor("#f4f4f6"))
-            p.drawText(QRect(int(cx - tw / 2), int(y + side + 8), tw, 26), Qt.AlignHCenter,
-                       fm.elidedText(title, Qt.ElideRight, tw))
+            y = rect.bottom() + 10
+            p.setPen(QColor(0, 0, 0, 160))
+            p.drawText(QRect(int(cx - tw / 2) + 2, int(y) + 2, tw, 34), Qt.AlignHCenter,
+                       p.fontMetrics().elidedText(title, Qt.ElideRight, tw))
+            p.setPen(tint)
+            p.drawText(QRect(int(cx - tw / 2), int(y), tw, 34), Qt.AlignHCenter,
+                       p.fontMetrics().elidedText(title, Qt.ElideRight, tw))
             f.setPixelSize(13)
             f.setBold(False)
+            f.setLetterSpacing(QFont.PercentageSpacing, 100)
             p.setFont(f)
             sub = tr.row.get("artist") or ""
             if tr.analyzed:
                 sub += f"   ·   {tr.bpm:.0f} BPM · {tr.row.get('camelot') or ''}"
-            p.setPen(QColor("#c9ccd6"))
-            p.drawText(QRect(int(cx - tw / 2), int(y + side + 36), tw, 20), Qt.AlignHCenter,
+            p.setPen(QColor("#e4e6ee"))
+            p.drawText(QRect(int(cx - tw / 2), int(y + 36), tw, 20), Qt.AlignHCenter,
                        p.fontMetrics().elidedText(sub, Qt.ElideRight, tw))
         p.end()
         return pm
@@ -712,6 +835,46 @@ class DeckView(QWidget):
         r = QRectF(e.rect())
         k = self.devicePixelRatioF()
         p.drawPixmap(r, self._bg, QRectF(r.x() * k, r.y() * k, r.width() * k, r.height() * k))
+        # pochettes : celle qui mène est grande et vive, l'autre plus petite et pâle
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        st = self._cov_state or ((1.0, 0.0), (0.0, 0.0))
+        for i, rect in enumerate(self._cov_rects):
+            s = self._show[i]
+            if rect is None or s is None or s[0] is None:
+                continue
+            wgt, pulse = st[i]
+            sc = 0.84 + 0.16 * wgt
+            cr = QRectF(rect.center().x() - rect.width() * sc / 2, rect.center().y() - rect.height() * sc / 2,
+                        rect.width() * sc, rect.height() * sc)
+            if not cr.intersects(r.adjusted(-12, -12, 12, 12)):
+                continue
+            col = self._color(s[0])
+            if pulse > 0.02:
+                glow = QColor(col.lighter(150))
+                glow.setAlpha(int(170 * pulse))
+                p.setPen(QPen(glow, 8))
+                p.setBrush(Qt.NoBrush)
+                p.drawRoundedRect(cr.adjusted(-4, -4, 4, 4), 8, 8)
+            p.setOpacity(0.5 + 0.5 * wgt)
+            cov = self.cover_for(s[0])
+            path = QPainterPath()
+            path.addRoundedRect(cr, 6, 6)
+            p.setClipPath(path)
+            if cov is not None:
+                p.drawPixmap(cr, cov, QRectF(cov.rect()))
+            else:
+                p.fillRect(cr, QColor("#2a2e38"))
+                p.setPen(QColor("#5c6375"))
+                f = QFont(self.font())
+                f.setPixelSize(int(cr.width() * 0.4))
+                p.setFont(f)
+                p.drawText(cr, Qt.AlignCenter, "♪")
+            p.setClipping(False)
+            p.setOpacity(1.0)
+            p.setPen(QPen(col.lighter(140), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(cr, 6, 6)
         p.end()
 
 

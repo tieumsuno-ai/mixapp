@@ -13,40 +13,49 @@ _light = False
 # couleur sombre → couleur claire. Les couleurs absentes (accents bleus,
 # blanc « #fff » sur fond coloré…) restent identiques dans les deux thèmes.
 LIGHT = {
-    # fonds
-    "#15171c": "#eef0f4",   # fenêtre
-    "#1b1e24": "#ffffff",   # listes, lecteur
-    "#1f2229": "#f5f6f9",   # lignes alternées
-    "#22252d": "#ffffff",   # champs
-    "#2a2e38": "#e4e7ee",   # boutons
-    "#343947": "#d8dde7",   # survol
-    "#343a48": "#d8dde7",
-    "#353a46": "#cfd4de",   # bordures
-    "#333844": "#cfd4de",
-    "#3a4050": "#c4cad6",
-    "#2f3b66": "#5b74e8",   # sélection (texte blanc dessus)
-    "#3a2a2a": "#f2dedc",
-    # textes
-    "#e6e6e6": "#1d2129",
-    "#f2f2f2": "#12151b",
-    "#ffffff": "#12151b",   # textes « en cours » (les icônes blanches restent #fff)
-    "#c8cdd8": "#3a4050",
-    "#aab0bf": "#4f5668",
-    "#9aa3b5": "#5d6578",
-    "#8a90a0": "#687080",
-    "#6f7686": "#80879a",
-    "#666": "#a3a9b5",
-    "#555": "#b5bac4",
-    "#7a6060": "#b08a8a",
-    "#5c6375": "#9aa0ac",
-    "#596074": "#b9bfcb",
-    "#8fb3ff": "#2f5bd8",   # à venir
-    "#7891c9": "#4a67b0",
-    "#646a78": "#9aa0ac",   # déjà joué
-    "#585e6b": "#a3a8b3",
-    "#555b67": "#a8adb7",
-    "#ffd479": "#a86f00",   # prioritaire
+    # fonds : gris doux plutôt que blanc pur (moins éblouissant)
+    "#15171c": "#e3e6ec",   # fenêtre
+    "#1b1e24": "#f4f5f8",   # listes, lecteur
+    "#1f2229": "#eaecf1",   # lignes alternées
+    "#22252d": "#f4f5f8",   # champs
+    "#2a2e38": "#d5dae3",   # boutons
+    "#343947": "#c9cfda",   # survol
+    "#343a48": "#c9cfda",
+    "#353a46": "#b9c0cc",   # bordures
+    "#333844": "#b9c0cc",
+    "#3a4050": "#aab2c0",
+    "#2f3b66": "#3d5bd9",   # sélection (texte blanc dessus)
+    "#3a2a2a": "#efd6d3",
+    "#6c8cff": "#3d5bd9",   # accent
+    "#4f6bed": "#3d5bd9",   # bouton principal (texte blanc)
+    # textes : nettement plus foncés
+    "#e6e6e6": "#12151b",
+    "#f2f2f2": "#0d1016",
+    "#ffffff": "#0d1016",   # textes « en cours » (les icônes blanches restent #fff)
+    "#c8cdd8": "#2a303d",
+    "#aab0bf": "#3a4152",
+    "#9aa3b5": "#3f4656",
+    "#8a90a0": "#4a5163",
+    "#6f7686": "#555c6e",
+    "#666": "#6b7180",
+    "#555": "#7a808c",
+    "#7a6060": "#8a5a5a",
+    "#5c6375": "#6b7180",
+    "#596074": "#8a91a0",
+    "#8fb3ff": "#1d3fae",   # à venir
+    "#7891c9": "#33447a",
+    "#646a78": "#5f6573",   # déjà joué
+    "#585e6b": "#6e7480",
+    "#555b67": "#6e7480",
+    "#ffd479": "#8a5400",   # prioritaire
 }
+
+# en clair, des bordures fines pour bien détacher listes, champs et boutons
+LIGHT_EXTRA = """
+QListWidget, QTableWidget, QLineEdit { border: 1px solid #b9c0cc; }
+QPushButton { border: 1px solid #b9c0cc; }
+QPushButton#play, QPushButton#next, QPushButton#stop, QPushButton#primary, QPushButton#flat { border: none; }
+"""
 
 _HEX = re.compile(r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b")
 
@@ -72,3 +81,8 @@ def css(sheet: str) -> str:
     if not _light or not sheet:
         return sheet
     return _HEX.sub(lambda m: LIGHT.get(m.group(0).lower(), m.group(0)), sheet)
+
+
+def app_css(sheet: str) -> str:
+    """Feuille de style générale de l'appli dans le thème actuel."""
+    return css(sheet) + (LIGHT_EXTRA if _light else "")

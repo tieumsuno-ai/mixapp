@@ -542,7 +542,7 @@ class MainWindow(QMainWindow):
         self.btn_stop33.setIcon(make_icon("turntable", 20))
         self.btn_stop33.setIconSize(QSize(20, 20))
         self.btn_stop33.setToolTip("Arrêt : le disque ralentit jusqu'à l'arrêt (S) · 2e appui : arrêt immédiat")
-        self.btn_pullup = QPushButton("  Pull-up")
+        self.btn_pullup = QPushButton("  Stop pull-up")
         self.btn_pullup.setObjectName("stop")
         self.btn_pullup.setIcon(make_icon("pullup", 20))
         self.btn_pullup.setIconSize(QSize(20, 20))
@@ -1566,7 +1566,7 @@ class MainWindow(QMainWindow):
 
     def apply_theme(self):
         theme.set_light(self.theme_switch.light)
-        QApplication.instance().setStyleSheet(theme.css(STYLE))
+        QApplication.instance().setStyleSheet(theme.app_css(STYLE))
         for w in self.findChildren(QWidget):
             sheet = w.property("css0")
             if sheet:
@@ -1759,7 +1759,86 @@ class MainWindow(QMainWindow):
             it.setSelected(True)
         self.queue_list.blockSignals(False)
 
+    def _confirm_quit(self) -> str:
+        """Fenêtre de confirmation quand la musique joue : « continue » (par défaut,
+        aussi pour Entrée / Espace / Échap), « echo » ou « now »."""
+        from PySide6.QtWidgets import QDialog
+        eng = self.engine
+        dlg = QDialog(self)
+        dlg.setWindowTitle(APP_NAME)
+        dlg.setModal(True)
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(22, 20, 22, 18)
+        v.setSpacing(6)
+        head = QHBoxLayout()
+        icon = QLabel()
+        icon.setPixmap(make_icon("turntable", 30, tc("#6c8cff")).pixmap(30, 30))
+        head.addWidget(icon, alignment=Qt.AlignTop)
+        col = QVBoxLayout()
+        title = QLabel("La musique joue encore")
+        title.setObjectName("nowTitle")
+        col.addWidget(title)
+        t = eng.now_playing()[0] if eng else None
+        n = len(eng.upcoming(1000)) if eng else 0
+        info = []
+        if t is not None:
+            info.append("En cours : " + (t.row.get("title") or t.label))
+        if n:
+            rest = self.counter.text().split("·")[0].replace("Reste", "").strip()
+            info.append(f"Encore {n} morceau{'x' if n > 1 else ''}" + (f", {rest}" if rest else ""))
+        sub = QLabel("\n".join(info))
+        sub.setObjectName("nowInfo")
+        col.addWidget(sub)
+        q = QLabel("Veux-tu vraiment quitter MixApp ?")
+        q.setContentsMargins(0, 8, 0, 4)
+        col.addWidget(q)
+        head.addSpacing(10)
+        head.addLayout(col, 1)
+        v.addLayout(head)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addStretch(1)
+        choice = {"v": "continue"}
+        now = QPushButton("Quitter tout de suite")
+        echo = QPushButton("Finir en écho et quitter")
+        keep = QPushButton("Continuer la soirée")
+        keep.setObjectName("primary")
+        for b, k in ((now, "now"), (echo, "echo"), (keep, "continue")):
+            b.setAutoDefault(False)
+            b.clicked.connect(lambda _=False, k=k: (choice.__setitem__("v", k), dlg.accept()))
+            row.addWidget(b)
+        keep.setDefault(True)
+        keep.setAutoDefault(True)
+        v.addSpacing(8)
+        v.addLayout(row)
+        dlg.setStyleSheet(theme.css("QDialog { background: #1b1e24; }"))
+        keep.setFocus()
+        self._quit_dialog = dlg
+        dlg.exec()                     # Échap ferme la fenêtre = on continue
+        self._quit_dialog = None
+        return choice["v"]
+
     def closeEvent(self, e):
+        eng = self.engine
+        if eng is not None and not eng.finished and not getattr(self, "_quitting", False):
+            choice = self._confirm_quit()
+            if choice == "continue":
+                e.ignore()
+                return
+            if choice == "echo" and not eng.paused:
+                self._quitting = True
+                e.ignore()
+                eng.stop_soft("echo")
+                t0 = time.time()
+
+                def wait():
+                    if (self.engine is None or self.engine.finished or self.engine.cur is None
+                            or time.time() - t0 > 8):
+                        self.close()
+                    else:
+                        QTimer.singleShot(100, wait)
+                QTimer.singleShot(100, wait)
+                return
         self.stop()
         if self.observer:
             self.observer.stop()
