@@ -461,9 +461,16 @@ class DeckView(QWidget):
         cols = [QRect(m, top, cx - ww // 2 - 2 * m, bot - top),
                 QRect(cx + ww // 2 + m, top, W - m - (cx + ww // 2 + m), bot - top)]
         avail_h = bot - top
-        cs = int(min(cols[0].width() * 0.74, avail_h * 0.64, 560))
-        cs = max(cs, 80)
-        return {"m": m, "ch": ch, "top": top, "bot": bot, "cx": cx, "cols": cols, "cs": cs,
+        # la pochette prend ce qui reste une fois réservée la place des textes
+        # (étiquette, temps, titre sur 2 lignes, artiste, BPM / clé) : rien ne déborde
+        cs = int(min(cols[0].width() * 0.74, 560))
+        for _ in range(3):
+            fs = float(np.clip(cs * 0.072, 17, 30))
+            cs = int(min(cs, avail_h - self._text_h(fs)))
+        horiz = cs < 150                       # fenêtre basse : pochette à gauche, infos à droite
+        if horiz:
+            cs = int(max(60, min(avail_h - 16, cols[0].width() * 0.42, 260)))
+        return {"m": m, "ch": ch, "top": top, "bot": bot, "cx": cx, "cols": cols, "cs": cs, "horiz": horiz,
                 "console": QRect(m, H - ch - m, W - 2 * m, ch)}
 
     def resizeEvent(self, e):
@@ -486,7 +493,8 @@ class DeckView(QWidget):
             k = (right - left - 6 * (len(widths) - 1)) / max(1, sum(widths))
             widths = [max(54, int(wd * k)) for wd in widths]
             total = sum(widths) + 6 * (len(widths) - 1)
-        y1 = c.top() + int(c.height() * 0.30)
+        block = 18 + 8 + 34 + 10 + self.xf.height() + 2 + 20     # titre, pads, crossfader, annonce
+        y1 = c.top() + max(6, (c.height() - block) // 2) + 22
         self.pad_label.adjustSize()
         self.pad_label.move(mid - self.pad_label.width() // 2, y1 - self.pad_label.height() - 8)
         x = mid - total // 2
@@ -494,7 +502,7 @@ class DeckView(QWidget):
             b.setGeometry(x, y1, wd, 34)
             x += wd + 6
         # rangée 2 : crossfader, annonce dessous
-        y2 = y1 + 34 + int(c.height() * 0.10)
+        y2 = y1 + 34 + 10
         self.xf.move(mid - self.xf.width() // 2, y2)
         self.xf.setVisible(right - left > self.xf.width())
         self.next_label.setAlignment(Qt.AlignCenter)
@@ -711,16 +719,43 @@ class DeckView(QWidget):
 
     # ------------------------------------------------------------ décor (redessiné rarement)
 
-    def _cover_rect(self, i, g=None):
+    @staticmethod
+    def _text_h(fs):
+        """Hauteur des textes autour d'une pochette : étiquette au-dessus (22),
+        temps (38), titre sur 2 lignes au plus, artiste (34), BPM / clé (26)."""
+        return 22 + 38 + int(fs * 2.6) + 34 + 26 + 6
+
+    def _lay(self, i, g=None):
+        """Emplacements d'une platine : pochette, étiquette, titre, artiste, BPM / clé, temps."""
         g = g or self._geom()
         col, cs = g["cols"][i], g["cs"]
-        block = cs + 16 + int(np.clip(cs * 0.34, 96, 150))       # pochette + textes
-        y = col.top() + max(0, (col.height() - block) // 2) + 18
-        return QRect(col.center().x() - cs // 2, y, cs, cs)
+        if not g["horiz"]:                                    # pochette au-dessus, textes dessous
+            fs = int(np.clip(cs * 0.072, 17, 30))
+            block = cs + self._text_h(fs)
+            y = col.top() + max(0, (col.height() - block) // 2) + 22
+            r = QRect(col.center().x() - cs // 2, y, cs, cs)
+            tw = int(min(cs * 1.25, col.width()))
+            tx = r.center().x() - tw // 2
+            return {"r": r, "fs": fs, "align": Qt.AlignHCenter, "tx": tx, "tw": tw,
+                    "label": QRect(r.left(), r.top() - 22, cs, 16),
+                    "title_y": r.bottom() + 38, "title_lines": 2, "tags": True,
+                    "prog": QRect(r.left() - 2, r.bottom() + 8, r.width() + 4, 22)}
+        # fenêtre basse : pochette à gauche, textes à droite
+        fs = int(np.clip(cs * 0.11, 15, 22))
+        tw = int(max(80, min(col.width() - cs - 18, 340)))
+        x = col.left() + max(0, (col.width() - (cs + 18 + tw)) // 2)
+        r = QRect(x, col.top() + max(0, (col.height() - cs) // 2), cs, cs)
+        tx = r.right() + 18
+        return {"r": r, "fs": fs, "align": Qt.AlignLeft, "tx": tx, "tw": tw,
+                "label": QRect(tx, r.top(), tw, 16),
+                "title_y": r.top() + 22, "title_lines": 1, "tags": cs >= 132,  # très petit : BPM dans le lecteur
+                "prog": QRect(tx - 2, r.bottom() - 24, tw + 4, 22)}
+
+    def _cover_rect(self, i, g=None):
+        return self._lay(i, g)["r"]
 
     def _prog_rect(self, i):
-        r = self._cover_rect(i)
-        return QRect(r.left() - 2, r.bottom() + 8, r.width() + 4, 22)
+        return self._lay(i)["prog"]
 
     def _blur_of(self, tr):
         k = self._ck(tr)
@@ -763,7 +798,8 @@ class DeckView(QWidget):
             if s is None or s[0] is None:
                 continue
             tr = s[0]
-            r = self._cover_rect(i, g)
+            L = self._lay(i, g)
+            r = L["r"]
             wgt = self._wts[i]
             active = wgt >= 0.5
             cs = r.width()
@@ -774,7 +810,7 @@ class DeckView(QWidget):
             f.setLetterSpacing(QFont.PercentageSpacing, 118)
             p.setFont(f)
             p.setPen(QColor(ACCENT) if active else QColor("#6f7686"))
-            p.drawText(QRect(r.left(), r.top() - 22, cs, 16), Qt.AlignLeft,
+            p.drawText(L["label"], Qt.AlignLeft,
                        "EN COURS" if i == max(range(2), key=lambda k: self._wts[k]) and self._wts[i] > 0.99
                        else ("EN TRANSITION" if 0.01 < wgt < 0.99 else "À SUIVRE"))
             # ombre douce
@@ -801,21 +837,24 @@ class DeckView(QWidget):
             p.drawRoundedRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5), 10, 10)
             # textes
             base, vers = _split_title(tr.row.get("title") or tr.label)
-            y = r.bottom() + 38
-            fs = int(np.clip(cs * 0.072, 17, 30))
+            y = L["title_y"]
+            fs = L["fs"]
+            al = L["align"]
             f = QFont(self.font())
             f.setPixelSize(fs)
             f.setWeight(QFont.DemiBold)
             p.setFont(f)
             p.setPen(QColor("#f4f4f6") if active else QColor("#b9bdc8"))
-            tw = int(cs * 1.25)
-            tx = r.center().x() - tw // 2
-            title_r = QRect(tx, y, tw, int(fs * 2.6))
-            br = p.fontMetrics().boundingRect(title_r, Qt.AlignHCenter | Qt.TextWordWrap, base)
-            if br.height() > fs * 2.6:
+            tw, tx = L["tw"], L["tx"]
+            if L["title_lines"] == 1:                     # fenêtre basse : titre sur une ligne
+                base = p.fontMetrics().elidedText(base, Qt.ElideRight, tw)
+            title_r = QRect(tx, y, tw, int(fs * (2.6 if L["title_lines"] == 2 else 1.4)))
+            br = p.fontMetrics().boundingRect(title_r, al | Qt.TextWordWrap, base)
+            if br.height() > title_r.height():
                 base = p.fontMetrics().elidedText(base, Qt.ElideRight, tw * 2 - 20)
-            p.drawText(title_r, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, base)
-            y += min(br.height(), int(fs * 2.6)) + 6
+                br = p.fontMetrics().boundingRect(title_r, al | Qt.TextWordWrap, base)
+            p.drawText(title_r, al | Qt.AlignTop | Qt.TextWordWrap, base)
+            y += min(br.height(), title_r.height()) + 6
             f2 = QFont(self.font())
             f2.setPixelSize(int(np.clip(fs * 0.56, 12, 16)))
             p.setFont(f2)
@@ -823,10 +862,10 @@ class DeckView(QWidget):
             sub = tr.row.get("artist") or ""
             if vers:
                 sub += f"  ·  {vers}"
-            p.drawText(QRect(tx, y, tw, 22), Qt.AlignHCenter,
+            p.drawText(QRect(tx, y, tw, 22), al,
                        p.fontMetrics().elidedText(sub, Qt.ElideRight, tw))
             y += 28
-            if tr.analyzed:                                   # étiquettes tempo / clé
+            if tr.analyzed and L["tags"]:                     # étiquettes tempo / clé
                 tags = [f"{tr.bpm:.0f} BPM", tr.row.get("camelot") or ""]
                 tags = [t for t in tags if t]
                 f3 = QFont(self.font())
@@ -834,7 +873,7 @@ class DeckView(QWidget):
                 p.setFont(f3)
                 fm = p.fontMetrics()
                 widths = [fm.horizontalAdvance(t) + 18 for t in tags]
-                xx = r.center().x() - (sum(widths) + 8 * (len(tags) - 1)) // 2
+                xx = (r.center().x() - (sum(widths) + 8 * (len(tags) - 1)) // 2) if al == Qt.AlignHCenter else tx
                 for t, wd in zip(tags, widths):
                     p.setPen(QPen(QColor(255, 255, 255, 40), 1))
                     p.setBrush(Qt.NoBrush)
