@@ -560,6 +560,15 @@ class DeckView(QWidget):
         super().hideEvent(e)
         self.timer.stop()
 
+    def shutdown(self):
+        """Fermeture de l'appli : on attend la fin des calculs en cours (forme
+        d'onde) avant que Qt ne s'arrête, sinon l'appli peut planter en quittant."""
+        self.timer.stop()
+        try:
+            self._pool.shutdown(wait=True, cancel_futures=True)
+        except TypeError:                                   # Python < 3.9
+            self._pool.shutdown(wait=True)
+
     def set_engine(self, eng):
         self.engine = eng
         self._sides.clear()

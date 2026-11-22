@@ -2191,6 +2191,7 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(100, wait)
                 return
         self.stop()
+        self.deck.shutdown()
         if self.observer:
             self.observer.stop()
         super().closeEvent(e)
@@ -2219,7 +2220,17 @@ def main(argv=None):
     if os.environ.get("MIXAPP_TOUR"):              # captures pour les tutoriels
         from . import tour
         tour.run(w, os.environ["MIXAPP_TOUR"])
-    return app.exec()
+    code = app.exec()
+    # tout est sauvegardé et la fenêtre fermée : on sort tout de suite, sans laisser
+    # Python démonter Qt pendant qu'un fil de fond (pochette, analyse…) travaille
+    # encore — ce qui peut faire « quitter inopinément » l'appli sur Mac
+    try:
+        w.conn.commit()
+    except Exception:
+        pass
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
 
 
 if __name__ == "__main__":
