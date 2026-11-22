@@ -142,6 +142,71 @@
   .sonos .vol span { font-size: 2.3vh; font-weight: 300; min-width: 4.6vh; text-align: center; }
   .sonos.attente .commandes, .sonos.attente .pochette { opacity: 0.6; }
 
+  /* Tuile PSG */
+  .foot { margin-top: 1.6vh; padding-top: 1.5vh; padding-bottom: 1.4vh; display: none; }
+  .foot.visible { display: block; }
+  .foot .haut { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+  .foot .forme { white-space: nowrap; margin-left: 1vw; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .foot .haut .etiquette { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .foot .forme span { display: inline-block; width: 2.3vh; height: 2.3vh; line-height: 2.3vh; border-radius: 50%;
+    font-size: 1.35vh; font-weight: 600; text-align: center; margin-left: 0.35vw; color: #0b1026; }
+  .foot .forme .V { background: #5fd38d; } .foot .forme .N { background: #c9cbd6; } .foot .forme .D { background: #ff7b6b; }
+  .foot .score { font-size: 3.4vh; font-weight: 300; margin-top: 0.7vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .foot .score b { font-weight: 500; }
+  .foot .score .quand { font-size: 2vh; opacity: 0.6; margin-left: 0.8vw; }
+  .foot .ligne { font-size: 1.95vh; font-weight: 300; margin-top: 0.55vh; line-height: 1.3; opacity: 0.85;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .foot .ligne .eux { opacity: 0.6; }
+  .foot .ligne svg { width: 1.8vh; height: 1.8vh; vertical-align: -0.25vh; margin-right: 0.4vw; }
+  .foot .direct { color: #ff8a7a; font-weight: 600; }
+  .foot .direct i { display: inline-block; width: 1vh; height: 1vh; border-radius: 50%; background: #ff5a48; margin-right: 0.5vw;
+    -webkit-animation: clignote 1.4s infinite; animation: clignote 1.4s infinite; }
+  @-webkit-keyframes clignote { 50% { opacity: 0.25; } } @keyframes clignote { 50% { opacity: 0.25; } }
+
+  /* Panneau Lumières & volets (Delta Dore) */
+  #btn-maison { position: fixed; top: 3.4vh; right: 2.4vw; width: 6.6vh; height: 6.6vh; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.18); display: none; z-index: 5;
+    -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  #btn-maison.visible { display: block; }
+  #btn-maison svg { display: block; width: 52%; height: 52%; margin: 24% auto 0; }
+  #btn-maison .badge { position: absolute; top: -0.6vh; right: -0.6vh; min-width: 2.6vh; height: 2.6vh; line-height: 2.6vh;
+    border-radius: 2vh; background: #ffd36b; color: #2a2000; font-size: 1.6vh; font-weight: 600; text-align: center; padding: 0 0.4vh; }
+  #btn-maison .badge:empty { display: none; }
+  #maison { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 10; display: none;
+    background: #080c22; padding: 5vh 4.5vw; box-sizing: border-box; overflow: hidden; }
+  #maison.ouvert { display: block; }
+  #maison .entete { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+  #maison h1 { font-size: 4.6vh; font-weight: 200; margin: 0; -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; }
+  #maison .action { -webkit-appearance: none; border: 0; outline: none; color: #fff; font: inherit; font-size: 2.1vh;
+    background: rgba(255,255,255,0.12); border-radius: 100px; padding: 1.2vh 1.8vw; margin-left: 1vw; }
+  #maison .action:active, #maison .fermer:active { background: rgba(255,255,255,0.3); }
+  #maison .fermer { -webkit-appearance: none; border: 0; outline: none; color: #fff; width: 6.6vh; height: 6.6vh;
+    border-radius: 50%; background: rgba(255,255,255,0.12); margin-left: 1.6vw; font-size: 3.6vh; line-height: 6.6vh; padding: 0; }
+  #maison .rubrique { margin: 3.2vh 0 1.4vh; }
+  #maison .grille { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-right: -1.4vw; }
+  #maison .eq { width: 21.6vw; margin: 0 1.4vw 1.4vw 0; box-sizing: border-box; position: relative;
+    -webkit-tap-highlight-color: rgba(0,0,0,0); -webkit-transition: background 0.2s; transition: background 0.2s; }
+  #maison .eq .n { font-size: 2.6vh; font-weight: 400; margin-top: 1vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #maison .eq .e { font-size: 1.9vh; font-weight: 300; opacity: 0.65; margin-top: 0.3vh; }
+  #maison .lum { padding: 2.2vh 1.6vw; }
+  #maison .lum svg { display: block; width: 6vh; height: 6vh; }
+  #maison .lum.on { background: rgba(255,211,107,0.22); border-color: rgba(255,211,107,0.55); }
+  #maison .lum:active { background: rgba(255,255,255,0.25); }
+  #maison .vol { padding: 2vh 1.6vw 1.8vh; }
+  #maison .vol .jauge { height: 0.8vh; border-radius: 1vh; background: rgba(255,255,255,0.15); margin-top: 1.2vh; overflow: hidden; }
+  #maison .vol .jauge i { display: block; height: 100%; background: #8fc6ff; border-radius: 1vh; }
+  #maison .vol .bts { display: -webkit-box; display: -webkit-flex; display: flex; margin-top: 1.4vh;
+    -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between; }
+  #maison .vol button { -webkit-appearance: none; border: 0; outline: none; padding: 0; color: #fff;
+    width: 5.6vh; height: 5.6vh; border-radius: 50%; background: rgba(255,255,255,0.13);
+    -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  #maison .vol button svg { display: block; width: 46%; height: 46%; margin: 0 auto; fill: currentColor; }
+  #maison .vol button:active { background: rgba(255,255,255,0.35); }
+  #maison .vide { font-size: 2.4vh; font-weight: 300; opacity: 0.7; margin-top: 4vh; }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -200,14 +265,17 @@
     display: -webkit-box; display: -webkit-flex; display: flex;
     margin-top: 1.6vh;
   }
-  .jour { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; text-align: center; margin-right: 1.2vw; padding: 2vh 0.5vw; }
+  .jour { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; margin-right: 1.2vw; padding: 1.2vh 1vw;
+    display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+  .jour .txt { margin-left: 0.8vw; min-width: 0; }
   .jour:last-child { margin-right: 0; }
   .jour .nom { font-size: 2.3vh; font-weight: 400; opacity: 0.75; }
   .jour .nom:first-letter { text-transform: uppercase; }
-  .jour svg { display: block; width: 7vh; height: 7vh; margin: 0.8vh auto 0.5vh; }
-  .jour .max { font-size: 3.8vh; font-weight: 300; }
-  .jour .min { font-size: 2.6vh; font-weight: 300; opacity: 0.55; margin-left: 0.4vw; }
-  .jour .pluie { font-size: 1.9vh; margin-top: 0.6vh; color: #a9d4ff; }
+  .jour svg { display: block; width: 6.2vh; height: 6.2vh; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .jour .max { font-size: 3.2vh; font-weight: 300; }
+  .jour .min { font-size: 2.3vh; font-weight: 300; opacity: 0.55; margin-left: 0.4vw; }
+  .jour .nom { font-size: 1.9vh; }
+  .jour .pluie { font-size: 1.7vh; color: #a9d4ff; white-space: nowrap; }
 
   .etat { font-size: 1.6vh; opacity: 0.4; margin-top: 1.6vh; text-align: right; }
   .erreur { color: #ffb3a6; opacity: 1; }
@@ -293,12 +361,24 @@
       <div class="contenu" id="infos-contenu"></div>
     </div>
 
+    <div class="carte foot" id="foot"></div>
+
     <div class="pousse"></div>
 
-    <div class="etiquette">Prochains jours</div>
     <div class="prev" id="prev"></div>
     <div class="etat" id="etat"></div>
   </div>
+</div>
+
+<div id="btn-maison" onclick="ouvrirMaison()"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
+<div id="maison" onclick="toucheMaison()">
+  <div class="entete">
+    <h1>Lumières &amp; volets</h1>
+    <button class="action" onclick="toutMaison('lumiere')">Tout éteindre</button>
+    <button class="action" onclick="toutMaison('volet')">Tout fermer</button>
+    <button class="fermer" onclick="fermerMaison(event)">&times;</button>
+  </div>
+  <div id="maison-contenu"></div>
 </div>
 
 <script src="config.js"></script>
@@ -310,7 +390,7 @@ var CONFIG_DEFAUT = {
   nomLieu: "Paris", sonos: null, latitude: 48.86, longitude: 2.35,
   joursPrevision: 3, rafraichirMinutes: 15, attenuerDebut: 22, attenuerFin: 7,
   collecte: [], equipe: null, anniversaires: [], evenements: [],
-  urlInterieur: null, secondesParInfo: 8, animerIcones: true
+  urlInterieur: null, secondesParInfo: 8, animerIcones: true, interrupteurs: null
 };
 var CONFIG = {};
 (function () {
@@ -772,13 +852,12 @@ function afficherMeteo(m) {
     var j = jourISO(d.time[i]);
     var inf = meteoInfo(d.weather_code[i]);
     var pluie = d.precipitation_probability_max ? d.precipitation_probability_max[i] : null;
-    html += '<div class="carte jour">' +
+    html += '<div class="carte jour">' + svgIcone(inf[1]) + '<div class="txt">' +
       '<div class="nom">' + (i === o + 1 ? "demain" : JOURS[j.getDay()]) + '</div>' +
-      svgIcone(inf[1]) +
       '<div><span class="max">' + Math.round(d.temperature_2m_max[i]) + '°</span>' +
       '<span class="min">' + Math.round(d.temperature_2m_min[i]) + '°</span></div>' +
-      (pluie !== null && pluie !== undefined && pluie >= 20 ? '<div class="pluie">pluie ' + pluie + ' %</div>' : '<div class="pluie">&nbsp;</div>') +
-      '</div>';
+      (pluie !== null && pluie !== undefined && pluie >= 20 ? '<div class="pluie">pluie ' + pluie + ' %</div>' : '') +
+      '</div></div>';
   }
   el("prev").innerHTML = html;
 
@@ -836,35 +915,45 @@ function chargerAir() {
   setTimeout(chargerAir, 60 * 60000);
 }
 
-/* ---------- Football ----------
-   Source principale : ESPN (tous les matchs, domicile et extérieur, Ligue 1 + coupes d'Europe + Coupe de France).
-   Secours : TheSportsDB (la clé gratuite ne donne que les matchs à domicile). */
-var etatFoot = null;
+/* ---------- Football : tuile dédiée ----------
+   Données ESPN : calendrier (Ligue 1, Ligue des champions, Coupe de France), classement de Ligue 1,
+   buteurs du dernier match, et score en direct pendant les matchs. */
+var etatFoot = null, footDirect = null, footMinuteur = null;
 var ESPN_EQUIPES = { "133714": 160 };   // TheSportsDB → ESPN
-var ESPN_COMPET = { "fra.1": "French Ligue 1", "uefa.champions": "UEFA Champions League", "fra.coupe_de_france": "Coupe de France" };
+var ESPN_COMPET = { "fra.1": "Ligue 1", "uefa.champions": "Ligue des champions", "fra.coupe_de_france": "Coupe de France" };
+var COMPET_COURT = { "fra.1": "Ligue 1", "uefa.champions": "C1", "fra.coupe_de_france": "Coupe de France" };
+var ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/";
+function idESPN() { return CONFIG.equipe && (CONFIG.equipe.espn || ESPN_EQUIPES[String(CONFIG.equipe.id)]); }
 function chargerFoot() {
   if (!CONFIG.equipe) return;
-  if (location.hash === "#demo") { etatFoot = footDemo(); construireInfos(); return; }
-  setTimeout(chargerFoot, 30 * 60000);
-  var id = CONFIG.equipe.espn || ESPN_EQUIPES[String(CONFIG.equipe.id)];
-  if (id) chargerFootESPN(id); else chargerFootTSDB();
-}
-function chargerFootESPN(id) {
-  var base = "https://site.api.espn.com/apis/site/v2/sports/soccer/", urls = [], tous = [], n = 0, ok = 0;
+  clearTimeout(footMinuteur);
+  if (location.hash === "#demo") { etatFoot = footDemo(); afficherFoot(); return; }
+  footMinuteur = setTimeout(chargerFoot, 30 * 60000);
+  var id = idESPN();
+  if (!id) return;
+  var urls = [], tous = [], n = 0, ok = 0, res = { classement: null };
   for (var c in ESPN_COMPET) {
-    urls.push([c, base + c + "/teams/" + id + "/schedule"]);
-    urls.push([c, base + c + "/teams/" + id + "/schedule?fixture=true"]);
+    urls.push([c, ESPN + c + "/teams/" + id + "/schedule"]);
+    urls.push([c, ESPN + c + "/teams/" + id + "/schedule?fixture=true"]);
   }
   function fini() {
-    if (++n < urls.length) return;
-    if (!ok) { chargerFootTSDB(); return; }
-    var maintenant = new Date(), res = { dernier: null, prochain: null }, passes = [], futurs = [];
-    for (var i = 0; i < tous.length; i++) (tous[i].termine ? passes : futurs).push(tous[i]);
-    res.dernier = extremeMatch(passes, true);
-    var f = [];
-    for (i = 0; i < futurs.length; i++) { var d = dateMatch(futurs[i]); if (d && d.getTime() > maintenant.getTime() - 3 * 3600000) f.push(futurs[i]); }
-    res.prochain = extremeMatch(f, false);
-    etatFoot = res; construireInfos();
+    if (++n < urls.length + 1) return;
+    if (!ok) return;
+    var maintenant = new Date().getTime(), passes = [], futurs = [];
+    for (var i = 0; i < tous.length; i++) {
+      var m = tous[i];
+      if (m.termine) passes.push(m);
+      else if (m.date.getTime() > maintenant - 3 * 3600000) futurs.push(m);
+    }
+    passes.sort(function (x, y) { return y.date - x.date; });
+    futurs.sort(function (x, y) { return x.date - y.date; });
+    res.dernier = passes[0] || null;
+    res.prochain = futurs[0] || null;
+    res.forme = passes.slice(0, 5).reverse();
+    etatFoot = res;
+    afficherFoot();
+    if (res.dernier) chargerButeurs(res.dernier);
+    surveillerDirect();
   }
   for (var k = 0; k < urls.length; k++) (function (compet, u) {
     chargerJSON(u, function (a) {
@@ -874,8 +963,18 @@ function chargerFootESPN(id) {
       fini();
     }, fini);
   })(urls[k][0], urls[k][1]);
+  chargerJSON("https://site.api.espn.com/apis/v2/sports/soccer/fra.1/standings", function (a) {
+    try {
+      var en = a.children[0].standings.entries;
+      for (var i = 0; i < en.length; i++) if (String(en[i].team.id) === String(id)) {
+        var st = {}; for (var j = 0; j < en[i].stats.length; j++) st[en[i].stats[j].name] = en[i].stats[j].value;
+        res.classement = { rang: st.rank, points: st.points, joues: st.gamesPlayed };
+      }
+    } catch (e) {}
+    fini();
+  }, fini);
 }
-function scoreESPN(s) { if (s === undefined || s === null) return null; if (typeof s === "object") s = s.displayValue !== undefined ? s.displayValue : s.value; return s === "" || s === undefined ? null : String(Math.round(+s)); }
+function scoreESPN(s) { if (s === undefined || s === null) return null; if (typeof s === "object") s = s.displayValue !== undefined ? s.displayValue : s.value; return s === "" || s === undefined ? null : Math.round(+s); }
 function matchESPN(e, compet) {
   var c = e.competitions && e.competitions[0];
   if (!c || !c.competitors || c.competitors.length < 2 || !e.date) return null;
@@ -884,73 +983,103 @@ function matchESPN(e, compet) {
   if (!dom || !ext) return null;
   var st = (c.status && c.status.type) || (e.status && e.status.type) || {};
   if (st.name === "STATUS_POSTPONED" || st.name === "STATUS_CANCELED") return null;
-  var termine = !!st.completed || st.state === "post";
-  return { strHomeTeam: dom.team.displayName, strAwayTeam: ext.team.displayName,
-           intHomeScore: termine ? scoreESPN(dom.score) : null, intAwayScore: termine ? scoreESPN(ext.score) : null,
-           strLeague: ESPN_COMPET[compet], strTimestamp: e.date, termine: termine };
+  var termine = !!st.completed || st.state === "post", id = String(idESPN());
+  return { id: e.id, compet: compet, date: dateUTC(e.date), termine: termine,
+           dom: dom.team.displayName, ext: ext.team.displayName, nousDom: String(dom.team.id) === id,
+           sd: termine ? scoreESPN(dom.score) : null, se: termine ? scoreESPN(ext.score) : null };
 }
-function chargerFootTSDB() {
-  var base = "https://www.thesportsdb.com/api/v1/json/123/", res = { dernier: null, prochain: null }, n = 0;
-  function fini() { n++; if (n === 2) { etatFoot = res; construireInfos(); } }
-  chargerJSON(base + "eventslast.php?id=" + CONFIG.equipe.id, function (a) {
-    res.dernier = extremeMatch(a.results, true); fini();
-  }, fini);
-  chargerJSON(base + "eventsnext.php?id=" + CONFIG.equipe.id, function (a) {
-    res.prochain = extremeMatch(a.events, false); fini();
-  }, fini);
-}
-function dateMatch(e) {
-  var s = e.strTimestamp || ((e.dateEvent || "") + "T" + (e.strTime || "00:00:00"));
-  if (!s || s.length < 16) return null;
-  return new Date(Date.UTC(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2)));
-}
-function extremeMatch(l, plusRecent) {
-  var best = null, bd = null;
-  if (!l) return null;
-  for (var i = 0; i < l.length; i++) {
-    var d = dateMatch(l[i]);
-    if (!d) continue;
-    if (!best || (plusRecent ? d > bd : d < bd)) { best = l[i]; bd = d; }
+function dateUTC(s) { return new Date(Date.UTC(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2))); }
+function nomFamille(n) { var p = (n || "").split(" "); return p.length > 1 && p[p.length - 1].length > 2 ? p[p.length - 1] : n; }
+function lireButs(s, m) {
+  var l = [], k = s.keyEvents || [];
+  for (var i = 0; i < k.length; i++) {
+    var e = k[i];
+    if (!e.scoringPlay) continue;
+    var txt = e.text || "", qui = e.participants && e.participants[0] && e.participants[0].athlete ? e.participants[0].athlete.displayName : "";
+    var csc = /own goal/i.test(txt) || (e.type && /own/i.test(e.type.text || "")), pen = /penalty/i.test(txt);
+    var pourDom = e.team && e.team.displayName === m.dom;
+    l.push({ nom: nomFamille(qui) + (csc ? " (csc)" : pen ? " (sp)" : ""), min: (e.clock && e.clock.displayValue || "").replace("'+", "+"),
+             nous: pourDom === m.nousDom });
   }
-  return best;
+  return l;
 }
-function nomEquipe(n) { return CONFIG.equipe && n === CONFIG.equipe.nom ? CONFIG.equipe.court : (n || "").replace(/^(AS|FC|OGC|RC|AJ|SCO|ESTAC) /, ""); }
-function nomCompet(n) {
-  var M = { "French Ligue 1": "Ligue 1", "UEFA Champions League": "Ligue des champions",
-            "Coupe de France": "Coupe de France", "French Coupe de France": "Coupe de France",
-            "Trophée des Champions": "Trophée des champions", "UEFA Super Cup": "Supercoupe d'Europe",
-            "FIFA Club World Cup": "Coupe du monde des clubs", "Club Friendlies": "Match amical" };
-  return M[n] || n || "";
+function chargerButeurs(m) {
+  chargerJSON(ESPN + m.compet + "/summary?event=" + m.id, function (s) {
+    m.buts = lireButs(s, m);
+    afficherFoot();
+  });
 }
-function slideFoot(f, now) {
-  var court = CONFIG.equipe.court, s = { titre: court, grand: "", petit: "" };
-  var p = f.prochain, pd = p ? dateMatch(p) : null;
-  var lignePro = "";
-  if (p && pd) {
-    var nj = joursEntre(now, pd);
-    var quand = nj === 0 ? "ce soir " + hm(pd) : nj === 1 ? "demain " + hm(pd) : JOURS[pd.getDay()].substr(0, 3) + ". " + pd.getDate() + " " + MOISCOURT[pd.getMonth()] + " " + hm(pd);
-    if (nj === 0 && pd.getHours() < 18) quand = "aujourd'hui " + hm(pd);
-    lignePro = nomEquipe(p.strHomeTeam) + " – " + nomEquipe(p.strAwayTeam) + " · " + quand;
-    if (nj === 0 && pd.getTime() > now.getTime() - 2 * 3600000) {   // match du jour : on le met en avant
-      s.titre = court + " · match " + (pd.getHours() >= 18 ? "ce soir" : "aujourd'hui");
-      s.grand = nomEquipe(p.strHomeTeam) + " – " + nomEquipe(p.strAwayTeam) + " · " + hm(pd);
-      s.petit = nomCompet(p.strLeague);
-      return s;
+// Score en direct : du coup d'envoi à 2 h 30 après, toutes les 90 s
+function surveillerDirect() {
+  var f = etatFoot, p = f && f.prochain;
+  if (!p) return;
+  var t = new Date().getTime(), debut = p.date.getTime();
+  if (t < debut - 5 * 60000) {   // réveil au coup d'envoi
+    if (debut - t < 24 * 3600000) setTimeout(surveillerDirect, debut - t - 4 * 60000);
+    return;
+  }
+  if (t > debut + 150 * 60000) { footDirect = null; afficherFoot(); return; }
+  chargerJSON(ESPN + p.compet + "/summary?event=" + p.id, function (s) {
+    try {
+      var c = s.header.competitions[0], st = c.status.type, sc = {};
+      for (var i = 0; i < c.competitors.length; i++) sc[c.competitors[i].homeAway] = scoreESPN(c.competitors[i].score);
+      footDirect = { etat: st.state, minute: c.status.displayClock || "", detail: st.shortDetail || "", sd: sc.home, se: sc.away, buts: lireButs(s, p) };
+      if (st.state === "post") { footDirect = null; chargerFoot(); return; }
+      afficherFoot();
+    } catch (e) {}
+  });
+  setTimeout(surveillerDirect, 90000);
+}
+function nomEquipe(n) { return CONFIG.equipe && n === CONFIG.equipe.nom ? CONFIG.equipe.court : (n || "").replace(/^(AS|FC|OGC|RC|AJ|SCO|ESTAC|SL|SC|AC|SS|CF|RB|PSV) /, "").replace(/ (FC|CF|AC)$/, ""); }
+function lignesButs(buts) {
+  if (!buts || !buts.length) return "";
+  var a = [], b = [];
+  for (var i = 0; i < buts.length; i++) (buts[i].nous ? a : b).push(buts[i].nom + " " + buts[i].min);
+  var ballon = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M12 7.5l3.6 2.6-1.4 4.2H9.8L8.4 10.1z" fill="#fff"/></svg>';
+  return '<div class="ligne">' + ballon + (a.length ? a.join(" · ") : "—") + (b.length ? ' <span class="eux">· ' + b.join(" · ") + "</span>" : "") + "</div>";
+}
+function quandMatch(d, now) {
+  var nj = joursEntre(now, d);
+  if (nj === 0) return (d.getHours() >= 18 ? "ce soir " : "aujourd'hui ") + hm(d);
+  if (nj === 1) return "demain " + hm(d);
+  return JOURS[d.getDay()].substr(0, 3) + ". " + d.getDate() + " " + MOISCOURT[d.getMonth()] + " " + hm(d);
+}
+function afficherFoot() {
+  var z = document.getElementById("foot"), f = etatFoot, now = new Date();
+  if (!f || (!f.dernier && !f.prochain)) { z.className = "carte foot"; return; }
+  var court = CONFIG.equipe.court, h = "", titre = court, cl = f.classement;
+  if (cl && cl.rang) titre += " · " + (cl.rang === 1 ? "1er" : cl.rang + "e") + " de L1 · " + cl.points + " pts";
+  var forme = "";
+  if (f.forme) for (var i = 0; i < f.forme.length; i++) {
+    var m = f.forme[i], nous = m.nousDom ? m.sd : m.se, eux = m.nousDom ? m.se : m.sd, r = nous > eux ? "V" : nous < eux ? "D" : "N";
+    forme += '<span class="' + r + '">' + r + "</span>";
+  }
+  var p = f.prochain;
+  if (footDirect && p && footDirect.etat === "in") {
+    h += '<div class="haut"><div class="etiquette direct"><i></i>' + court + " · en direct · " + echap(footDirect.detail || footDirect.minute) + '</div></div>' +
+      '<div class="score">' + nomEquipe(p.dom) + " <b>" + footDirect.sd + " – " + footDirect.se + "</b> " + nomEquipe(p.ext) + "</div>" +
+      lignesButs(footDirect.buts) + '<div class="ligne">' + ESPN_COMPET[p.compet] + "</div>";
+  } else if (p && joursEntre(now, p.date) === 0) {
+    h += '<div class="haut"><div class="etiquette">' + titre + '</div><div class="forme">' + forme + "</div></div>" +
+      '<div class="score">' + nomEquipe(p.dom) + " – " + nomEquipe(p.ext) + '<span class="quand">' + quandMatch(p.date, now) + "</span></div>" +
+      '<div class="ligne">Match ' + (p.date.getHours() >= 18 ? "ce soir" : "aujourd'hui") + " · " + ESPN_COMPET[p.compet] + "</div>";
+    var d0 = f.dernier;
+    if (d0) h += '<div class="ligne eux">Dernier : ' + nomEquipe(d0.dom) + " " + d0.sd + " – " + d0.se + " " + nomEquipe(d0.ext) + "</div>";
+  } else {
+    var d = f.dernier;
+    h += '<div class="haut"><div class="etiquette">' + titre + '</div><div class="forme">' + forme + "</div></div>";
+    if (d) {
+      var n2 = d.nousDom ? d.sd : d.se, e2 = d.nousDom ? d.se : d.sd;
+      var tag = n2 > e2 ? '<span class="tag v">Victoire</span>' : n2 < e2 ? '<span class="tag d">Défaite</span>' : '<span class="tag n">Nul</span>';
+      h += '<div class="score">' + nomEquipe(d.dom) + " <b>" + d.sd + " – " + d.se + "</b> " + nomEquipe(d.ext) + tag +
+        '<span class="quand">' + JOURS[d.date.getDay()].substr(0, 3) + ". " + d.date.getDate() + " " + MOISCOURT[d.date.getMonth()] + "</span></div>" +
+        lignesButs(d.buts);
     }
+    if (p) h += '<div class="ligne">Prochain : <b>' + nomEquipe(p.dom) + " – " + nomEquipe(p.ext) + "</b> · " + quandMatch(p.date, now) +
+      ' <span class="eux">· ' + COMPET_COURT[p.compet] + "</span></div>";
   }
-  var d = f.dernier;
-  if (d && d.intHomeScore !== null && d.intHomeScore !== "" && d.intAwayScore !== null) {
-    var hs = +d.intHomeScore, as = +d.intAwayScore, dom = d.strHomeTeam === CONFIG.equipe.nom;
-    var nous = dom ? hs : as, eux = dom ? as : hs;
-    var tag = nous > eux ? '<span class="tag v">Victoire</span>' : nous < eux ? '<span class="tag d">Défaite</span>' : '<span class="tag n">Nul</span>';
-    var dd = dateMatch(d);
-    s.titre = court + " · dernier match";
-    s.grand = nomEquipe(d.strHomeTeam) + " " + hs + " – " + as + " " + nomEquipe(d.strAwayTeam) + tag;
-    s.petit = nomCompet(d.strLeague) + (dd ? " · " + dateLongue(dd) : "") + (lignePro ? "<br>Prochain : " + lignePro : "");
-    return s;
-  }
-  if (lignePro) { s.titre = court + " · prochain match"; s.grand = lignePro.split(" · ")[0]; s.petit = lignePro.split(" · ").slice(1).join(" · "); return s; }
-  return null;
+  z.innerHTML = h;
+  z.className = "carte foot visible";
 }
 
 /* ---------- Température intérieure (plus tard, via Home Assistant) ---------- */
@@ -1090,7 +1219,6 @@ var SLIDES = [], idxSlide = 0;
 function construireInfos() {
   var now = new Date(), auj = new Date(now.getFullYear(), now.getMonth(), now.getDate()), s = [], x;
   function ajoute(v) { if (v) s.push(v); }
-  if (etatFoot) ajoute(slideFoot(etatFoot, now));
   if (etatInterieur && etatInterieur.length) ajoute(slideInterieur());
   ajoute(slideEvenement(auj));
   ajoute(slideVacances(auj));
@@ -1148,10 +1276,12 @@ function donneesDemo() {
 }
 function footDemo() {
   return {
-    dernier: { strHomeTeam: "Paris Saint-Germain", strAwayTeam: "Troyes", intHomeScore: "1", intAwayScore: "0",
-               strLeague: "French Ligue 1", strTimestamp: "2026-11-07T20:05:00" },
-    prochain: { strHomeTeam: "Paris Saint-Germain", strAwayTeam: "Roma", strLeague: "UEFA Champions League",
-                strTimestamp: "2026-11-25T20:00:00" }
+    dernier: { id: "1", compet: "fra.1", date: new Date(2026, 10, 21, 17, 15), termine: true, dom: "Nice", ext: "Paris Saint-Germain", nousDom: false, sd: 2, se: 3,
+               buts: [{ nom: "Amoura", min: "8'", nous: false }, { nom: "Mayulu", min: "31'", nous: true }, { nom: "Doué", min: "32'", nous: true },
+                      { nom: "Torres", min: "85'", nous: true }, { nom: "Abdi", min: "90+5'", nous: false }] },
+    prochain: { id: "2", compet: "uefa.champions", date: new Date(2026, 10, 25, 21, 0), termine: false, dom: "Paris Saint-Germain", ext: "AS Roma", nousDom: true },
+    classement: { rang: 1, points: 26, joues: 11 },
+    forme: [{ nousDom: true, sd: 2, se: 0 }, { nousDom: false, sd: 1, se: 5 }, { nousDom: false, sd: 0, se: 6 }, { nousDom: true, sd: 1, se: 1 }, { nousDom: false, sd: 2, se: 3 }]
   };
 }
 
@@ -1249,6 +1379,101 @@ document.addEventListener("touchstart", function () {}, true);   // active :acti
 setInterval(function () { if (sonosGroupe && enLecture(sonosGroupe)) majBarreSonos(); }, 1000);
 setInterval(afficherSonos, 60000);
 
+/* ---------- Lumières & volets (Delta Dore, via le relais du NAS) ----------
+   Bouton en haut à droite (avec le nombre de lumières allumées) → panneau plein écran.
+   CONFIG.interrupteurs : liste des noms à afficher, dans l'ordre voulu (null = tous). */
+var maisonEq = null, maisonOuvert = false, maisonMinuteur = null, maisonDerniereTouche = 0, maisonOccupe = 0;
+var SVG_AMPOULE = function (on) {
+  return '<svg viewBox="0 0 24 24" fill="' + (on ? "rgba(255,211,107,0.9)" : "none") + '" stroke="' + (on ? "#ffd36b" : "rgba(255,255,255,0.75)") +
+    '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>' +
+    '<path d="M9.5 18.5h5M10.5 21h3" fill="none"/></svg>';
+};
+var SVG_HAUT = '<svg viewBox="0 0 24 24"><path d="M12 6l7 9H5z"/></svg>', SVG_BAS = '<svg viewBox="0 0 24 24"><path d="M12 18l7-9H5z"/></svg>',
+    SVG_STOP = '<svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>';
+function chargerMaison() {
+  clearTimeout(maisonMinuteur);
+  if (location.hash === "#demo") { maisonEq = maisonEq || maisonDemo(); afficherMaison(); return; }
+  var u = urlSonos();
+  if (!u) return;
+  chargerJSON(u + "/maison?t=" + new Date().getTime(), function (d) {
+    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert ? 3000 : 60000);
+    if (new Date().getTime() - maisonOccupe > 2500) { maisonEq = d.equipements || []; afficherMaison(); }
+  }, function () { maisonMinuteur = setTimeout(chargerMaison, 5 * 60000); });
+}
+function choisis() {
+  var l = maisonEq || [], c = CONFIG.interrupteurs, r = [];
+  if (!c || !c.length) return l;
+  for (var i = 0; i < c.length; i++) for (var j = 0; j < l.length; j++) if (l[j].nom === c[i]) r.push(l[j]);
+  return r;
+}
+function afficherMaison() {
+  var l = choisis(), nb = 0, lum = "", vol = "", i;
+  document.getElementById("btn-maison").className = l.length ? "visible" : "";
+  for (i = 0; i < l.length; i++) if (l[i].type === "lumiere" && l[i].allume) nb++;
+  document.getElementById("badge-maison").innerHTML = nb || "";
+  if (!maisonOuvert) return;
+  for (i = 0; i < l.length; i++) {
+    var e = l[i];
+    if (e.type === "lumiere" || e.type === "prise") {
+      lum += '<div class="carte eq lum' + (e.allume ? " on" : "") + '" onclick="cmdMaison(\'' + e.id + '\',\'basculer\')">' + SVG_AMPOULE(e.allume) +
+        '<div class="n">' + echap(e.nom) + '</div><div class="e">' + (e.allume ? (e.niveau && e.niveau < 100 ? "Allumée " + e.niveau + " %" : "Allumée") : "Éteinte") + "</div></div>";
+    } else if (e.type === "volet") {
+      var p = e.position, txt = p === undefined || p === null ? "" : p >= 98 ? "Ouvert" : p <= 2 ? "Fermé" : "Ouvert à " + p + " %";
+      vol += '<div class="carte eq vol"><div class="n">' + echap(e.nom) + '</div><div class="e">' + txt + "</div>" +
+        '<div class="jauge"><i style="width:' + (p || 0) + '%"></i></div><div class="bts">' +
+        '<button onclick="cmdMaison(\'' + e.id + '\',\'haut\')" aria-label="Monter">' + SVG_HAUT + "</button>" +
+        '<button onclick="cmdMaison(\'' + e.id + '\',\'stop\')" aria-label="Arrêter">' + SVG_STOP + "</button>" +
+        '<button onclick="cmdMaison(\'' + e.id + '\',\'bas\')" aria-label="Descendre">' + SVG_BAS + "</button></div></div>";
+    }
+  }
+  document.getElementById("maison-contenu").innerHTML =
+    (lum ? '<div class="etiquette rubrique">Lumières</div><div class="grille">' + lum + "</div>" : "") +
+    (vol ? '<div class="etiquette rubrique">Volets</div><div class="grille">' + vol + "</div>" : "") +
+    (!lum && !vol ? '<div class="vide">Aucun équipement Delta Dore trouvé.</div>' : "");
+}
+function trouverEq(id) { var l = maisonEq || []; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
+function cmdMaison(id, a) {
+  var e = trouverEq(id);
+  if (!e) return;
+  // affichage immédiat
+  if (a === "basculer") { e.allume = !e.allume; e.niveau = e.allume ? 100 : 0; }
+  if (a === "off") { e.allume = false; e.niveau = 0; }
+  if (a === "haut") e.position = 100;
+  if (a === "bas") e.position = 0;
+  maisonOccupe = new Date().getTime();
+  afficherMaison();
+  if (location.hash === "#demo") return;
+  chargerJSON(urlSonos() + "/maison/cmd?id=" + encodeURIComponent(id) + "&a=" + a + "&t=" + maisonOccupe, function () {}, function () {});
+}
+function toutMaison(type) {
+  var l = choisis();
+  for (var i = 0; i < l.length; i++) {
+    if (type === "lumiere" && (l[i].type === "lumiere") && l[i].allume) cmdMaison(l[i].id, "off");
+    if (type === "volet" && l[i].type === "volet") cmdMaison(l[i].id, "bas");
+  }
+}
+function ouvrirMaison() {
+  maisonOuvert = true; maisonDerniereTouche = new Date().getTime();
+  document.getElementById("maison").className = "ouvert";
+  afficherMaison(); chargerMaison();
+}
+function fermerMaison(ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  maisonOuvert = false;
+  document.getElementById("maison").className = "";
+  chargerMaison();
+}
+function toucheMaison() { maisonDerniereTouche = new Date().getTime(); }
+setInterval(function () { if (maisonOuvert && new Date().getTime() - maisonDerniereTouche > 60000) fermerMaison(); }, 5000);
+function maisonDemo() {
+  return [
+    { id: "a", nom: "Salon", type: "lumiere", allume: true, niveau: 100 }, { id: "b", nom: "Cuisine", type: "lumiere", allume: false, niveau: 0 },
+    { id: "c", nom: "Entrée", type: "lumiere", allume: false, niveau: 0 }, { id: "d", nom: "Terrasse", type: "lumiere", allume: true, niveau: 100 },
+    { id: "e", nom: "Volet salon", type: "volet", position: 100 }, { id: "f", nom: "Volet cuisine", type: "volet", position: 0 },
+    { id: "g", nom: "Volet chambre", type: "volet", position: 40 }, { id: "h", nom: "Volet bureau", type: "volet", position: 100 }
+  ];
+}
+
 /* ---------- Rechargement automatique ----------
    Le relais du NAS remplace index.html quand une nouvelle version est publiée :
    la page vérifie toutes les 30 min si elle a changé et se recharge. Rechargement aussi chaque nuit à 3h. */
@@ -1285,6 +1510,7 @@ chargerAir();
 chargerFoot();
 chargerInterieur();
 chargerSonos();
+chargerMaison();
 </script>
 </body>
 </html>
