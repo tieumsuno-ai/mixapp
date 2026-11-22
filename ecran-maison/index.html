@@ -1206,6 +1206,8 @@ setInterval(afficherSonos, 60000);
    la page vérifie toutes les 30 min si elle a changé et se recharge. Rechargement aussi chaque nuit à 3h. */
 var signaturePage = null;
 function signature(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return t.length + ":" + h; }
+// Recharge avec une adresse nouvelle : l'icône d'écran d'accueil d'iOS garde sinon l'ancienne page en cache.
+function recharger() { location.replace(location.pathname + "?v=" + new Date().getTime() + location.hash); }
 function verifierVersion() {
   if (location.protocol === "file:" || location.hash === "#demo") return;
   var x = new XMLHttpRequest();
@@ -1214,13 +1216,13 @@ function verifierVersion() {
     if (x.readyState !== 4 || x.status !== 200 || x.responseText.length < 5000) return;
     var s = signature(x.responseText);
     if (signaturePage === null) signaturePage = s;
-    else if (s !== signaturePage) location.reload();
+    else if (s !== signaturePage) recharger();
   };
   try { x.send(); } catch (e) {}
 }
 setInterval(function () {
   var d = new Date();
-  if (d.getHours() === 3 && d.getMinutes() === 0 && d.getSeconds() < 2) location.reload();
+  if (d.getHours() === 3 && d.getMinutes() === 0 && d.getSeconds() < 2) recharger();
 }, 1000);
 setInterval(verifierVersion, 30 * 60000);
 verifierVersion();
