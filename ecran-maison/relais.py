@@ -133,7 +133,7 @@ def maj_netatmo():
 # ---------- 3. Sonos (UPnP local, port 1400 des enceintes) ----------
 SONOS = os.environ.get("SONOS", "1") != "0"
 SONOS_PORT_API = int(os.environ.get("SONOS_PORT_API", "8099"))
-SONOS_RESEAU = os.environ.get("SONOS_RESEAU", "")   # ex. 192.168.68.0/22 (ou 192.168.68 pour un /24)
+SONOS_RESEAU = os.environ.get("SONOS_RESEAU", "")   # ex. 192.168.1.0/24 (ou 192.168.1)
 SONOS_IPS = [x.strip() for x in os.environ.get("SONOS_IPS", "").split(",") if x.strip()]
 SONOS_PAS_VOLUME = int(os.environ.get("SONOS_PAS_VOLUME", "3"))
 
