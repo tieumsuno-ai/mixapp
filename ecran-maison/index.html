@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#0b1026">
+<title>Écran maison</title>
+<!--
+  ÉCRAN MAISON — page d'affichage pour vieille tablette (Android 5+)
+  JavaScript "ancien" (ES5) et CSS simple, pour les vieux moteurs web.
+  Météo : Open-Meteo (gratuit, sans clé).
+  RÉGLAGES : modifiez uniquement le bloc CONFIG dans le script.
+  Aperçu avec des données fictives : ajoutez #demo à la fin de l'adresse.
+-->
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: #0b1026;
+    color: #fff;
+    font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  #ciel { position: fixed; top: 0; left: 0; right: 0; bottom: 0; }
+  #etoiles { position: fixed; top: 0; left: 0; right: 0; height: 70%; opacity: 0; -webkit-transition: opacity 3s; transition: opacity 3s; }
+  body.ciel-nuit #etoiles { opacity: 1; }
+  .etoile { position: absolute; width: 2px; height: 2px; border-radius: 1px; background: #fff; }
+  #voile { position: fixed; left: 0; right: 0; bottom: 0; height: 45%;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0), rgba(0,0,0,0.35));
+    background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.35)); }
+
+  .page {
+    position: relative;
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    height: 100%; box-sizing: border-box;
+    padding: 5vh 4.5vw 4vh;
+    -webkit-transition: opacity 2s; transition: opacity 2s;
+  }
+  body.attenue .page { opacity: 0.55; }
+  .col {
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-orient: vertical; -webkit-flex-direction: column; flex-direction: column;
+    min-width: 0;
+  }
+  .gauche { -webkit-box-flex: 11; -webkit-flex: 11; flex: 11; padding-right: 3.5vw; }
+  .droite { -webkit-box-flex: 10; -webkit-flex: 10; flex: 10; }
+  .pousse { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; }
+
+  .etiquette {
+    font-size: 1.9vh; font-weight: 500; letter-spacing: 0.22em;
+    text-transform: uppercase; opacity: 0.6;
+  }
+
+  /* Horloge */
+  .heure { font-size: 21vh; font-weight: 100; line-height: 0.9; letter-spacing: -0.03em; margin-left: -0.6vw; }
+  .heure .deuxpoints { opacity: 0.55; margin: 0 0.3vw; }
+  .date { font-size: 4.8vh; font-weight: 300; margin-top: 1.6vh; }
+  .date:first-letter { text-transform: uppercase; }
+  .sousdate { font-size: 2.3vh; font-weight: 300; opacity: 0.6; margin-top: 1vh; letter-spacing: 0.02em; }
+
+  /* Cartes "verre" */
+  .carte {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 22px;
+    padding: 1.8vh 2vw;
+  }
+  .fete { margin-top: 2.2vh; }
+  .fete .nom { font-size: 4vh; font-weight: 300; margin-top: 0.6vh; }
+
+  .ephem { margin-top: 1.6vh; }
+  .ephem .rangee {
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+  }
+  .soleil { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; }
+  .soleil svg { display: block; width: 100%; height: 10vh; }
+  .heures-soleil {
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between;
+    font-size: 2.4vh; font-weight: 300; margin-top: 0.6vh;
+  }
+  .heures-soleil b { font-weight: 400; }
+  .heures-soleil .milieu { opacity: 0.65; }
+  .separe { width: 1px; align-self: stretch; -webkit-align-self: stretch; background: rgba(255,255,255,0.14); margin: 0 2vw; }
+  .lune { text-align: center; width: 13vw; }
+  .lune svg { display: block; width: 7.5vh; height: 7.5vh; margin: 0 auto; }
+  .lune .phase { font-size: 2.1vh; font-weight: 300; margin-top: 1vh; line-height: 1.25; }
+  .lune .pct { font-size: 1.8vh; opacity: 0.6; }
+
+  /* Collecte des déchets */
+  .collecte { margin-top: 1.8vh; padding-top: 1.4vh; padding-bottom: 1.2vh; }
+  .collecte .crow { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between;
+    padding: 0.45vh 0; }
+  .collecte .crow:first-of-type { padding-top: 0.7vh; }
+  .collecte .cquand { font-size: 2vh; font-weight: 300; }
+  .collecte .crow.first .cquand { font-weight: 500; }
+  .collecte .cjour { width: 40%; font-size: 2vh; font-weight: 300; }
+  .collecte .crow.first .cjour { font-weight: 500; }
+  .collecte .soir { font-size: 1.7vh; font-weight: 400; color: #ffd36b; margin-left: 0.6vw; }
+  .collecte .cbacs { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1;
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+  .collecte .bac { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    font-size: 1.9vh; font-weight: 300; margin-right: 1.4vw; }
+  .collecte .bac svg { width: 2.7vh; height: 2.7vh; margin-right: 0.4vw; }
+
+  /* Météo */
+  .actuel {
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    margin-top: 0.8vh;
+  }
+  .grande-icone svg { display: block; width: 17vh; height: 17vh; }
+  .temp { font-size: 18vh; font-weight: 100; line-height: 1; margin-left: 1.5vw; letter-spacing: -0.03em; }
+  .temp sup { font-size: 7.5vh; font-weight: 200; vertical-align: top; position: relative; top: 2vh; margin-left: 0.3vw; }
+  .desc { font-size: 4.2vh; font-weight: 300; margin-top: 0.3vh; }
+  .alerte { display: inline-block; vertical-align: middle; font-size: 2.1vh; font-weight: 400;
+    color: #ffe1b0; background: rgba(255,150,40,0.30); border-radius: 100px;
+    padding: 0.6vh 1.2vw; margin-left: 1vw; position: relative; top: -0.4vh; }
+  .alerte b { font-weight: 600; }
+  .pastilles { margin-top: 1.6vh; }
+
+  /* Pluie dans les 2 heures */
+  .pluie-h { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center; margin-top: 0.4vh; }
+  .pluie-h .barres { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: end; -webkit-align-items: flex-end; align-items: flex-end;
+    height: 3.6vh; margin-right: 1.2vw; }
+  .pluie-h .b { display: block; width: 0.7vw; margin-right: 0.3vw; border-radius: 2px; background: rgba(255,255,255,0.22); }
+  .pluie-h .b.on { background: #8fc6ff; }
+  .pluie-h .txt { font-size: 2.3vh; font-weight: 300; }
+  .pluie-h .dans { opacity: 0.65; }
+
+  /* Encadré d'infos qui défile */
+  .infos { margin-top: 1.8vh; position: relative; }
+  .infos .points { position: absolute; right: 2vw; top: 2.1vh; }
+  .infos .pt { display: inline-block; width: 0.8vh; height: 0.8vh; border-radius: 50%;
+    background: rgba(255,255,255,0.28); margin-left: 0.6vh; }
+  .infos .pt.on { background: #fff; }
+  .infos .contenu { min-height: 10.5vh; -webkit-transition: opacity 0.45s; transition: opacity 0.45s; }
+  .infos .contenu.cache { opacity: 0; }
+  .infos .grand { font-size: 3.5vh; font-weight: 300; margin-top: 0.7vh; line-height: 1.2; }
+  .infos .petit { font-size: 2.1vh; font-weight: 300; opacity: 0.72; margin-top: 0.6vh; line-height: 1.3; }
+  .tag { display: inline-block; font-size: 1.9vh; font-weight: 500; padding: 0.3vh 0.9vw;
+    border-radius: 100px; margin-left: 0.8vw; vertical-align: middle; position: relative; top: -0.3vh; }
+  .tag.v { background: rgba(95,211,141,0.30); color: #c9f5d9; }
+  .tag.n { background: rgba(255,255,255,0.18); }
+  .tag.d { background: rgba(255,107,90,0.30); color: #ffd0c9; }
+
+  /* Anniversaire du jour (en petit, sous la fête) */
+  .fete .sous { font-size: 2.2vh; color: #ffd36b; margin-top: 0.6vh; }
+  .fete .sous:empty { display: none; }
+  .pastille {
+    display: inline-block;
+    font-size: 2.2vh; font-weight: 300;
+    background: rgba(255,255,255,0.10);
+    border-radius: 100px; padding: 0.9vh 1.4vw; margin: 0 0.8vw 1vh 0;
+  }
+  .pastille b { font-weight: 500; }
+
+  .prev {
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    margin-top: 1.6vh;
+  }
+  .jour { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; text-align: center; margin-right: 1.2vw; padding: 2vh 0.5vw; }
+  .jour:last-child { margin-right: 0; }
+  .jour .nom { font-size: 2.3vh; font-weight: 400; opacity: 0.75; }
+  .jour .nom:first-letter { text-transform: uppercase; }
+  .jour svg { display: block; width: 7vh; height: 7vh; margin: 0.8vh auto 0.5vh; }
+  .jour .max { font-size: 3.8vh; font-weight: 300; }
+  .jour .min { font-size: 2.6vh; font-weight: 300; opacity: 0.55; margin-left: 0.4vw; }
+  .jour .pluie { font-size: 1.9vh; margin-top: 0.6vh; color: #a9d4ff; }
+
+  .etat { font-size: 1.6vh; opacity: 0.4; margin-top: 1.6vh; text-align: right; }
+  .erreur { color: #ffb3a6; opacity: 1; }
+</style>
+</head>
+<body>
+<div id="ciel"></div>
+<div id="etoiles"></div>
+<div id="voile"></div>
+
+<div class="page">
+  <div class="col gauche">
+    <div class="heure" id="heure">--:--</div>
+    <div class="date" id="date"></div>
+    <div class="sousdate" id="sousdate"></div>
+
+    <div class="carte fete" id="fete-carte">
+      <div class="etiquette" id="fete-titre">Bonne fête</div>
+      <div class="nom" id="fete"></div>
+      <div class="sous" id="fete-sous"></div>
+    </div>
+
+    <div class="carte collecte">
+      <div class="etiquette">Collecte des déchets</div>
+      <div id="collecte"></div>
+    </div>
+
+    <div class="pousse"></div>
+
+    <div class="carte ephem">
+      <div class="rangee">
+        <div class="soleil">
+          <div id="arc"></div>
+          <div class="heures-soleil">
+            <span>&#8593; <b id="lever">--</b></span>
+            <span class="milieu" id="duree"></span>
+            <span><b id="coucher">--</b> &#8595;</span>
+          </div>
+        </div>
+        <div class="separe"></div>
+        <div class="lune">
+          <div id="lune-svg"></div>
+          <div class="phase" id="lune-nom"></div>
+          <div class="pct" id="lune-pct"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col droite">
+    <div class="etiquette" id="lieu"></div>
+    <div class="actuel">
+      <div class="grande-icone" id="icone"></div>
+      <div class="temp" id="temp"></div>
+    </div>
+    <div class="desc" id="desc">Chargement de la météo…</div>
+    <div class="pastilles" id="details"></div>
+    <div class="pluie-h" id="pluie"></div>
+
+    <div class="carte infos">
+      <div class="etiquette" id="infos-titre"></div>
+      <div class="points" id="infos-points"></div>
+      <div class="contenu" id="infos-contenu"></div>
+    </div>
+
+    <div class="pousse"></div>
+
+    <div class="etiquette">Prochains jours</div>
+    <div class="prev" id="prev"></div>
+    <div class="etat" id="etat"></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+/* ====================== RÉGLAGES ======================
+   Les réglages personnels sont dans config.js (à côté de cette page, sur le NAS).
+   Valeurs par défaut utilisées si config.js est absent. */
+var CONFIG_DEFAUT = {
+  nomLieu: "Paris", latitude: 48.86, longitude: 2.35,
+  joursPrevision: 3, rafraichirMinutes: 15, attenuerDebut: 22, attenuerFin: 7,
+  collecte: [], equipe: null, anniversaires: [], evenements: [],
+  urlInterieur: null, secondesParInfo: 8, animerIcones: true
+};
+var CONFIG = {};
+(function () {
+  var c = window.CONFIG_MAISON || {};
+  for (var k in CONFIG_DEFAUT) CONFIG[k] = (c[k] !== undefined) ? c[k] : CONFIG_DEFAUT[k];
+})();
+/* ==================================================== */
+
+var JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+var MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+            "août", "septembre", "octobre", "novembre", "décembre"];
+
+/* Calendrier des fêtes. Un "!" signale une fête religieuse ou civile (pas un prénom). */
+var FETES = [
+ ["!Jour de l'An","Basile","Geneviève","Odilon","Édouard","Mélaine","Raymond","Lucien","Alix","Guillaume","Paulin","Tatiana","Yvette","Nina","Rémi","Marcel","Roseline","Prisca","Marius","Sébastien","Agnès","Vincent","Barnard","François de Sales","!Conversion de saint Paul","Paule","Angèle","Thomas d'Aquin","Gildas","Martine","Marcelle"],
+ ["Ella","!Chandeleur","Blaise","Véronique","Agathe","Gaston","Eugénie","Jacqueline","Apolline","Arnaud","!Notre-Dame de Lourdes","Félix","Béatrice","Valentin","Claude","Julienne","Alexis","Bernadette","Gabin","Aimée","Pierre Damien","Isabelle","Lazare","Modeste","Roméo","Nestor","Honorine","Romain","Auguste"],
+ ["Aubin","Charles le Bon","Guénolé","Casimir","Olive","Colette","Félicité","Jean de Dieu","Françoise","Vivien","Rosine","Justine","Rodrigue","Mathilde","Louise","Bénédicte","Patrice","Cyrille","Joseph","Herbert","Clémence","Léa","Victorien","Catherine de Suède","!Annonciation","Larissa","Habib","Gontran","Gwladys","Amédée","Benjamin"],
+ ["Hugues","Sandrine","Richard","Isidore","Irène","Marcellin","Jean-Baptiste de la Salle","Julie","Gautier","Fulbert","Stanislas","Jules","Ida","Maxime","Paterne","Benoît-Joseph","Anicet","Parfait","Emma","Odette","Anselme","Alexandre","Georges","Fidèle","Marc","Alida","Zita","Valérie","Catherine de Sienne","Robert"],
+ ["!Fête du Travail","Boris","Philippe et Jacques","Sylvain","Judith","Prudence","Gisèle","Désiré","Pacôme","Solange","Estelle","Achille","Rolande","Matthias","Denise","Honoré","Pascal","Éric","Yves","Bernardin","Constantin","Émile","Didier","Donatien","Sophie","Bérenger","Augustin de Cantorbéry","Germain","Aymar","Ferdinand","!Visitation"],
+ ["Justin","Blandine","Kévin","Clotilde","Igor","Norbert","Gilbert","Médard","Diane","Landry","Barnabé","Guy","Antoine de Padoue","Élisée","Germaine","Jean-François Régis","Hervé","Léonce","Romuald","Silvère","Rodolphe","Alban","Audrey","Jean-Baptiste","Prosper","Anthelme","Fernand","Irénée","Pierre et Paul","Martial"],
+ ["Thierry","Martinien","Thomas","Florent","Antoine","Mariette","Raoul","Thibaut","Amandine","Ulrich","Benoît","Olivier","Henri et Joël","!Fête nationale","Donald","!Notre-Dame du Mont Carmel","Charlotte","Frédéric","Arsène","Marina","Victor","Marie-Madeleine","Brigitte","Christine","Jacques","Anne et Joachim","Nathalie","Samson","Marthe","Juliette","Ignace de Loyola"],
+ ["Alphonse","Julien Eymard","Lydie","Jean-Marie Vianney","Abel","!Transfiguration","Gaétan","Dominique","Amour","Laurent","Claire","Clarisse","Hippolyte","Evrard","!Assomption","Armel","Hyacinthe","Hélène","Jean Eudes","Bernard","Christophe","Fabrice","Rose de Lima","Barthélemy","Louis","Natacha","Monique","Augustin","Sabine","Fiacre","Aristide"],
+ ["Gilles","Ingrid","Grégoire","Rosalie","Raïssa","Bertrand","Reine","!Nativité de Marie","Alain","Inès","Adelphe","Apollinaire","Aimé","!Croix glorieuse","Roland","Édith","Renaud","Nadège","Émilie","Davy","Matthieu","Maurice","Constant","Thècle","Hermann","Côme et Damien","Vincent de Paul","Venceslas","Michel, Gabriel et Raphaël","Jérôme"],
+ ["Thérèse de l'Enfant-Jésus","Léger","Gérard","François d'Assise","Fleur","Bruno","Serge","Pélagie","Denis","Ghislain","Firmin","Wilfried","Géraud","Juste","Thérèse d'Avila","Edwige","Baudouin","Luc","René","Adeline","Céline","Élodie","Jean de Capistran","Florentin","Crépin","Dimitri","Émeline","Simon et Jude","Narcisse","Bienvenue","Quentin"],
+ ["!Toussaint","!Jour des défunts","Hubert","Charles","Sylvie","Bertille","Carine","Geoffroy","Théodore","Léon","Martin","Christian","Brice","Sidoine","Albert","Marguerite","Élisabeth","Aude","Tanguy","Edmond","!Présentation de Marie","Cécile","Clément","Flora","Catherine","Delphine","Séverin","Jacques de la Marche","Saturnin","André"],
+ ["Florence","Viviane","François-Xavier","Barbara","Gérald","Nicolas","Ambroise","!Immaculée Conception","Pierre Fourier","Romaric","Daniel","Jeanne-Françoise de Chantal","Lucie","Odile","Ninon","Alice","Gaël","Gatien","Urbain","Théophile","Pierre Canisius","Françoise-Xavière","Armand","Adèle","!Noël","Étienne","Jean","!Saints Innocents","David","Roger","Sylvestre"]
+];
+
+/* ---------- Icônes météo (SVG dessinés, rendu identique sur tous les appareils) ---------- */
+var NUAGE = "M18 44h28a9 9 0 0 0 0-18 13 13 0 0 0-25-3 10.5 10.5 0 0 0-3 21z";
+/* Petites animations intégrées aux dessins (SMIL) : légères, compatibles avec le Safari de l'iPad. */
+function aRot(cx, cy, dur) {
+  if (!CONFIG.animerIcones) return "";
+  return '<animateTransform attributeName="transform" type="rotate" from="0 ' + cx + ' ' + cy +
+         '" to="360 ' + cx + ' ' + cy + '" dur="' + dur + 's" repeatCount="indefinite"/>';
+}
+function aBalance(a, cx, cy, dur) {
+  if (!CONFIG.animerIcones) return "";
+  return '<animateTransform attributeName="transform" type="rotate" values="-' + a + ' ' + cx + ' ' + cy + ';' + a + ' ' + cx + ' ' + cy +
+         ';-' + a + ' ' + cx + ' ' + cy + '" dur="' + dur + 's" repeatCount="indefinite"/>';
+}
+function aDerive(dx, dur) {
+  if (!CONFIG.animerIcones) return "";
+  return '<animateTransform attributeName="transform" type="translate" values="0 0;' + dx + ' 0;0 0" keyTimes="0;0.5;1" calcMode="spline" ' +
+         'keySplines="0.45 0 0.55 1;0.45 0 0.55 1" dur="' + dur + 's" repeatCount="indefinite"/>';
+}
+function aChute(valeurs, dur, debut) {
+  if (!CONFIG.animerIcones) return "";
+  return '<animateTransform attributeName="transform" type="translate" values="' + valeurs + '" dur="' + dur + 's" begin="' + debut + 's" repeatCount="indefinite"/>' +
+         '<animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.2;0.7;1" dur="' + dur + 's" begin="' + debut + 's" repeatCount="indefinite"/>';
+}
+function aScintille(dur, debut) {
+  if (!CONFIG.animerIcones) return "";
+  return '<animate attributeName="opacity" values="0.2;1;0.2" dur="' + dur + 's" begin="' + debut + 's" repeatCount="indefinite"/>';
+}
+function rayons(cx, cy, r1, r2, ep) {
+  var s = "";
+  for (var i = 0; i < 8; i++) {
+    var a = i * Math.PI / 4;
+    s += '<line x1="' + (cx + r1 * Math.cos(a)).toFixed(1) + '" y1="' + (cy + r1 * Math.sin(a)).toFixed(1) +
+         '" x2="' + (cx + r2 * Math.cos(a)).toFixed(1) + '" y2="' + (cy + r2 * Math.sin(a)).toFixed(1) +
+         '" stroke="#ffd36b" stroke-width="' + ep + '" stroke-linecap="round"/>';
+  }
+  return '<g>' + s + aRot(cx, cy, 40) + '</g>';
+}
+function svgIcone(type) {
+  var g = "", A = CONFIG.animerIcones;
+  var pulse = A ? '<animate attributeName="r" values="11;12.2;11" dur="4s" repeatCount="indefinite"/>' : '';
+  var soleil = rayons(32, 32, 16, 22, 3.2) + '<circle cx="32" cy="32" r="11" fill="#ffd36b">' + pulse + '</circle>';
+  var petitSoleil = rayons(24, 22, 11.5, 15.5, 2.4) + '<circle cx="24" cy="22" r="8" fill="#ffd36b"/>';
+  var lune = '<g><path d="M38 12a20 20 0 1 0 14 32 16 16 0 0 1-14-32z" fill="#f3ecd2"/>' + aBalance(7, 34, 32, 9) + '</g>' +
+             '<circle cx="13" cy="15" r="1.5" fill="#fff">' + aScintille(3, -1) + '</circle>' +
+             '<circle cx="53" cy="9" r="1.1" fill="#fff">' + aScintille(4, -2.5) + '</circle>';
+  var petiteLune = '<g><path d="M27 11a12 12 0 1 0 9 19 10 10 0 0 1-9-19z" fill="#f3ecd2"/>' + aBalance(6, 24, 20, 9) + '</g>';
+  var nuageDevant = '<g><path d="' + NUAGE + '" fill="#f4f7fb" transform="translate(4,4)"/>' + aDerive(2.5, 7) + '</g>';
+  var nuageGris = '<g><path d="' + NUAGE + '" fill="#d9e1ea" transform="translate(0,-6)"/>' + aDerive(1.5, 8) + '</g>';
+  var i;
+  if (type === "soleil") g = soleil;
+  else if (type === "lune") g = lune;
+  else if (type === "eclaircie") g = petitSoleil + nuageDevant;
+  else if (type === "eclaircie-nuit") g = petiteLune + nuageDevant;
+  else if (type === "nuage") g = '<g><path d="' + NUAGE + '" fill="#b9c4d0" transform="translate(-6,-6) scale(0.8)"/>' + aDerive(-2, 9) + '</g>' +
+                                 '<g><path d="' + NUAGE + '" fill="#f4f7fb"/>' + aDerive(2.5, 7) + '</g>';
+  else if (type === "brouillard") g = nuageGris +
+    '<g><line x1="14" y1="46" x2="50" y2="46" stroke="#e6ecf2" stroke-width="3.5" stroke-linecap="round"/>' + aDerive(3, 6) + '</g>' +
+    '<g><line x1="20" y1="54" x2="44" y2="54" stroke="#e6ecf2" stroke-width="3.5" stroke-linecap="round"/>' + aDerive(-3, 7) + '</g>';
+  else if (type === "pluie") {
+    g = "";
+    var gx = [24, 33, 42];
+    for (i = 0; i < 3; i++)
+      g += '<line x1="' + gx[i] + '" y1="46" x2="' + (gx[i] - 3) + '" y2="55" stroke="#8fc6ff" stroke-width="3.2" stroke-linecap="round">' +
+           aChute("1.3 -5;-2.7 7", 1.1, -i * 0.37) + '</line>';
+    g += nuageGris;   // le nuage passe devant, les gouttes en sortent
+  }
+  else if (type === "neige") {
+    g = "";
+    var fl = [[23, 48], [33, 52], [43, 48], [28, 57], [38, 58]];
+    for (i = 0; i < fl.length; i++)
+      g += '<circle cx="' + fl[i][0] + '" cy="' + fl[i][1] + '" r="2.6" fill="#fff">' +
+           aChute("0 -6;1.5 -1;-1 4;0.5 8", 3.2, -i * 0.64) + '</circle>';
+    g += nuageGris;
+  }
+  else if (type === "orage") g = nuageGris +
+    '<path d="M34 40l-8 12h7l-4 10 11-14h-7l4-8z" fill="#ffd36b">' +
+    (A ? '<animate attributeName="opacity" values="1;1;0.1;1;0.25;1;1" keyTimes="0;0.55;0.6;0.65;0.7;0.75;1" dur="3.5s" repeatCount="indefinite"/>' : '') +
+    '</path>';
+  else g = '<g><path d="' + NUAGE + '" fill="#f4f7fb"/>' + aDerive(2.5, 7) + '</g>';
+  return '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">' + g + '</svg>';
+}
+
+/* Codes météo WMO -> [texte, icône de jour, icône de nuit, couvert ?] */
+function meteoInfo(c) {
+  if (c === 0) return ["Ciel dégagé", "soleil", "lune", false];
+  if (c === 1) return ["Plutôt ensoleillé", "soleil", "lune", false];
+  if (c === 2) return ["Éclaircies", "eclaircie", "eclaircie-nuit", false];
+  if (c === 3) return ["Ciel couvert", "nuage", "nuage", true];
+  if (c === 45 || c === 48) return ["Brouillard", "brouillard", "brouillard", true];
+  if (c === 51 || c === 53 || c === 55) return ["Bruine", "pluie", "pluie", true];
+  if (c === 56 || c === 57) return ["Bruine verglaçante", "pluie", "pluie", true];
+  if (c === 61) return ["Pluie faible", "pluie", "pluie", true];
+  if (c === 63) return ["Pluie", "pluie", "pluie", true];
+  if (c === 65) return ["Forte pluie", "pluie", "pluie", true];
+  if (c === 66 || c === 67) return ["Pluie verglaçante", "pluie", "pluie", true];
+  if (c === 71) return ["Neige faible", "neige", "neige", true];
+  if (c === 73) return ["Neige", "neige", "neige", true];
+  if (c === 75) return ["Forte neige", "neige", "neige", true];
+  if (c === 77) return ["Grains de neige", "neige", "neige", true];
+  if (c === 80) return ["Averses faibles", "pluie", "pluie", true];
+  if (c === 81) return ["Averses", "pluie", "pluie", true];
+  if (c === 82) return ["Fortes averses", "pluie", "pluie", true];
+  if (c === 85 || c === 86) return ["Averses de neige", "neige", "neige", true];
+  if (c === 95) return ["Orage", "orage", "orage", true];
+  if (c === 96 || c === 99) return ["Orage et grêle", "orage", "orage", true];
+  return ["", "nuage", "nuage", true];
+}
+
+/* ---------- Outils ---------- */
+function el(id) { return document.getElementById(id); }
+function deux(n) { return n < 10 ? "0" + n : "" + n; }
+function bissextile(a) { return (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0; }
+function jourDeLAnnee(d) {
+  var debut = new Date(d.getFullYear(), 0, 1);
+  return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - debut) / 86400000) + 1;
+}
+function semaineISO(d) {
+  var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var jour = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - jour);
+  var debut = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - debut) / 86400000 + 1) / 7);
+}
+/* "2026-11-18T07:59" -> minutes depuis minuit, sans dépendre du navigateur */
+function minutesISO(s) { return parseInt(s.substr(11, 2), 10) * 60 + parseInt(s.substr(14, 2), 10); }
+function heureMin(m) { return deux(Math.floor(m / 60)) + "h" + deux(m % 60); }
+function jourISO(s) {
+  return new Date(parseInt(s.substr(0, 4), 10), parseInt(s.substr(5, 2), 10) - 1, parseInt(s.substr(8, 2), 10));
+}
+
+/* ---------- Lune ---------- */
+function infoLune(d) {
+  var cycle = 29.530588853;
+  var age = ((d.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000) % cycle;
+  if (age < 0) age += cycle;
+  var k = Math.cos(2 * Math.PI * age / cycle);
+  var eclat = Math.round((1 - k) / 2 * 100);
+  var noms = [[1.84, "Nouvelle lune"], [5.53, "Premier croissant"], [9.22, "Premier quartier"],
+              [12.91, "Lune gibbeuse croissante"], [16.61, "Pleine lune"], [20.30, "Lune gibbeuse décroissante"],
+              [23.99, "Dernier quartier"], [27.68, "Dernier croissant"], [99, "Nouvelle lune"]];
+  var nom = "";
+  for (var i = 0; i < noms.length; i++) { if (age < noms[i][0]) { nom = noms[i][1]; break; } }
+  return { age: age, k: k, croissante: age < cycle / 2, eclat: eclat, nom: nom };
+}
+function svgLune(L) {
+  var c = 50, r = 40, rx = Math.abs(L.k) * r;
+  var p;
+  if (L.croissante) {
+    p = "M" + c + " " + (c - r) + " A" + r + " " + r + " 0 0 1 " + c + " " + (c + r) +
+        " A" + rx.toFixed(2) + " " + r + " 0 0 " + (L.k > 0 ? 0 : 1) + " " + c + " " + (c - r) + "z";
+  } else {
+    p = "M" + c + " " + (c - r) + " A" + r + " " + r + " 0 0 0 " + c + " " + (c + r) +
+        " A" + rx.toFixed(2) + " " + r + " 0 0 " + (L.k > 0 ? 1 : 0) + " " + c + " " + (c - r) + "z";
+  }
+  return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
+    '<circle cx="50" cy="50" r="40" fill="rgba(255,255,255,0.12)"/>' +
+    (L.eclat > 0 ? '<path d="' + p + '" fill="#f3ecd2"/>' : '') + '</svg>';
+}
+
+/* ---------- Course du soleil ---------- */
+function svgArc(maintenant, lever, coucher) {
+  var x0 = 18, x1 = 282, base = 104, h = 86;
+  var t = (maintenant - lever) / (coucher - lever);
+  var jour = t >= 0 && t <= 1;
+  var tt = t < 0 ? 0 : (t > 1 ? 1 : t);
+  function pt(f) {
+    var a = Math.PI * f;
+    return [(x0 + (x1 - x0) * (1 - Math.cos(a)) / 2), (base - h * Math.sin(a))];
+  }
+  var chemin = "", fait = "";
+  for (var i = 0; i <= 40; i++) {
+    var q = pt(i / 40);
+    chemin += (i === 0 ? "M" : "L") + q[0].toFixed(1) + " " + q[1].toFixed(1) + " ";
+    if (i / 40 <= tt) fait += (i === 0 ? "M" : "L") + q[0].toFixed(1) + " " + q[1].toFixed(1) + " ";
+  }
+  var s = pt(tt);
+  if (jour) fait += "L" + s[0].toFixed(1) + " " + s[1].toFixed(1);
+  return '<svg viewBox="0 0 300 116" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">' +
+    '<line x1="4" y1="' + base + '" x2="296" y2="' + base + '" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>' +
+    '<path d="' + chemin + '" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2" stroke-dasharray="3 6" stroke-linecap="round"/>' +
+    (jour ? '<path d="' + fait + '" fill="none" stroke="#ffd36b" stroke-width="2.5" stroke-linecap="round"/>' +
+            '<circle cx="' + s[0].toFixed(1) + '" cy="' + s[1].toFixed(1) + '" r="13" fill="rgba(255,211,107,0.25)"/>' +
+            '<circle cx="' + s[0].toFixed(1) + '" cy="' + s[1].toFixed(1) + '" r="7.5" fill="#ffd36b"/>'
+          : '') +
+    '</svg>';
+}
+
+/* ---------- Ciel (couleur du fond selon l'heure et la météo) ---------- */
+var etatSoleil = { lever: 7 * 60 + 45, coucher: 17 * 60 + 15, connu: false };
+var couvert = false;
+
+function phaseCiel(m) {
+  var L = etatSoleil.lever, C = etatSoleil.coucher;
+  if (m < L - 50 || m > C + 50) return "nuit";
+  if (m <= L + 40) return "aube";
+  if (m >= C - 40) return "crepuscule";
+  return "jour";
+}
+var CIELS = {
+  nuit:       ["#060a1c", "#18204a"],
+  aube:       ["#22305c", "#d0907a"],
+  crepuscule: ["#262050", "#dc7d5c"],
+  jour:       ["#1c6db4", "#83bde8"],
+  jourCouvert:["#3f5064", "#8e9eb0"],
+  nuitCouvert:["#0d1220", "#262d3d"]
+};
+var dernierCiel = "";
+function majCiel(m) {
+  var ph = phaseCiel(m);
+  var cle = ph;
+  if (couvert && ph === "jour") cle = "jourCouvert";
+  if (couvert && ph === "nuit") cle = "nuitCouvert";
+  if (cle === dernierCiel) return;
+  dernierCiel = cle;
+  var c = CIELS[cle], z = el("ciel").style;
+  z.background = "-webkit-linear-gradient(top, " + c[0] + ", " + c[1] + ")";
+  z.background = "linear-gradient(to bottom, " + c[0] + ", " + c[1] + ")";
+  document.body.className = document.body.className.replace(/\s*ciel-\S+/g, "") +
+    (ph === "nuit" && !couvert ? " ciel-nuit" : "");
+}
+function creerEtoiles() {
+  var h = "", graine = 7;
+  function alea() { graine = (graine * 9301 + 49297) % 233280; return graine / 233280; }
+  for (var i = 0; i < 70; i++) {
+    h += '<div class="etoile" style="left:' + (alea() * 100).toFixed(2) + '%;top:' + (alea() * 100).toFixed(2) +
+         '%;opacity:' + (0.25 + alea() * 0.6).toFixed(2) + '"></div>';
+  }
+  el("etoiles").innerHTML = h;
+}
+
+/* ---------- Collecte des déchets (règles dans config.js) ---------- */
+var MOISCOURT = ["janv.", "févr.", "mars", "avr.", "mai", "juin",
+                 "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+var FLUX = {
+  om:    { court: "Ordures ménagères",    couleur: "#6b7480" },
+  tri:   { court: "Emballages / papiers", couleur: "#f2c200" },
+  verre: { court: "Verre",                couleur: "#38b24a" }
+};
+function fluxDuJour(d) {
+  var out = [], j = d.getDay(), n = d.getDate(), l = CONFIG.collecte || [];
+  for (var i = 0; i < l.length; i++) {
+    var c = l[i], ok = false;
+    for (var k = 0; k < c.jours.length; k++) if (c.jours[k] === j) ok = true;
+    if (!ok || (c.premierDuMois && n > 7)) continue;
+    out.push(c.flux);
+  }
+  return out;
+}
+function svgBac(f) {
+  return '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M9 2.5h6l1 2h4.2v2H3.8v-2H8l1-2z" fill="' + f + '"/>' +
+    '<path d="M5.6 7.5h12.8l-1.1 12.3a2 2 0 0 1-2 1.7H8.7a2 2 0 0 1-2-1.7L5.6 7.5z" fill="' + f + '"/>' +
+    '<rect x="9.4" y="10.5" width="1.5" height="8" rx="0.7" fill="rgba(0,0,0,0.22)"/>' +
+    '<rect x="13.1" y="10.5" width="1.5" height="8" rx="0.7" fill="rgba(0,0,0,0.22)"/>' +
+    '</svg>';
+}
+function prochainParFlux(now) {
+  var base = new Date(now.getFullYear(), now.getMonth(), now.getDate()), res = {}, n = 0;
+  for (var i = 0; i < 40 && n < 3; i++) {
+    if (i === 0 && now.getHours() >= 13) continue; // collecte du jour déjà passée
+    var d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i), f = fluxDuJour(d);
+    for (var k = 0; k < f.length; k++) if (!res[f[k]]) { res[f[k]] = { date: d, dans: i }; n++; }
+  }
+  return res;
+}
+function majCollecte(now) {
+  var r = prochainParFlux(now), ordre = ["om", "tri", "verre"], l = [], h = "", i;
+  for (i = 0; i < ordre.length; i++) if (r[ordre[i]]) l.push({ k: ordre[i], date: r[ordre[i]].date, dans: r[ordre[i]].dans });
+  l.sort(function (a, b) { return a.date - b.date; });
+  for (i = 0; i < l.length; i++) {
+    var e = l[i], fl = FLUX[e.k], d = e.date;
+    var quand = e.dans === 0 ? "Aujourd'hui" : e.dans === 1 ? "Demain"
+              : JOURS[d.getDay()].charAt(0).toUpperCase() + JOURS[d.getDay()].substr(1) + " " + d.getDate() +
+                (d.getMonth() !== now.getMonth() ? " " + MOISCOURT[d.getMonth()] : "");
+    h += '<div class="crow' + (e.dans <= 1 ? ' first' : '') + '">' +
+         '<span class="bac">' + svgBac(fl.couleur) + '<span>' + fl.court + '</span></span>' +
+         '<span class="cquand">' + quand + (e.dans === 1 ? '<span class="soir"> · à sortir ce soir</span>' : '') + '</span></div>';
+  }
+  el("collecte").innerHTML = h;
+  el("collecte").parentNode.style.display = h ? "" : "none";
+}
+
+/* ---------- Horloge, date, fête, éphéméride ---------- */
+var dernierJour = -1, derniereMinute = -1;
+function minutesMaintenant(d) { return d.getHours() * 60 + d.getMinutes(); }
+
+function majEphemeride(d) {
+  var m = minutesMaintenant(d);
+  el("arc").innerHTML = svgArc(m, etatSoleil.lever, etatSoleil.coucher);
+  if (etatSoleil.connu) {
+    el("lever").innerHTML = heureMin(etatSoleil.lever);
+    el("coucher").innerHTML = heureMin(etatSoleil.coucher);
+    var duree = etatSoleil.coucher - etatSoleil.lever;
+    el("duree").innerHTML = Math.floor(duree / 60) + "h" + deux(duree % 60) + " de jour";
+  }
+}
+
+function majHorloge() {
+  var d = new Date();
+  var m = minutesMaintenant(d);
+  if (m === derniereMinute) return;
+  derniereMinute = m;
+
+  el("heure").innerHTML = deux(d.getHours()) + '<span class="deuxpoints">:</span>' + deux(d.getMinutes());
+
+  var h = d.getHours(), A = CONFIG.attenuerDebut, B = CONFIG.attenuerFin;
+  var attenue = A > B ? (h >= A || h < B) : (h >= A && h < B);
+  if (attenue && document.body.className.indexOf("attenue") < 0) document.body.className += " attenue";
+  if (!attenue) document.body.className = document.body.className.replace(/\s*attenue/g, "");
+
+  majCiel(m);
+  majEphemeride(d);
+
+  if (d.getDate() !== dernierJour) {
+    dernierJour = d.getDate();
+    el("date").innerHTML = JOURS[d.getDay()] + " " + d.getDate() + " " + MOIS[d.getMonth()];
+    var total = bissextile(d.getFullYear()) ? 366 : 365, n = jourDeLAnnee(d);
+    el("sousdate").innerHTML = "Semaine " + semaineISO(d) + " &nbsp;·&nbsp; " + n + "<sup>e</sup> jour de " +
+      d.getFullYear() + " &nbsp;·&nbsp; " + (d.getFullYear() + 1) + " : J-" + (total - n + 1);
+    var f = FETES[d.getMonth()][d.getDate() - 1] || "";
+    var titreFete = f.charAt(0) === "!" ? "Aujourd'hui" : "Bonne fête";
+    var nomFete = f.charAt(0) === "!" ? f.substr(1) : f;
+    var ann = annivDuJour(d);
+    el("fete-titre").innerHTML = titreFete;
+    el("fete").innerHTML = nomFete;
+    el("fete-sous").innerHTML = ann.length ? "Joyeux anniversaire " + ann.join(" et ") + " !" : "";
+    var L = infoLune(d);
+    el("lune-svg").innerHTML = svgLune(L);
+    el("lune-nom").innerHTML = L.nom;
+    el("lune-pct").innerHTML = "éclairée à " + L.eclat + " %";
+    majCollecte(d);
+    construireInfos();
+  }
+}
+
+/* ---------- Outils de chargement ---------- */
+function chargerJSON(url, ok, ko) {
+  var x = new XMLHttpRequest();
+  x.open("GET", url, true);
+  x.timeout = 20000;
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) return;
+    var data = null;
+    if (x.status === 200) { try { data = JSON.parse(x.responseText); } catch (e) {} }
+    if (data) { try { ok(data); } catch (e) {} } else if (ko) { ko(); }
+  };
+  x.ontimeout = function () {};
+  try { x.send(); } catch (e) { if (ko) ko(); }
+}
+function parseISO(s) {
+  return new Date(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2));
+}
+function hm(d) { return deux(d.getHours()) + "h" + deux(d.getMinutes()); }
+function joursEntre(a, b) {
+  var A = new Date(a.getFullYear(), a.getMonth(), a.getDate()), B = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((B - A) / 86400000);
+}
+function dansJours(n) { return n === 0 ? "aujourd'hui" : n === 1 ? "demain" : "dans " + n + " jours"; }
+function dateLongue(d) { return JOURS[d.getDay()] + " " + d.getDate() + " " + MOISCOURT[d.getMonth()]; }
+function dateYMD(s) { return new Date(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2)); }
+
+/* ---------- Météo (Open-Meteo) ---------- */
+var JR = 1; // dans les tableaux "daily", l'indice 0 est la veille, 1 aujourd'hui
+var etatJour = { hier: 0, aujourdhui: 0 };
+
+function chargerMeteo() {
+  if (location.hash === "#demo") { afficherMeteo(donneesDemo()); return; }
+  var url = "https://api.open-meteo.com/v1/forecast" +
+    "?latitude=" + CONFIG.latitude + "&longitude=" + CONFIG.longitude +
+    "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
+    "&minutely_15=precipitation&forecast_minutely_15=9" +
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,wind_gusts_10m_max" +
+    "&past_days=1&timezone=Europe%2FParis&forecast_days=" + (CONFIG.joursPrevision + 1);
+  chargerJSON(url, function (m) {
+    afficherMeteo(m);
+    setTimeout(chargerMeteo, CONFIG.rafraichirMinutes * 60000);
+  }, erreurMeteo);
+}
+function erreurMeteo() {
+  el("etat").innerHTML = '<span class="erreur">Météo indisponible · nouvel essai dans 2 min</span>';
+  setTimeout(chargerMeteo, 120000);
+}
+
+var pastillesMeteo = "";
+function majPastilles() {
+  var p = "";
+  if (etatInterieur && etatInterieur.length) {
+    var s = 0;
+    for (var i = 0; i < etatInterieur.length; i++) s += etatInterieur[i].temp;
+    p += '<span class="pastille">Maison <b>' + (Math.round(s / etatInterieur.length * 10) / 10).toString().replace(".", ",") + '°</b></span>';
+  }
+  el("details").innerHTML = p + pastillesMeteo;
+}
+
+function afficherMeteo(m) {
+  var c = m.current, d = m.daily, o = JR;
+  var maintenant = new Date(), h = maintenant.getHours();
+
+  etatSoleil.lever = minutesISO(d.sunrise[o]);
+  etatSoleil.coucher = minutesISO(d.sunset[o]);
+  etatSoleil.connu = true;
+  etatJour.aujourdhui = etatSoleil.coucher - etatSoleil.lever;
+  etatJour.hier = minutesISO(d.sunset[o - 1]) - minutesISO(d.sunrise[o - 1]);
+
+  var mn = minutesMaintenant(maintenant);
+  var faitNuit = mn < etatSoleil.lever || mn > etatSoleil.coucher;
+  var info = meteoInfo(c.weather_code);
+  couvert = info[3];
+
+  // Alertes : gel et rafales
+  var al = "";
+  var minDemain = d.temperature_2m_min[o + 1], minAuj = d.temperature_2m_min[o];
+  if (h >= 14 && minDemain !== undefined && minDemain <= 0.5) al += '<span class="alerte">Gel cette nuit · <b>' + Math.round(minDemain) + '°</b></span>';
+  else if (h < 11 && minAuj <= 0.5) al += '<span class="alerte">Gel ce matin · <b>' + Math.round(minAuj) + '°</b></span>';
+  var raf = d.wind_gusts_10m_max ? d.wind_gusts_10m_max[o] : 0;
+  if (raf >= 60) al += '<span class="alerte">Rafales <b>' + Math.round(raf) + ' km/h</b></span>';
+
+  el("lieu").innerHTML = CONFIG.nomLieu + " &nbsp;·&nbsp; maintenant";
+  el("icone").innerHTML = svgIcone(faitNuit ? info[2] : info[1]);
+  el("temp").innerHTML = Math.round(c.temperature_2m) + "<sup>°</sup>";
+  el("desc").innerHTML = info[0] + al;
+  pastillesMeteo =
+    '<span class="pastille">Ressenti <b>' + Math.round(c.apparent_temperature) + '°</b></span>' +
+    '<span class="pastille">Humidité <b>' + Math.round(c.relative_humidity_2m) + ' %</b></span>' +
+    '<span class="pastille">Vent <b>' + Math.round(c.wind_speed_10m) + ' km/h</b></span>';
+  majPastilles();
+  afficherPluie(m.minutely_15);
+
+  var html = "";
+  for (var i = o + 1; i < d.time.length && i <= o + CONFIG.joursPrevision; i++) {
+    var j = jourISO(d.time[i]);
+    var inf = meteoInfo(d.weather_code[i]);
+    var pluie = d.precipitation_probability_max ? d.precipitation_probability_max[i] : null;
+    html += '<div class="carte jour">' +
+      '<div class="nom">' + (i === o + 1 ? "demain" : JOURS[j.getDay()]) + '</div>' +
+      svgIcone(inf[1]) +
+      '<div><span class="max">' + Math.round(d.temperature_2m_max[i]) + '°</span>' +
+      '<span class="min">' + Math.round(d.temperature_2m_min[i]) + '°</span></div>' +
+      (pluie !== null && pluie !== undefined && pluie >= 20 ? '<div class="pluie">pluie ' + pluie + ' %</div>' : '<div class="pluie">&nbsp;</div>') +
+      '</div>';
+  }
+  el("prev").innerHTML = html;
+
+  el("etat").innerHTML = "Mis à jour à " + deux(maintenant.getHours()) + "h" + deux(maintenant.getMinutes());
+  dernierCiel = "";
+  derniereMinute = -1;
+  majHorloge();
+  construireInfos();
+}
+
+/* ---------- Pluie dans les 2 prochaines heures ---------- */
+function afficherPluie(mm) {
+  var z = el("pluie");
+  if (!mm || !mm.time) { z.innerHTML = ""; return; }
+  var now = new Date().getTime(), t = [], v = [], i;
+  for (i = 0; i < mm.time.length && t.length < 8; i++) {
+    var d = parseISO(mm.time[i]);
+    if (d.getTime() + 15 * 60000 <= now) continue;
+    t.push(d); v.push(mm.precipitation[i] || 0);
+  }
+  if (!v.length) { z.innerHTML = ""; return; }
+  var SEUIL = 0.1, max = 0.6, txt;
+  for (i = 0; i < v.length; i++) if (v[i] > max) max = v[i];
+  if (v[0] >= SEUIL) {
+    var fin = -1;
+    for (i = 1; i < v.length; i++) if (v[i] < SEUIL) { fin = i; break; }
+    txt = fin < 0 ? "Il pleut, et ça va durer au moins 2 h" : "Il pleut, jusque vers " + hm(t[fin]);
+  } else {
+    var deb = -1;
+    for (i = 1; i < v.length; i++) if (v[i] >= SEUIL) { deb = i; break; }
+    txt = deb < 0 ? "Pas de pluie dans les 2 prochaines heures"
+                  : "Pluie vers " + hm(t[deb]) + ' <span class="dans">· dans ' +
+                    Math.max(5, Math.round((t[deb].getTime() - now) / 300000) * 5) + " min</span>";
+  }
+  var b = "";
+  for (i = 0; i < v.length; i++) {
+    var on = v[i] >= SEUIL;
+    b += '<span class="b' + (on ? ' on' : '') + '" style="height:' + (on ? Math.max(25, Math.round(v[i] / max * 100)) : 12) + '%"></span>';
+  }
+  z.innerHTML = '<span class="barres">' + b + '</span><span class="txt">' + txt + '</span>';
+}
+
+/* ---------- Qualité de l'air (Open-Meteo, données CAMS) ---------- */
+var etatAir = null;
+function chargerAir() {
+  if (location.hash === "#demo") { etatAir = { aqi: 24 }; construireInfos(); return; }
+  var url = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + CONFIG.latitude +
+    "&longitude=" + CONFIG.longitude +
+    "&current=european_aqi&timezone=Europe%2FParis";
+  chargerJSON(url, function (a) {
+    var c = a.current || {};
+    etatAir = { aqi: c.european_aqi };
+    construireInfos();
+  });
+  setTimeout(chargerAir, 60 * 60000);
+}
+
+/* ---------- Football (TheSportsDB) ---------- */
+var etatFoot = null;
+function chargerFoot() {
+  if (!CONFIG.equipe) return;
+  if (location.hash === "#demo") { etatFoot = footDemo(); construireInfos(); return; }
+  var base = "https://www.thesportsdb.com/api/v1/json/123/", res = { dernier: null, prochain: null }, n = 0;
+  function fini() { n++; if (n === 2) { etatFoot = res; construireInfos(); } }
+  chargerJSON(base + "eventslast.php?id=" + CONFIG.equipe.id, function (a) {
+    res.dernier = extremeMatch(a.results, true); fini();
+  }, fini);
+  chargerJSON(base + "eventsnext.php?id=" + CONFIG.equipe.id, function (a) {
+    res.prochain = extremeMatch(a.events, false); fini();
+  }, fini);
+  setTimeout(chargerFoot, 30 * 60000);
+}
+function dateMatch(e) {
+  var s = e.strTimestamp || ((e.dateEvent || "") + "T" + (e.strTime || "00:00:00"));
+  if (!s || s.length < 16) return null;
+  return new Date(Date.UTC(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2)));
+}
+function extremeMatch(l, plusRecent) {
+  var best = null, bd = null;
+  if (!l) return null;
+  for (var i = 0; i < l.length; i++) {
+    var d = dateMatch(l[i]);
+    if (!d) continue;
+    if (!best || (plusRecent ? d > bd : d < bd)) { best = l[i]; bd = d; }
+  }
+  return best;
+}
+function nomEquipe(n) { return CONFIG.equipe && n === CONFIG.equipe.nom ? CONFIG.equipe.court : (n || "").replace(/^(AS|FC|OGC|RC|AJ|SCO|ESTAC) /, ""); }
+function nomCompet(n) {
+  var M = { "French Ligue 1": "Ligue 1", "UEFA Champions League": "Ligue des champions",
+            "Coupe de France": "Coupe de France", "French Coupe de France": "Coupe de France",
+            "Trophée des Champions": "Trophée des champions", "UEFA Super Cup": "Supercoupe d'Europe",
+            "FIFA Club World Cup": "Coupe du monde des clubs", "Club Friendlies": "Match amical" };
+  return M[n] || n || "";
+}
+function slideFoot(f, now) {
+  var court = CONFIG.equipe.court, s = { titre: court, grand: "", petit: "" };
+  var p = f.prochain, pd = p ? dateMatch(p) : null;
+  var lignePro = "";
+  if (p && pd) {
+    var nj = joursEntre(now, pd);
+    var quand = nj === 0 ? "ce soir " + hm(pd) : nj === 1 ? "demain " + hm(pd) : JOURS[pd.getDay()].substr(0, 3) + ". " + pd.getDate() + " " + MOISCOURT[pd.getMonth()] + " " + hm(pd);
+    if (nj === 0 && pd.getHours() < 18) quand = "aujourd'hui " + hm(pd);
+    lignePro = nomEquipe(p.strHomeTeam) + " – " + nomEquipe(p.strAwayTeam) + " · " + quand;
+    if (nj === 0 && pd.getTime() > now.getTime() - 2 * 3600000) {   // match du jour : on le met en avant
+      s.titre = court + " · match " + (pd.getHours() >= 18 ? "ce soir" : "aujourd'hui");
+      s.grand = nomEquipe(p.strHomeTeam) + " – " + nomEquipe(p.strAwayTeam) + " · " + hm(pd);
+      s.petit = nomCompet(p.strLeague);
+      return s;
+    }
+  }
+  var d = f.dernier;
+  if (d && d.intHomeScore !== null && d.intHomeScore !== "" && d.intAwayScore !== null) {
+    var hs = +d.intHomeScore, as = +d.intAwayScore, dom = d.strHomeTeam === CONFIG.equipe.nom;
+    var nous = dom ? hs : as, eux = dom ? as : hs;
+    var tag = nous > eux ? '<span class="tag v">Victoire</span>' : nous < eux ? '<span class="tag d">Défaite</span>' : '<span class="tag n">Nul</span>';
+    var dd = dateMatch(d);
+    s.titre = court + " · dernier match";
+    s.grand = nomEquipe(d.strHomeTeam) + " " + hs + " – " + as + " " + nomEquipe(d.strAwayTeam) + tag;
+    s.petit = nomCompet(d.strLeague) + (dd ? " · " + dateLongue(dd) : "") + (lignePro ? "<br>Prochain : " + lignePro : "");
+    return s;
+  }
+  if (lignePro) { s.titre = court + " · prochain match"; s.grand = lignePro.split(" · ")[0]; s.petit = lignePro.split(" · ").slice(1).join(" · "); return s; }
+  return null;
+}
+
+/* ---------- Température intérieure (plus tard, via Home Assistant) ---------- */
+var etatInterieur = null; // format attendu : [{ "nom": "Salon", "temp": 20.5 }, …]
+function chargerInterieur() {
+  if (!CONFIG.urlInterieur || location.hash === "#demo") return;
+  var u = CONFIG.urlInterieur + (CONFIG.urlInterieur.indexOf("?") < 0 ? "?" : "&") + "t=" + new Date().getTime();
+  chargerJSON(u, function (a) { if (a && a.length) { etatInterieur = a; majPastilles(); construireInfos(); } });
+  setTimeout(chargerInterieur, 5 * 60000);
+}
+
+/* ---------- Calendriers : vacances scolaires (zone C) et jours fériés ---------- */
+var VACANCES = [ // [nom, premier jour de vacances, jour de reprise] — calendrier officiel 2026-2027, zone C
+  ["de la Toussaint", "2026-10-17", "2026-11-02"],
+  ["de Noël",         "2026-12-19", "2027-01-04"],
+  ["d'hiver",         "2027-02-06", "2027-02-22"],
+  ["de printemps",    "2027-04-03", "2027-04-19"],
+  ["d'été",           "2027-07-03", null]
+];
+function paques(y) {
+  var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4,
+      f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+      i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+      mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, mo - 1, da);
+}
+function feries(y) {
+  var p = paques(y);
+  function j(m, d) { return new Date(y, m - 1, d); }
+  function pp(n) { return new Date(p.getFullYear(), p.getMonth(), p.getDate() + n); }
+  var l = [[j(1, 1), "Jour de l'An"], [pp(1), "Lundi de Pâques"], [j(5, 1), "Fête du Travail"],
+           [j(5, 8), "Victoire 1945"], [pp(39), "Ascension"], [pp(50), "Lundi de Pentecôte"],
+           [j(7, 14), "Fête nationale"], [j(8, 15), "Assomption"], [j(11, 1), "Toussaint"],
+           [j(11, 11), "Armistice"], [j(12, 25), "Noël"]];
+  l.sort(function (a, b) { return a[0] - b[0]; });
+  return l;
+}
+function slideFerie(auj) {
+  var l = feries(auj.getFullYear()).concat(feries(auj.getFullYear() + 1));
+  for (var i = 0; i < l.length; i++) {
+    if (l[i][0] < auj) continue;
+    var d = l[i][0], n = joursEntre(auj, d), jw = d.getDay();
+    var pont = (jw === 2 || jw === 4) ? " · pont possible" : (jw === 0 || jw === 6) ? " · tombe un week-end" : "";
+    return { titre: "Prochain jour férié",
+             grand: n === 0 ? "Aujourd'hui : " + l[i][1] : l[i][1] + " " + dansJours(n),
+             petit: dateLongue(d) + pont };
+  }
+  return null;
+}
+function slideVacances(auj) {
+  for (var i = 0; i < VACANCES.length; i++) {
+    var v = VACANCES[i], deb = dateYMD(v[1]), fin = v[2] ? dateYMD(v[2]) : null;
+    if (fin && auj >= fin) continue;
+    if (auj >= deb) {
+      return { titre: "Vacances scolaires · zone C", grand: "Vacances " + v[0],
+               petit: fin ? "Reprise " + dateLongue(fin) + " · encore " + joursEntre(auj, fin) + " jours" : "Bonnes vacances !" };
+    }
+    return { titre: "Vacances scolaires · zone C", grand: "Vacances " + v[0] + " " + dansJours(joursEntre(auj, deb)),
+             petit: "Du " + dateLongue(deb) + (fin ? " au " + dateLongue(fin) : "") };
+  }
+  return null;
+}
+
+/* ---------- Anniversaires et événements ---------- */
+function listeAnniv() {
+  var l = CONFIG.anniversaires || [];
+  if (!l.length && location.hash === "#demo") {
+    var d = new Date();
+    l = [{ nom: "Marie", date: d.getDate() + "/" + (d.getMonth() + 1), annee: 1985 }];
+  }
+  return l;
+}
+function prochainsAnniv(auj) {
+  var src = listeAnniv(), l = [];
+  for (var i = 0; i < src.length; i++) {
+    var p = src[i].date.split("/"), jj = +p[0], mm = +p[1];
+    var d = new Date(auj.getFullYear(), mm - 1, jj);
+    if (d < auj) d = new Date(auj.getFullYear() + 1, mm - 1, jj);
+    l.push({ nom: src[i].nom, date: d, n: joursEntre(auj, d), age: src[i].annee ? d.getFullYear() - src[i].annee : null });
+  }
+  l.sort(function (a, b) { return a.n - b.n; });
+  return l;
+}
+function annivDuJour(d) {
+  var auj = new Date(d.getFullYear(), d.getMonth(), d.getDate()), l = prochainsAnniv(auj), r = [];
+  for (var i = 0; i < l.length; i++) if (l[i].n === 0) r.push(l[i].nom + (l[i].age ? " (" + l[i].age + " ans)" : ""));
+  return r;
+}
+function slideEvenement(auj) {
+  var l = CONFIG.evenements || [], best = null;
+  for (var i = 0; i < l.length; i++) {
+    var p = l[i].date.split("/"), d = new Date(+p[2], +p[1] - 1, +p[0]);
+    if (d < auj) continue;
+    if (!best || d < best.d) best = { nom: l[i].nom, d: d };
+  }
+  if (!best) return null;
+  return { titre: "À venir", grand: best.nom + " " + dansJours(joursEntre(auj, best.d)), petit: dateLongue(best.d) };
+}
+
+/* ---------- Air, durée du jour, intérieur ---------- */
+function slideAir() {
+  var a = etatAir.aqi, lab, col;
+  if (a === null || a === undefined) return null;
+  if (a <= 20) { lab = "Très bonne"; col = "#7fe0a6"; } else if (a <= 40) { lab = "Bonne"; col = "#b6e07a"; }
+  else if (a <= 60) { lab = "Moyenne"; col = "#f5d24a"; } else if (a <= 80) { lab = "Médiocre"; col = "#ffaa55"; }
+  else if (a <= 100) { lab = "Mauvaise"; col = "#ff7b6b"; } else { lab = "Très mauvaise"; col = "#e08bff"; }
+  var conseil = a <= 40 ? "aucune précaution particulière" : a <= 60 ? "les personnes sensibles peuvent limiter l'effort dehors"
+              : "éviter les efforts intenses en extérieur";
+  return { titre: "Qualité de l'air", grand: '<span style="color:' + col + '">' + lab + "</span> qualité de l'air",
+           petit: "Indice européen " + Math.round(a) + " · " + conseil };
+}
+function slideJour(auj) {
+  var delta = etatJour.aujourdhui - etatJour.hier, y = auj.getFullYear();
+  var hiv = new Date(y, 11, 21), ete = new Date(y, 5, 21);
+  if (auj > hiv) hiv = new Date(y + 1, 11, 21);
+  if (auj > ete) ete = new Date(y + 1, 5, 21);
+  var sol = hiv < ete ? ["solstice d'hiver", hiv] : ["solstice d'été", ete];
+  var nSol = joursEntre(auj, sol[1]);
+  var grand = delta < 0 ? "Les jours raccourcissent" : delta > 0 ? "Les jours rallongent" : "Durée du jour stable";
+  var dt = delta !== 0 ? (delta > 0 ? "+" : "−") + Math.abs(delta) + " min de jour par rapport à hier · " : "";
+  return { titre: "Lumière du jour", grand: grand,
+           petit: dt + (nSol === 0 ? "c'est le " + sol[0] + " !" : sol[0] + " " + dansJours(nSol)) };
+}
+function slideInterieur() {
+  var r = [];
+  for (var i = 0; i < etatInterieur.length; i++)
+    r.push(etatInterieur[i].nom + " " + (Math.round(etatInterieur[i].temp * 10) / 10).toString().replace(".", ",") + "°");
+  return { titre: "Dans la maison", grand: r.slice(0, 2).join(" · "), petit: r.slice(2).join(" · ") };
+}
+
+/* ---------- Encadré qui fait défiler les infos ---------- */
+var SLIDES = [], idxSlide = 0;
+function construireInfos() {
+  var now = new Date(), auj = new Date(now.getFullYear(), now.getMonth(), now.getDate()), s = [], x;
+  function ajoute(v) { if (v) s.push(v); }
+  if (etatFoot) ajoute(slideFoot(etatFoot, now));
+  if (etatInterieur && etatInterieur.length) ajoute(slideInterieur());
+  ajoute(slideEvenement(auj));
+  ajoute(slideVacances(auj));
+  ajoute(slideFerie(auj));
+  if (etatAir) ajoute(slideAir());
+  if (etatJour.aujourdhui) ajoute(slideJour(auj));
+  SLIDES = s;
+  if (idxSlide >= s.length) idxSlide = 0;
+  afficherSlide();
+}
+function afficherSlide() {
+  if (!SLIDES.length) return;
+  var s = SLIDES[idxSlide], pts = "";
+  el("infos-titre").innerHTML = s.titre;
+  el("infos-contenu").innerHTML = '<div class="grand">' + s.grand + '</div>' + (s.petit ? '<div class="petit">' + s.petit + '</div>' : "");
+  for (var i = 0; i < SLIDES.length; i++) pts += '<span class="pt' + (i === idxSlide ? ' on' : '') + '"></span>';
+  el("infos-points").innerHTML = pts;
+}
+function tourner() {
+  if (SLIDES.length < 2) return;
+  var c = el("infos-contenu");
+  c.className = "contenu cache";
+  setTimeout(function () {
+    idxSlide = (idxSlide + 1) % SLIDES.length;
+    afficherSlide();
+    c.className = "contenu";
+  }, 450);
+}
+
+/* ---------- Données fictives pour l'aperçu (#demo) ---------- */
+function donneesDemo() {
+  var t = [], d0 = new Date(), i;
+  for (i = -1; i < 4; i++) {
+    var x = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + i);
+    t.push(x.getFullYear() + "-" + deux(x.getMonth() + 1) + "-" + deux(x.getDate()));
+  }
+  var mt = [], mp = [], q = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), d0.getHours(), Math.floor(d0.getMinutes() / 15) * 15);
+  var pluieDemo = [0, 0, 0, 0.3, 0.8, 1.2, 0.6, 0.2, 0];
+  for (i = 0; i < 9; i++) {
+    var z = new Date(q.getTime() + i * 15 * 60000);
+    mt.push(z.getFullYear() + "-" + deux(z.getMonth() + 1) + "-" + deux(z.getDate()) + "T" + deux(z.getHours()) + ":" + deux(z.getMinutes()));
+    mp.push(pluieDemo[i]);
+  }
+  return {
+    current: { temperature_2m: 6.4, relative_humidity_2m: 81, apparent_temperature: 3.9, weather_code: 2, wind_speed_10m: 17 },
+    minutely_15: { time: mt, precipitation: mp },
+    daily: {
+      time: t, weather_code: [3, 2, 61, 3, 0],
+      temperature_2m_max: [9, 8, 10, 9, 7], temperature_2m_min: [3, 2, -1, 5, 0],
+      sunrise: [t[0] + "T08:01", t[1] + "T08:03"], sunset: [t[0] + "T17:11", t[1] + "T17:09"],
+      precipitation_probability_max: [20, 10, 80, 30, 5],
+      wind_gusts_10m_max: [30, 35, 40, 30, 20]
+    }
+  };
+}
+function footDemo() {
+  return {
+    dernier: { strHomeTeam: "Paris Saint-Germain", strAwayTeam: "Troyes", intHomeScore: "1", intAwayScore: "0",
+               strLeague: "French Ligue 1", strTimestamp: "2026-11-07T20:05:00" },
+    prochain: { strHomeTeam: "Paris Saint-Germain", strAwayTeam: "Roma", strLeague: "UEFA Champions League",
+                strTimestamp: "2026-11-25T20:00:00" }
+  };
+}
+
+/* ---------- Rechargement automatique ----------
+   Le relais du NAS remplace index.html quand une nouvelle version est publiée :
+   la page vérifie toutes les 30 min si elle a changé et se recharge. Rechargement aussi chaque nuit à 3h. */
+var signaturePage = null;
+function signature(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return t.length + ":" + h; }
+function verifierVersion() {
+  if (location.protocol === "file:" || location.hash === "#demo") return;
+  var x = new XMLHttpRequest();
+  x.open("GET", "index.html?v=" + new Date().getTime(), true);
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4 || x.status !== 200 || x.responseText.length < 5000) return;
+    var s = signature(x.responseText);
+    if (signaturePage === null) signaturePage = s;
+    else if (s !== signaturePage) location.reload();
+  };
+  try { x.send(); } catch (e) {}
+}
+setInterval(function () {
+  var d = new Date();
+  if (d.getHours() === 3 && d.getMinutes() === 0 && d.getSeconds() < 2) location.reload();
+}, 1000);
+setInterval(verifierVersion, 30 * 60000);
+verifierVersion();
+
+/* ---------- Démarrage ---------- */
+creerEtoiles();
+majHorloge();
+setInterval(majHorloge, 1000);
+setInterval(tourner, CONFIG.secondesParInfo * 1000);
+chargerMeteo();
+chargerAir();
+chargerFoot();
+chargerInterieur();
+</script>
+</body>
+</html>
