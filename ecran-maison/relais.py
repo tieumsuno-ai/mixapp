@@ -290,7 +290,7 @@ def commande(g, a):
     time.sleep(0.35)
 
 
-class API(BaseHTTPRequestHandler):
+class ApiSonos(BaseHTTPRequestHandler):
     def repondre(self, code, obj):
         b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -323,7 +323,7 @@ class API(BaseHTTPRequestHandler):
 
 
 def demarrer_sonos():
-    srv = ThreadingHTTPServer(("0.0.0.0", SONOS_PORT_API), API)
+    srv = ThreadingHTTPServer(("0.0.0.0", SONOS_PORT_API), ApiSonos)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     g = topologie()
     log("API Sonos sur le port %d — %s" % (SONOS_PORT_API,
