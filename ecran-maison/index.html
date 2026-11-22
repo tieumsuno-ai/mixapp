@@ -836,11 +836,60 @@ function chargerAir() {
   setTimeout(chargerAir, 60 * 60000);
 }
 
-/* ---------- Football (TheSportsDB) ---------- */
+/* ---------- Football ----------
+   Source principale : ESPN (tous les matchs, domicile et extérieur, Ligue 1 + coupes d'Europe + Coupe de France).
+   Secours : TheSportsDB (la clé gratuite ne donne que les matchs à domicile). */
 var etatFoot = null;
+var ESPN_EQUIPES = { "133714": 160 };   // TheSportsDB → ESPN
+var ESPN_COMPET = { "fra.1": "French Ligue 1", "uefa.champions": "UEFA Champions League", "fra.coupe_de_france": "Coupe de France" };
 function chargerFoot() {
   if (!CONFIG.equipe) return;
   if (location.hash === "#demo") { etatFoot = footDemo(); construireInfos(); return; }
+  setTimeout(chargerFoot, 30 * 60000);
+  var id = CONFIG.equipe.espn || ESPN_EQUIPES[String(CONFIG.equipe.id)];
+  if (id) chargerFootESPN(id); else chargerFootTSDB();
+}
+function chargerFootESPN(id) {
+  var base = "https://site.api.espn.com/apis/site/v2/sports/soccer/", urls = [], tous = [], n = 0, ok = 0;
+  for (var c in ESPN_COMPET) {
+    urls.push([c, base + c + "/teams/" + id + "/schedule"]);
+    urls.push([c, base + c + "/teams/" + id + "/schedule?fixture=true"]);
+  }
+  function fini() {
+    if (++n < urls.length) return;
+    if (!ok) { chargerFootTSDB(); return; }
+    var maintenant = new Date(), res = { dernier: null, prochain: null }, passes = [], futurs = [];
+    for (var i = 0; i < tous.length; i++) (tous[i].termine ? passes : futurs).push(tous[i]);
+    res.dernier = extremeMatch(passes, true);
+    var f = [];
+    for (i = 0; i < futurs.length; i++) { var d = dateMatch(futurs[i]); if (d && d.getTime() > maintenant.getTime() - 3 * 3600000) f.push(futurs[i]); }
+    res.prochain = extremeMatch(f, false);
+    etatFoot = res; construireInfos();
+  }
+  for (var k = 0; k < urls.length; k++) (function (compet, u) {
+    chargerJSON(u, function (a) {
+      ok++;
+      var ev = a.events || [];
+      for (var i = 0; i < ev.length; i++) { var m = matchESPN(ev[i], compet); if (m) tous.push(m); }
+      fini();
+    }, fini);
+  })(urls[k][0], urls[k][1]);
+}
+function scoreESPN(s) { if (s === undefined || s === null) return null; if (typeof s === "object") s = s.displayValue !== undefined ? s.displayValue : s.value; return s === "" || s === undefined ? null : String(Math.round(+s)); }
+function matchESPN(e, compet) {
+  var c = e.competitions && e.competitions[0];
+  if (!c || !c.competitors || c.competitors.length < 2 || !e.date) return null;
+  var dom = null, ext = null;
+  for (var i = 0; i < c.competitors.length; i++) { if (c.competitors[i].homeAway === "home") dom = c.competitors[i]; else ext = c.competitors[i]; }
+  if (!dom || !ext) return null;
+  var st = (c.status && c.status.type) || (e.status && e.status.type) || {};
+  if (st.name === "STATUS_POSTPONED" || st.name === "STATUS_CANCELED") return null;
+  var termine = !!st.completed || st.state === "post";
+  return { strHomeTeam: dom.team.displayName, strAwayTeam: ext.team.displayName,
+           intHomeScore: termine ? scoreESPN(dom.score) : null, intAwayScore: termine ? scoreESPN(ext.score) : null,
+           strLeague: ESPN_COMPET[compet], strTimestamp: e.date, termine: termine };
+}
+function chargerFootTSDB() {
   var base = "https://www.thesportsdb.com/api/v1/json/123/", res = { dernier: null, prochain: null }, n = 0;
   function fini() { n++; if (n === 2) { etatFoot = res; construireInfos(); } }
   chargerJSON(base + "eventslast.php?id=" + CONFIG.equipe.id, function (a) {
@@ -849,7 +898,6 @@ function chargerFoot() {
   chargerJSON(base + "eventsnext.php?id=" + CONFIG.equipe.id, function (a) {
     res.prochain = extremeMatch(a.events, false); fini();
   }, fini);
-  setTimeout(chargerFoot, 30 * 60000);
 }
 function dateMatch(e) {
   var s = e.strTimestamp || ((e.dateEvent || "") + "T" + (e.strTime || "00:00:00"));

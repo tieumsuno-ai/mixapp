@@ -13,4 +13,4 @@ qualité de l'air, durée du jour), température intérieure Netatmo et téléco
   (port 8099) qui pilote les enceintes Sonos du réseau local (variable `SONOS_RESEAU`, ex. `192.168.1.0/24`).
 
 Données : [Open-Meteo](https://open-meteo.com) (météo, qualité de l'air),
-[TheSportsDB](https://www.thesportsdb.com) (football), API Netatmo.
+[ESPN](https://www.espn.com) et [TheSportsDB](https://www.thesportsdb.com) (football), API Netatmo.
