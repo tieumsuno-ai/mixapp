@@ -1,0 +1,18 @@
+== installateur
+capture 01_install_dossier.png
+capture 02_install_taches.png
+capture 03_install_taches_cochee.png
+capture 04_install_pret.png
+capture 05_install_en_cours.png
+capture 06_install_fin.png
+== premier lancement
+capture 07_bienvenue.png
+capture 08_choix_dossier.png
+⚠ premier lancement : TimeoutError: Dossier de musique
+dossier réglé directement
+== analyse
+capture 09_analyse_en_cours.png
+morceaux analysés : 8 / 8
+capture 10_fenetre.png
+== visite guidée
+⚠ visite trop longue
