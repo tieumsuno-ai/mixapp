@@ -1454,7 +1454,8 @@ class MainWindow(QMainWindow):
 
     def _want_compact(self) -> bool:
         scr = self.screen()
-        small_screen = scr is not None and scr.availableGeometry().width() < 1600
+        small_screen = (scr is not None and scr.availableGeometry().width() < 1600
+                        and not os.environ.get("MIXAPP_TOUR"))      # tutoriels : boutons avec leur nom
         return self.width() < 1460 or small_screen
 
     def _set_compact(self, on: bool):

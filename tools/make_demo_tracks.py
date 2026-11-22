@@ -65,6 +65,11 @@ def main(dest):
         tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="cover", data=cover(*cols, i)))
         tags.save(str(mp3))
         print(mp3)
+    # un même morceau dans deux playlists : pour montrer la fenêtre « Doublons »
+    import shutil
+    src = dest / "Soirée Disco" / "04 - Les Néons - Velours.mp3"
+    if src.exists():
+        shutil.copy(src, dest / "Apéro Latino" / "08 - Les Néons - Velours.mp3")
 
 
 if __name__ == "__main__":
