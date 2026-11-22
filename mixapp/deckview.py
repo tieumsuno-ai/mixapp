@@ -476,8 +476,9 @@ class DeckView(QWidget):
     def resizeEvent(self, e):
         g = self._geom()
         r0 = self._cover_rect(0, g)
-        wh = min(g["bot"] - g["top"], r0.height() + 110)           # formes d'onde : hauteur des pochettes
-        self.wave.setGeometry(g["cx"] - self.wave.width() // 2, r0.top() - 22, self.wave.width(), wh)
+        wy = max(g["top"], r0.top() - 22)
+        wh = min(g["bot"] - wy, r0.height() + 110)                 # formes d'onde : hauteur des pochettes,
+        self.wave.setGeometry(g["cx"] - self.wave.width() // 2, wy, self.wave.width(), wh)  # jamais sur la console
         c = g["console"]
         d = c.height() - 24                                         # platines aux deux bouts
         self.jogs[0].setGeometry(c.left() + 16, c.top() + 12, d, d)
