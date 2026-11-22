@@ -113,6 +113,35 @@
     font-size: 1.9vh; font-weight: 300; margin-right: 1.4vw; }
   .collecte .bac svg { width: 2.7vh; height: 2.7vh; margin-right: 0.4vw; }
 
+  /* Musique en cours (Sonos) */
+  .sonos { margin-top: 1.6vh; display: none; padding: 1.6vh 1.6vw; }
+  body.musique .sonos { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+  body.musique .ephem { display: none; }
+  .sonos .pochette { width: 16vh; height: 16vh; border-radius: 12px; -webkit-flex-shrink: 0; flex-shrink: 0;
+    background: rgba(255,255,255,0.12) center/cover no-repeat; margin-right: 1.8vw;
+    box-shadow: 0 0.6vh 2vh rgba(0,0,0,0.35); position: relative; }
+  .sonos .pochette svg { position: absolute; left: 30%; top: 30%; width: 40%; height: 40%; opacity: 0.5; }
+  .sonos .texte { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; }
+  .sonos .titre { font-size: 3vh; font-weight: 400; margin-top: 0.5vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sonos .artiste { font-size: 2.2vh; font-weight: 300; opacity: 0.7; margin-top: 0.2vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sonos .barre { height: 0.45vh; border-radius: 1vh; background: rgba(255,255,255,0.16); margin-top: 1vh; overflow: hidden; }
+  .sonos .barre i { display: block; height: 100%; width: 0; background: rgba(255,255,255,0.75); border-radius: 1vh; }
+  .sonos .commandes { display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center; margin-top: 1.2vh; }
+  .sonos button { -webkit-appearance: none; appearance: none; border: 0; padding: 0; margin: 0 0.9vw 0 0; outline: none;
+    width: 5.6vh; height: 5.6vh; border-radius: 50%; background: rgba(255,255,255,0.13); color: #fff;
+    -webkit-tap-highlight-color: rgba(0,0,0,0); -webkit-transition: -webkit-transform 0.12s, background 0.12s; transition: transform 0.12s, background 0.12s; }
+  .sonos button svg { display: block; width: 44%; height: 44%; margin: 0 auto; fill: currentColor; }
+  .sonos button.lecture { width: 7vh; height: 7vh; background: #fff; color: #0b1026; }
+  .sonos button:active { -webkit-transform: scale(0.88); transform: scale(0.88); background: rgba(255,255,255,0.3); }
+  .sonos button.lecture:active { background: #d8dcf0; }
+  .sonos .vol { margin-left: auto; display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+  .sonos .vol button { margin: 0; width: 4.8vh; height: 4.8vh; }
+  .sonos .vol span { font-size: 2.3vh; font-weight: 300; min-width: 4.6vh; text-align: center; }
+  .sonos.attente .commandes, .sonos.attente .pochette { opacity: 0.6; }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -208,6 +237,26 @@
 
     <div class="pousse"></div>
 
+
+    <div class="carte sonos" id="sonos">
+      <div class="pochette" id="sonos-pochette"></div>
+      <div class="texte">
+        <div class="etiquette" id="sonos-piece">En écoute</div>
+        <div class="titre" id="sonos-titre"></div>
+        <div class="artiste" id="sonos-artiste"></div>
+        <div class="barre"><i id="sonos-barre"></i></div>
+        <div class="commandes">
+          <button onclick="cmdSonos('prev')" aria-label="Titre précédent"><svg viewBox="0 0 24 24"><path d="M6 5h2.5v14H6zM20 5v14L9.5 12z"/></svg></button>
+          <button class="lecture" id="sonos-lecture" onclick="cmdSonos('basculer')" aria-label="Lecture ou pause"></button>
+          <button onclick="cmdSonos('next')" aria-label="Titre suivant"><svg viewBox="0 0 24 24"><path d="M15.5 5H18v14h-2.5zM4 5l10.5 7L4 19z"/></svg></button>
+          <div class="vol">
+            <button onclick="cmdSonos('voldown')" aria-label="Baisser le volume"><svg viewBox="0 0 24 24"><path d="M5 10.8h14v2.4H5z"/></svg></button>
+            <span id="sonos-vol"></span>
+            <button onclick="cmdSonos('volup')" aria-label="Monter le volume"><svg viewBox="0 0 24 24"><path d="M10.8 5h2.4v5.8H19v2.4h-5.8V19h-2.4v-5.8H5v-2.4h5.8z"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="carte ephem">
       <div class="rangee">
         <div class="soleil">
@@ -258,7 +307,7 @@
    Les réglages personnels sont dans config.js (à côté de cette page, sur le NAS).
    Valeurs par défaut utilisées si config.js est absent. */
 var CONFIG_DEFAUT = {
-  nomLieu: "Paris", latitude: 48.86, longitude: 2.35,
+  nomLieu: "Paris", sonos: null, latitude: 48.86, longitude: 2.35,
   joursPrevision: 3, rafraichirMinutes: 15, attenuerDebut: 22, attenuerFin: 7,
   collecte: [], equipe: null, anniversaires: [], evenements: [],
   urlInterieur: null, secondesParInfo: 8, animerIcones: true
@@ -1058,6 +1107,100 @@ function footDemo() {
   };
 }
 
+/* ---------- Musique en cours (Sonos, via le relais du NAS sur le port 8099) ----------
+   La tuile remplace l'éphéméride pendant la lecture, et jusqu'à 15 min après une pause. */
+var SVG_LECTURE = '<svg viewBox="0 0 24 24"><path d="M7 4.5v15L19.5 12z"/></svg>';
+var SVG_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z"/></svg>';
+var SVG_NOTE = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M9 3v11.6A3.5 3.5 0 1 0 11 18V7h7V3z"/></svg>';
+var sonosGroupe = null, sonosRecu = 0, sonosDernierJeu = 0, sonosMinuteur = null, sonosPochette = null, sonosOccupe = 0;
+function urlSonos() {
+  if (CONFIG.sonos === false) return null;
+  if (CONFIG.sonos) return CONFIG.sonos;
+  if (location.protocol === "file:") return null;
+  return location.protocol + "//" + location.hostname + ":8099";
+}
+function enLecture(g) { return g && (g.etat === "PLAYING" || g.etat === "TRANSITIONING"); }
+function choisirGroupe(l) {
+  var i, g = null;
+  for (i = 0; i < l.length; i++) if (enLecture(l[i])) return l[i];
+  if (sonosGroupe) for (i = 0; i < l.length; i++) if (l[i].id === sonosGroupe.id) g = l[i];
+  return g;
+}
+function afficherSonos() {
+  var g = sonosGroupe, now = new Date().getTime();
+  if (enLecture(g)) sonosDernierJeu = now;
+  var visible = g && g.titre && (enLecture(g) || now - sonosDernierJeu < 15 * 60000);
+  document.body.className = document.body.className.replace(/\s*musique/g, "") + (visible ? " musique" : "");
+  if (!visible) return;
+  document.getElementById("sonos-piece").innerHTML = (enLecture(g) ? "En écoute" : "En pause") + " · " + echap(g.nom);
+  document.getElementById("sonos-titre").innerHTML = echap(g.titre);
+  document.getElementById("sonos-artiste").innerHTML = echap(g.artiste + (g.album && g.artiste ? " — " + g.album : g.album || ""));
+  document.getElementById("sonos-lecture").innerHTML = enLecture(g) ? SVG_PAUSE : SVG_LECTURE;
+  document.getElementById("sonos-vol").innerHTML = g.volume === null || g.volume === undefined ? "–" : g.volume;
+  var p = document.getElementById("sonos-pochette");
+  if (g.pochette !== sonosPochette) {
+    sonosPochette = g.pochette;
+    p.style.backgroundImage = g.pochette ? "url('" + g.pochette.replace(/'/g, "%27") + "')" : "none";
+    p.innerHTML = g.pochette ? "" : SVG_NOTE;
+  }
+  majBarreSonos();
+}
+function majBarreSonos() {
+  var g = sonosGroupe;
+  if (!g || !g.duree) { document.getElementById("sonos-barre").style.width = "0"; return; }
+  var pos = g.pos + (enLecture(g) ? (new Date().getTime() - sonosRecu) / 1000 : 0);
+  document.getElementById("sonos-barre").style.width = Math.min(100, pos / g.duree * 100).toFixed(1) + "%";
+}
+function chargerSonos() {
+  clearTimeout(sonosMinuteur);
+  var u = urlSonos();
+  if (location.hash === "#demo") { sonosGroupe = sonosGroupe || sonosDemo(); sonosRecu = sonosRecu || new Date().getTime(); afficherSonos(); return; }
+  if (!u) return;
+  chargerJSON(u + "/sonos?t=" + new Date().getTime(), function (d) {
+    var l = d.groupes || [], joue = false;
+    for (var i = 0; i < l.length; i++) if (enLecture(l[i])) joue = true;
+    sonosMinuteur = setTimeout(chargerSonos, joue ? 5000 : 20000);
+    if (new Date().getTime() - sonosOccupe > 1500) {
+      sonosGroupe = choisirGroupe(l); sonosRecu = new Date().getTime(); afficherSonos();
+    }
+  }, function () {
+    sonosMinuteur = setTimeout(chargerSonos, 60000);
+  });
+}
+function cmdSonos(a) {
+  var g = sonosGroupe;
+  if (!g) return;
+  if (a === "basculer") a = enLecture(g) ? "pause" : "play";
+  // affichage immédiat, confirmé ensuite par l'enceinte
+  if (a === "pause") { g.pos += (new Date().getTime() - sonosRecu) / 1000; g.etat = "PAUSED_PLAYBACK"; }
+  if (a === "play") g.etat = "PLAYING";
+  if (a === "volup" && g.volume !== null) g.volume = Math.min(100, g.volume + 3);
+  if (a === "voldown" && g.volume !== null) g.volume = Math.max(0, g.volume - 3);
+  sonosRecu = new Date().getTime(); sonosOccupe = sonosRecu;
+  afficherSonos();
+  if (location.hash === "#demo") { commandeDemo(a); return; }
+  var el = document.getElementById("sonos");
+  el.className = "carte sonos attente";
+  chargerJSON(urlSonos() + "/sonos/cmd?id=" + encodeURIComponent(g.id) + "&a=" + a + "&t=" + sonosRecu, function (e) {
+    el.className = "carte sonos";
+    if (e && e.id) { sonosGroupe = e; sonosRecu = new Date().getTime(); afficherSonos(); }
+    clearTimeout(sonosMinuteur); sonosMinuteur = setTimeout(chargerSonos, 1500);
+  }, function () { el.className = "carte sonos"; chargerSonos(); });
+}
+function echap(t) { return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function sonosDemo() {
+  return { id: "demo", nom: "Salon + Cuisine", etat: "PLAYING", titre: "Get Lucky", artiste: "Daft Punk",
+           album: "Random Access Memories", pochette: "", volume: 28, pos: 95, duree: 369 };
+}
+function commandeDemo(a) {
+  var g = sonosGroupe;
+  if (a === "next" || a === "prev") { g.titre = a === "next" ? "Midnight City" : "Get Lucky"; g.artiste = a === "next" ? "M83" : "Daft Punk"; g.pos = 0; }
+  afficherSonos();
+}
+document.addEventListener("touchstart", function () {}, true);   // active :active sur iOS
+setInterval(function () { if (sonosGroupe && enLecture(sonosGroupe)) majBarreSonos(); }, 1000);
+setInterval(afficherSonos, 60000);
+
 /* ---------- Rechargement automatique ----------
    Le relais du NAS remplace index.html quand une nouvelle version est publiée :
    la page vérifie toutes les 30 min si elle a changé et se recharge. Rechargement aussi chaque nuit à 3h. */
@@ -1091,6 +1234,7 @@ chargerMeteo();
 chargerAir();
 chargerFoot();
 chargerInterieur();
+chargerSonos();
 </script>
 </body>
 </html>
