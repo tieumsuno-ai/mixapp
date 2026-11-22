@@ -679,7 +679,7 @@ function majPastilles() {
   if (etatInterieur && etatInterieur.length) {
     var s = 0;
     for (var i = 0; i < etatInterieur.length; i++) s += etatInterieur[i].temp;
-    p += '<span class="pastille">Maison <b>' + (Math.round(s / etatInterieur.length * 10) / 10).toString().replace(".", ",") + '°</b></span>';
+    p += '<span class="pastille">Intérieur <b>' + (Math.round(s / etatInterieur.length * 10) / 10).toString().replace(".", ",") + '°</b></span>';
   }
   el("details").innerHTML = p + pastillesMeteo;
 }
@@ -978,10 +978,14 @@ function slideJour(auj) {
            petit: dt + (nSol === 0 ? "c'est le " + sol[0] + " !" : sol[0] + " " + dansJours(nSol)) };
 }
 function slideInterieur() {
-  var r = [];
-  for (var i = 0; i < etatInterieur.length; i++)
-    r.push(etatInterieur[i].nom + " " + (Math.round(etatInterieur[i].temp * 10) / 10).toString().replace(".", ",") + "°");
-  return { titre: "Dans la maison", grand: r.slice(0, 2).join(" · "), petit: r.slice(2).join(" · ") };
+  function f(v) { return (Math.round(v * 10) / 10).toString().replace(".", ",") + "°"; }
+  var l = etatInterieur, r = [], c = [];
+  for (var i = 0; i < l.length; i++) {
+    r.push((l.length > 1 ? l[i].nom + " " : "") + f(l[i].temp));
+    if (l[i].consigne !== null && l[i].consigne !== undefined) c.push((l.length > 1 ? l[i].nom + " " : "") + f(l[i].consigne));
+  }
+  return { titre: "Dans la maison", grand: r.slice(0, 3).join(" · "),
+           petit: c.length ? "Consigne du chauffage : " + c.slice(0, 3).join(" · ") : "" };
 }
 
 /* ---------- Encadré qui fait défiler les infos ---------- */
