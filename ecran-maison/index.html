@@ -281,6 +281,111 @@
   @keyframes secoue { 0%, 18%, 100% { transform: rotate(0); } 3% { transform: rotate(-14deg); } 7% { transform: rotate(12deg); }
     11% { transform: rotate(-8deg); } 15% { transform: rotate(5deg); } }
 
+  /* ---------- Pages en glissant ---------- */
+  #pages { position: fixed; top: 0; left: 0; height: 100%; width: 500%;
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-transform: translate3d(-40%,0,0); transform: translate3d(-40%,0,0); }
+  #pages.anim { -webkit-transition: -webkit-transform 0.38s cubic-bezier(.2,.8,.2,1); transition: transform 0.38s cubic-bezier(.2,.8,.2,1); }
+  .ecran { width: 20%; height: 100%; position: relative; overflow: hidden; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .annexe { padding: 5vh 4.5vw 4vh; box-sizing: border-box; height: 100%; -webkit-transition: opacity 2s; transition: opacity 2s; }
+  body.attenue .annexe { opacity: 0.55; }
+  .annexe h2 { font-size: 4.4vh; font-weight: 600; margin: 0 0 2.4vh; letter-spacing: -0.01em; }
+  .annexe h2 span { font-weight: 300; opacity: 0.6; font-size: 2.6vh; margin-left: 1.2vw; letter-spacing: 0; }
+  #points { position: fixed; left: 0; right: 0; bottom: 1.2vh; text-align: center; z-index: 6; pointer-events: none; }
+  #points i { display: inline-block; width: 0.9vh; height: 0.9vh; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 0.5vh;
+    -webkit-transition: all 0.3s; transition: all 0.3s; }
+  #points i.actif { background: #fff; width: 2.6vh; border-radius: 1vh; }
+
+  /* page Météo */
+  .m-heures { position: relative; height: 9.5vh; }
+  .m-heures.bas { height: 5.5vh; margin-top: 0.6vh; }
+  .m-heures > div { position: absolute; top: 0; width: 10vw; margin-left: -5vw; text-align: center; font-size: 1.9vh; }
+  .m-heures svg { display: block; width: 4.6vh; height: 4.6vh; margin: 0 auto; }
+  .m-heures .t { font-size: 2.4vh; font-weight: 600; }
+  .m-heures .h { opacity: 0.6; }
+  .m-heures .v { opacity: 0.55; font-size: 1.6vh; }
+  .m-graph { display: block; width: 100%; height: 38vh; }
+  .m-jours { display: -webkit-box; display: -webkit-flex; display: flex; margin-top: 2.4vh; }
+  .m-jours .carte { -webkit-box-flex: 1; -webkit-flex: 1 1 0; flex: 1 1 0; width: 0; margin-right: 1.4vh; text-align: center; padding: 1.6vh 0.4vw; }
+  .m-jours .carte:last-child { margin-right: 0; }
+  .m-jours svg { display: block; width: 7vh; height: 7vh; margin: 1vh auto; }
+  .m-jours .carte { padding-top: 2vh; padding-bottom: 2vh; }
+  .m-jours .n { font-size: 2vh; }
+  .m-jours .mx { font-size: 3vh; font-weight: 600; }
+  .m-jours .mn { font-size: 2.2vh; opacity: 0.55; margin-left: 0.4vw; }
+  .m-jours .p { font-size: 1.7vh; color: #a9d4ff; margin-top: 0.4vh; min-height: 2.2vh; }
+
+  /* page Agenda */
+  .a-grille { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-right: -1.4vh; }
+  .a-jour { width: 21.3vw; width: calc(25% - 1.4vh); height: 38.6vh; margin: 0 1.4vh 1.4vh 0; box-sizing: border-box; overflow: hidden; }
+  .a-jour.auj { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.3); }
+  .a-jour .etiquette { margin-bottom: 1vh; }
+  .a-evt { font-size: 2.25vh; font-weight: 300; padding: 0.55vh 0; border-top: 1px solid rgba(255,255,255,0.08); line-height: 1.25; }
+  .a-evt b { font-weight: 600; display: block; font-size: 1.85vh; opacity: 0.8; }
+  .a-vide { font-size: 1.9vh; opacity: 0.4; font-weight: 300; }
+  .a-plus { font-size: 1.7vh; opacity: 0.6; margin-top: 0.4vh; }
+
+  /* page Maison */
+  .mz { display: -webkit-box; display: -webkit-flex; display: flex; height: 84vh; }
+  .mz-musique { width: 36vw; margin-right: 2.4vw; padding: 2.4vh 2vw; box-sizing: border-box; text-align: center;
+    display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-orient: vertical; -webkit-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center; }
+  .mz-musique .pochette { width: 30vh; height: 30vh; margin: 0 auto 2vh; border-radius: 14px; background: rgba(255,255,255,0.1) center/cover no-repeat;
+    box-shadow: 0 1vh 3vh rgba(0,0,0,0.35); position: relative; }
+  .mz-musique .pochette svg { position: absolute; left: 32%; top: 32%; width: 36%; height: 36%; opacity: 0.45; }
+  .mz-musique .titre { font-size: 3.2vh; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mz-musique .artiste { font-size: 2.2vh; opacity: 0.7; margin-top: 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mz-musique .bts { margin-top: 2.4vh; display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+  .mz-musique button { -webkit-appearance: none; border: 0; outline: none; padding: 0; color: #fff; width: 8vh; height: 8vh; border-radius: 50%;
+    background: rgba(255,255,255,0.13); margin: 0 0.8vw; -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  .mz-musique button svg { display: block; width: 44%; height: 44%; margin: 0 auto; fill: currentColor; }
+  .mz-musique button.lecture { width: 10vh; height: 10vh; background: #fff; color: #0b1026; }
+  .mz-musique button:active { background: rgba(255,255,255,0.35); }
+  .mz-musique .vol { margin-top: 1.6vh; }
+  .mz-musique .vol span { font-size: 3vh; min-width: 7vh; display: inline-block; }
+  .mz-musique .rien { font-size: 2.4vh; opacity: 0.55; font-weight: 300; }
+  .mz-equip { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; overflow: hidden; }
+  .mz-equip .grille { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-right: -1.4vh; }
+  .mz-equip .eq { width: 16.6vw; width: calc(33.33% - 1.4vh); margin: 0 1.4vh 1.4vh 0; box-sizing: border-box; -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  .mz-equip .eq .n { font-size: 2.3vh; margin-top: 0.8vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mz-equip .eq .e { font-size: 1.8vh; font-weight: 300; opacity: 0.65; }
+  .mz-equip .lum { padding: 1.8vh 1.2vw; }
+  .mz-equip .lum svg { display: block; width: 5vh; height: 5vh; }
+  .mz-equip .lum.on { background: rgba(255,211,107,0.22); border-color: rgba(255,211,107,0.55); }
+  .mz-equip .lum:active { background: rgba(255,255,255,0.25); }
+  .mz-equip .vol { padding: 1.6vh 1.2vw; }
+  .mz-equip .vol .jauge { height: 0.7vh; border-radius: 1vh; background: rgba(255,255,255,0.15); margin-top: 1vh; overflow: hidden; }
+  .mz-equip .vol .jauge i { display: block; height: 100%; background: #8fc6ff; }
+  .mz-equip .vol .bts { display: -webkit-box; display: -webkit-flex; display: flex; margin-top: 1.2vh; -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between; }
+  .mz-equip .vol button { -webkit-appearance: none; border: 0; outline: none; padding: 0; color: #fff; width: 5.4vh; height: 5.4vh; border-radius: 50%; background: rgba(255,255,255,0.13); }
+  .mz-equip .vol button svg { display: block; width: 46%; height: 46%; margin: 0 auto; fill: currentColor; }
+  .mz-equip .vol button:active { background: rgba(255,255,255,0.35); }
+  .mz-equip .rubrique { margin: 0 0 1.2vh; }
+  .mz-equip .rubrique.deux { margin-top: 1.6vh; }
+  .mz-vide { font-size: 2.2vh; opacity: 0.55; font-weight: 300; margin-top: 1vh; }
+
+  /* page PSG */
+  .f { display: -webkit-box; display: -webkit-flex; display: flex; }
+  .f-table { width: 44vw; margin-right: 2.4vw; padding: 2vh 1.6vw; box-sizing: border-box; }
+  .f-table table { width: 100%; border-collapse: collapse; font-size: 1.95vh; }
+  .f-table th { font-weight: 400; opacity: 0.5; text-align: right; padding-bottom: 0.6vh; font-size: 1.6vh; }
+  .f-table th.e { text-align: left; }
+  .f-table td { padding: 0.48vh 0.4vw; text-align: right; font-weight: 300; border-top: 1px solid rgba(255,255,255,0.06); }
+  .f-table td.r { opacity: 0.55; text-align: center; width: 2.6vh; }
+  .f-table td.e { text-align: left; }
+  .f-table td.pts { font-weight: 600; }
+  .f-table tr.nous td { background: rgba(255,255,255,0.14); font-weight: 600; }
+  .f-cote { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; }
+  .f-cote .carte { padding: 2vh 1.6vw; margin-bottom: 1.4vh; }
+  .f-ligne { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    font-size: 2.05vh; padding: 0.75vh 0; border-top: 1px solid rgba(255,255,255,0.07); }
+  .f-ligne .d { width: 12.5vw; opacity: 0.6; font-size: 1.75vh; white-space: nowrap; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .f-ligne .m { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f-ligne .m b { font-weight: 600; }
+  .f-ligne .c { opacity: 0.5; font-size: 1.6vh; margin-left: 0.6vw; }
+  .f-ligne .res { width: 2.6vh; height: 2.6vh; line-height: 2.6vh; border-radius: 50%; text-align: center; font-size: 1.5vh; font-weight: 700;
+    color: #0b1026; margin-left: 0.8vw; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .f-ligne .res.V { background: #5fd38d; } .f-ligne .res.N { background: #c9cbd6; } .f-ligne .res.D { background: #ff7b6b; }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -373,6 +478,10 @@
 <div id="ambiance"></div>
 <div id="voile"></div>
 
+<div id="pages">
+<section class="ecran"><div class="annexe" id="page-agenda"></div></section>
+<section class="ecran"><div class="annexe" id="page-meteo"></div></section>
+<section class="ecran">
 <div class="page">
   <div class="col gauche">
     <div class="heure" id="heure">--:--</div>
@@ -466,7 +575,13 @@
   </div>
 </div>
 
-<div id="btn-maison" onclick="ouvrirMaison()"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
+</section>
+<section class="ecran"><div class="annexe" id="page-maison"></div></section>
+<section class="ecran"><div class="annexe" id="page-foot"></div></section>
+</div>
+<div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i></div>
+
+<div id="btn-maison" onclick="allerA(3)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
 <div id="maison" onclick="toucheMaison()">
   <div class="entete">
     <h1>Lumières &amp; volets</h1>
@@ -887,15 +1002,18 @@ function dateYMD(s) { return new Date(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.s
 var JR = 1; // dans les tableaux "daily", l'indice 0 est la veille, 1 aujourd'hui
 var etatJour = { hier: 0, aujourdhui: 0 };
 
+var etatMeteo = null;
 function chargerMeteo() {
-  if (location.hash === "#demo") { afficherMeteo(donneesDemo()); return; }
+  if (location.hash === "#demo") { etatMeteo = donneesDemo(); afficherMeteo(etatMeteo); return; }
   var url = "https://api.open-meteo.com/v1/forecast" +
     "?latitude=" + CONFIG.latitude + "&longitude=" + CONFIG.longitude +
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
     "&minutely_15=precipitation&forecast_minutely_15=9" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,wind_gusts_10m_max" +
-    "&past_days=1&timezone=Europe%2FParis&forecast_days=" + (CONFIG.joursPrevision + 1);
+    "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,is_day" +
+    "&past_days=1&timezone=Europe%2FParis&forecast_days=" + Math.max(8, CONFIG.joursPrevision + 1);
   chargerJSON(url, function (m) {
+    etatMeteo = m;
     afficherMeteo(m);
     setTimeout(chargerMeteo, CONFIG.rafraichirMinutes * 60000);
   }, erreurMeteo);
@@ -1054,6 +1172,8 @@ function chargerFoot() {
     futurs.sort(function (x, y) { return x.date - y.date; });
     res.dernier = passes[0] || null;
     res.prochain = futurs[0] || null;
+    res.passes = passes.slice(0, 6);
+    res.avenir = futurs.slice(0, 6);
     res.forme = passes.slice(0, 5).reverse();
     etatFoot = res;
     afficherFoot();
@@ -1071,10 +1191,15 @@ function chargerFoot() {
   chargerJSON("https://site.api.espn.com/apis/v2/sports/soccer/fra.1/standings", function (a) {
     try {
       var en = a.children[0].standings.entries;
-      for (var i = 0; i < en.length; i++) if (String(en[i].team.id) === String(id)) {
+      res.table = [];
+      for (var i = 0; i < en.length; i++) {
         var st = {}; for (var j = 0; j < en[i].stats.length; j++) st[en[i].stats[j].name] = en[i].stats[j].value;
-        res.classement = { rang: st.rank, points: st.points, joues: st.gamesPlayed };
+        var nous = String(en[i].team.id) === String(id);
+        res.table.push({ rang: st.rank, nom: en[i].team.shortDisplayName || en[i].team.displayName, j: st.gamesPlayed, pts: st.points,
+                         diff: st.pointDifferential, g: st.wins, n: st.ties, p: st.losses, nous: nous });
+        if (nous) res.classement = { rang: st.rank, points: st.points, joues: st.gamesPlayed };
       }
+      res.table.sort(function (x, y) { return x.rang - y.rang; });
     } catch (e) {}
     fini();
   }, fini);
@@ -1361,7 +1486,7 @@ function tourner() {
 /* ---------- Données fictives pour l'aperçu (#demo) ---------- */
 function donneesDemo() {
   var t = [], d0 = new Date(), i;
-  for (i = -1; i < 4; i++) {
+  for (i = -1; i < 8; i++) {
     var x = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + i);
     t.push(x.getFullYear() + "-" + deux(x.getMonth() + 1) + "-" + deux(x.getDate()));
   }
@@ -1372,15 +1497,25 @@ function donneesDemo() {
     mt.push(z.getFullYear() + "-" + deux(z.getMonth() + 1) + "-" + deux(z.getDate()) + "T" + deux(z.getHours()) + ":" + deux(z.getMinutes()));
     mp.push(pluieDemo[i]);
   }
+  var ht = [], hT = [], hP = [], hR = [], hC = [], hV = [], hJ = [], d1 = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate());
+  for (i = 0; i < 72; i++) {
+    var hh = new Date(d1.getTime() + i * 3600000), hr = hh.getHours();
+    ht.push(hh.getFullYear() + "-" + deux(hh.getMonth() + 1) + "-" + deux(hh.getDate()) + "T" + deux(hr) + ":00");
+    hT.push(Math.round((5 + 4 * Math.sin((hr - 9) / 24 * 2 * Math.PI) - (i > 40 ? 2 : 0)) * 10) / 10);
+    var pl = i >= 17 && i <= 20 ? [0.4, 1.1, 0.8, 0.2][i - 17] : (i >= 34 && i <= 40 ? 0.5 : 0);
+    hR.push(pl); hP.push(pl ? 60 + Math.round(pl * 20) : (i > 30 && i < 44 ? 30 : 5));
+    hC.push(pl ? 61 : (hr > 9 && hr < 15 ? 2 : 3)); hV.push(12 + (i % 7) * 2); hJ.push(hr >= 8 && hr < 17 ? 1 : 0);
+  }
   return {
     current: { temperature_2m: 6.4, relative_humidity_2m: 81, apparent_temperature: 3.9, weather_code: 2, wind_speed_10m: 17 },
     minutely_15: { time: mt, precipitation: mp },
+    hourly: { time: ht, temperature_2m: hT, precipitation_probability: hP, precipitation: hR, weather_code: hC, wind_speed_10m: hV, is_day: hJ },
     daily: {
-      time: t, weather_code: [3, 2, 61, 3, 0],
-      temperature_2m_max: [9, 8, 10, 9, 7], temperature_2m_min: [3, 2, -1, 5, 0],
+      time: t, weather_code: [3, 2, 61, 3, 0, 61, 3, 2, 71],
+      temperature_2m_max: [9, 8, 10, 9, 7, 8, 6, 5, 3], temperature_2m_min: [3, 2, -1, 5, 0, 2, 1, -2, -3],
       sunrise: [t[0] + "T08:01", t[1] + "T08:03"], sunset: [t[0] + "T17:11", t[1] + "T17:09"],
-      precipitation_probability_max: [20, 10, 80, 30, 5],
-      wind_gusts_10m_max: [30, 35, 40, 30, 20]
+      precipitation_probability_max: [20, 10, 80, 30, 5, 70, 40, 10, 60],
+      wind_gusts_10m_max: [30, 35, 40, 30, 20, 45, 30, 25, 20]
     }
   };
 }
@@ -1391,6 +1526,21 @@ function footDemo() {
                       { nom: "Torres", min: "85'", nous: true }, { nom: "Abdi", min: "90+5'", nous: false }] },
     prochain: { id: "2", compet: "uefa.champions", date: new Date(2026, 10, 25, 21, 0), termine: false, dom: "Paris Saint-Germain", ext: "AS Roma", nousDom: true },
     classement: { rang: 1, points: 26, joues: 11 },
+    table: (function () {
+      var n = ["PSG", "Paris FC", "Lille", "Marseille", "Monaco", "Lyon", "Lens", "Strasbourg", "Nice", "Rennes", "Brest", "Toulouse", "Nantes", "Auxerre", "Angers", "Le Havre", "Lorient", "Troyes"], t = [];
+      for (var i = 0; i < n.length; i++) t.push({ rang: i + 1, nom: n[i], j: 11, pts: 26 - Math.round(i * 1.4), diff: 13 - i * 2, g: 8 - Math.floor(i / 3), n: 2, p: Math.floor(i / 2), nous: i === 0 });
+      return t;
+    })(),
+    passes: [{ compet: "fra.1", date: new Date(2026, 10, 21, 17, 15), dom: "Nice", ext: "Paris Saint-Germain", nousDom: false, sd: 2, se: 3 },
+             { compet: "fra.1", date: new Date(2026, 10, 8, 21, 0), dom: "Paris Saint-Germain", ext: "Lyon", nousDom: true, sd: 1, se: 1 },
+             { compet: "uefa.champions", date: new Date(2026, 10, 4, 21, 0), dom: "Bayern Munich", ext: "Paris Saint-Germain", nousDom: false, sd: 0, se: 2 },
+             { compet: "fra.1", date: new Date(2026, 10, 1, 17, 0), dom: "Paris Saint-Germain", ext: "Lens", nousDom: true, sd: 3, se: 0 },
+             { compet: "fra.1", date: new Date(2026, 9, 25, 21, 0), dom: "Marseille", ext: "Paris Saint-Germain", nousDom: false, sd: 1, se: 2 }],
+    avenir: [{ compet: "uefa.champions", date: new Date(2026, 10, 25, 21, 0), dom: "Paris Saint-Germain", ext: "AS Roma", nousDom: true },
+             { compet: "fra.1", date: new Date(2026, 10, 29, 20, 45), dom: "Paris Saint-Germain", ext: "Lorient", nousDom: true },
+             { compet: "fra.1", date: new Date(2026, 11, 5, 21, 0), dom: "Monaco", ext: "Paris Saint-Germain", nousDom: false },
+             { compet: "uefa.champions", date: new Date(2026, 11, 8, 21, 0), dom: "Aston Villa", ext: "Paris Saint-Germain", nousDom: false },
+             { compet: "fra.1", date: new Date(2026, 11, 13, 21, 0), dom: "Paris Saint-Germain", ext: "Brest", nousDom: true }],
     forme: [{ nousDom: true, sd: 2, se: 0 }, { nousDom: false, sd: 1, se: 5 }, { nousDom: false, sd: 0, se: 6 }, { nousDom: true, sd: 1, se: 1 }, { nousDom: false, sd: 2, se: 3 }]
   };
 }
@@ -1627,9 +1777,9 @@ function chargerMaison() {
   var u = urlSonos();
   if (!u) return;
   chargerJSON(u + "/maison?t=" + new Date().getTime(), function (d) {
-    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert ? 3000 : 20000);
+    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert || pageActuelle === 3 ? 3000 : 20000);
     maisonAccueil = d.accueil || [];
-    if (new Date().getTime() - maisonOccupe > 2500) { maisonEq = d.equipements || []; afficherMaison(); }
+    if (new Date().getTime() - maisonOccupe > 2500) { maisonEq = d.equipements || []; afficherMaison(); if (pageActuelle === 3) rendrePage(); }
   }, function () { maisonMinuteur = setTimeout(chargerMaison, 5 * 60000); });
 }
 function choisis() {
@@ -1689,7 +1839,7 @@ function majLumieresAccueil() {
 }
 function debutAppui() {
   appuiLongFait = false; clearTimeout(appuiLong);
-  appuiLong = setTimeout(function () { appuiLongFait = true; ouvrirMaison(); }, 650);   // appui long → panneau complet
+  appuiLong = setTimeout(function () { appuiLongFait = true; allerA(3); }, 650);   // appui long → panneau complet
 }
 function finAppui() { clearTimeout(appuiLong); }
 function toucheLumiere(id) {
@@ -1759,6 +1909,197 @@ setInterval(alignerColonnes, 2000);
 var alignMinuteur = null;
 function demanderAlignement() { clearTimeout(alignMinuteur); alignMinuteur = setTimeout(alignerColonnes, 30); }
 
+/* ---------- Pages en glissant : Agenda · Météo · ACCUEIL · Maison · PSG ----------
+   Glisser du doigt (ou de la souris, ou flèches du clavier). Retour à l'accueil après 2 min sans toucher. */
+var PAGE_ACCUEIL = 2, pageActuelle = 2, dernierContact = new Date().getTime(), glisse = null;
+var RENDUS_PAGES = [rendreAgenda, rendreMeteo, null, rendreMaisonPage, rendreFoot];
+function allerA(n, sansAnim) {
+  n = Math.max(0, Math.min(4, n));
+  var p = el("pages");
+  p.className = sansAnim ? "" : "anim";
+  pageActuelle = n;
+  var x = "translate3d(" + (-n * 20) + "%,0,0)";
+  p.style.webkitTransform = x; p.style.transform = x;
+  var pts = el("points").children;
+  for (var i = 0; i < pts.length; i++) pts[i].className = i === n ? "actif" : "";
+  el("btn-maison").style.display = n === PAGE_ACCUEIL ? "" : "none";
+  dernierContact = new Date().getTime();
+  rendrePage();
+  if (n === 3) chargerMaison();
+}
+function rendrePage() {
+  var f = RENDUS_PAGES[pageActuelle];
+  if (!f) return;
+  var anim = CONFIG.animerIcones;
+  CONFIG.animerIcones = false;          // icônes fixes sur les pages annexes : plus léger pour l'iPad
+  try { f(); } catch (e) {}
+  CONFIG.animerIcones = anim;
+}
+setInterval(function () {
+  if (pageActuelle !== PAGE_ACCUEIL && new Date().getTime() - dernierContact > 120000) allerA(PAGE_ACCUEIL);
+  else if (pageActuelle !== PAGE_ACCUEIL) rendrePage();
+}, 15000);
+function debutGlisse(x, y) { glisse = { x: x, y: y, dx: 0, actif: false }; dernierContact = new Date().getTime(); }
+function suiteGlisse(x, y, ev) {
+  if (!glisse) return;
+  var dx = x - glisse.x, dy = y - glisse.y;
+  if (!glisse.actif && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) { glisse.actif = true; clearTimeout(appuiLong); }
+  if (!glisse.actif) return;
+  if (ev && ev.preventDefault) ev.preventDefault();
+  glisse.dx = dx;
+  var largeur = window.innerWidth, base = -pageActuelle * largeur;
+  if ((pageActuelle === 0 && dx > 0) || (pageActuelle === 4 && dx < 0)) dx = dx / 3;   // résistance aux bords
+  var p = el("pages"), t = "translate3d(" + (base + dx) + "px,0,0)";
+  p.className = ""; p.style.webkitTransform = t; p.style.transform = t;
+}
+function finGlisse() {
+  if (!glisse) return;
+  var g = glisse; glisse = null;
+  if (!g.actif) return;
+  var seuil = window.innerWidth * 0.12;
+  allerA(g.dx < -seuil ? pageActuelle + 1 : g.dx > seuil ? pageActuelle - 1 : pageActuelle);
+}
+document.addEventListener("touchstart", function (e) { var t = e.touches[0]; debutGlisse(t.clientX, t.clientY); }, false);
+document.addEventListener("touchmove", function (e) { var t = e.touches[0]; suiteGlisse(t.clientX, t.clientY, e); }, { passive: false });
+document.addEventListener("touchend", function () { finGlisse(); }, false);
+document.addEventListener("mousedown", function (e) { debutGlisse(e.clientX, e.clientY); }, false);
+document.addEventListener("mousemove", function (e) { if (glisse) suiteGlisse(e.clientX, e.clientY, e); }, false);
+document.addEventListener("mouseup", function () { finGlisse(); }, false);
+document.addEventListener("click", function (e) {   // un glissement ne doit pas déclencher de bouton
+  if (glisseVientDeFinir) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+var glisseVientDeFinir = false;
+(function () {
+  var fin = finGlisse;
+  finGlisse = function () { var a = glisse && glisse.actif; fin(); if (a) { glisseVientDeFinir = true; setTimeout(function () { glisseVientDeFinir = false; }, 350); } };
+})();
+document.addEventListener("keydown", function (e) {
+  if (e.keyCode === 37) allerA(pageActuelle - 1);
+  if (e.keyCode === 39) allerA(pageActuelle + 1);
+});
+window.addEventListener("resize", function () { allerA(pageActuelle, true); });
+
+/* --- page Météo --- */
+function rendreMeteo() {
+  var m = etatMeteo, z = el("page-meteo");
+  if (!m || !m.hourly) { z.innerHTML = "<h2>Météo</h2>"; return; }
+  var h = m.hourly, now = new Date(), cle = now.getFullYear() + "-" + deux(now.getMonth() + 1) + "-" + deux(now.getDate()) + "T" + deux(now.getHours()) + ":00";
+  var i0 = 0;
+  for (var i = 0; i < h.time.length; i++) if (h.time[i] >= cle) { i0 = i; break; }
+  var N = 25, T = [], P = [], R = [], k;
+  for (k = 0; k < N && i0 + k < h.time.length; k++) { T.push(h.temperature_2m[i0 + k]); P.push(h.precipitation_probability ? h.precipitation_probability[i0 + k] : 0); R.push(h.precipitation[i0 + k] || 0); }
+  N = T.length;
+  var tmin = Math.min.apply(null, T), tmax = Math.max.apply(null, T);
+  if (tmax - tmin < 4) { tmin -= 2; tmax += 2; }
+  var W = 1000, H = 240, gx = function (j) { return 20 + j * (W - 40) / (N - 1); }, gy = function (t) { return 30 + (tmax - t) / (tmax - tmin) * 120; };
+  var ligne = "", aire = "M" + gx(0) + " " + gy(T[0]);
+  for (k = 0; k < N; k++) ligne += (k ? " L" : "M") + gx(k).toFixed(1) + " " + gy(T[k]).toFixed(1);
+  aire = ligne + " L" + gx(N - 1) + " 165 L" + gx(0) + " 165 Z";
+  var barres = "";
+  for (k = 0; k < N; k++) {
+    var hb = Math.min(60, R[k] * 30 + (P[k] >= 30 ? 4 : 0));
+    if (hb > 0) barres += '<rect x="' + (gx(k) - 9).toFixed(1) + '" y="' + (235 - hb) + '" width="18" height="' + hb + '" rx="3" fill="#7fb8ff" opacity="' + (0.35 + Math.min(0.6, P[k] / 150)) + '"/>';
+  }
+  var reperes = "";
+  for (k = 0; k < N; k += 3) reperes += '<circle cx="' + gx(k).toFixed(1) + '" cy="' + gy(T[k]).toFixed(1) + '" r="5" fill="#fff"/>';
+  var svg = '<svg class="m-graph" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+    '<defs><linearGradient id="gT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd36b" stop-opacity="0.35"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></linearGradient></defs>' +
+    '<line x1="0" y1="235" x2="' + W + '" y2="235" stroke="rgba(255,255,255,0.15)"/>' + barres +
+    '<path d="' + aire + '" fill="url(#gT)"/><path d="' + ligne + '" fill="none" stroke="#ffd36b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>' + reperes + "</svg>";
+  var haut = "", bas = "";
+  for (k = 0; k < N; k += 3) {
+    var hh = h.time[i0 + k].substr(11, 2), jour = h.is_day ? h.is_day[i0 + k] : 1, inf = meteoInfo(h.weather_code[i0 + k]);
+    var pos = ' style="left:' + (gx(k) / W * 100).toFixed(2) + '%"';
+    haut += "<div" + pos + '><div class="t">' + Math.round(T[k]) + "°</div>" + svgIcone(jour ? inf[1] : inf[2]) + "</div>";
+    bas += "<div" + pos + '><div class="h">' + (k === 0 ? "Maint." : hh + "h") + '</div><div class="v">' + (P[k] >= 20 ? '<span style="color:#a9d4ff">' + P[k] + " %</span> · " : "") + Math.round(h.wind_speed_10m[i0 + k]) + " km/h</div></div>";
+  }
+  var d = m.daily, o = 1, jours = "";
+  for (k = o; k < d.time.length && k < o + 7; k++) {
+    var dj = jourISO(d.time[k]), inf2 = meteoInfo(d.weather_code[k]), pp = d.precipitation_probability_max ? d.precipitation_probability_max[k] : null;
+    jours += '<div class="carte"><div class="n">' + (k === o ? "Aujourd'hui" : k === o + 1 ? "Demain" : JOURS[dj.getDay()].charAt(0).toUpperCase() + JOURS[dj.getDay()].substr(1, 2) + ". " + dj.getDate()) + "</div>" +
+      svgIcone(inf2[1]) + '<div><span class="mx">' + Math.round(d.temperature_2m_max[k]) + '°</span><span class="mn">' + Math.round(d.temperature_2m_min[k]) + "°</span></div>" +
+      '<div class="p">' + (pp >= 20 ? "pluie " + pp + " %" : "") + "</div></div>";
+  }
+  z.innerHTML = "<h2>Météo<span>" + echap(CONFIG.nomLieu) + " · 24 prochaines heures</span></h2>" +
+    '<div class="m-heures">' + haut + "</div>" + svg + '<div class="m-heures bas">' + bas + "</div>" + '<div class="m-jours">' + jours + "</div>";
+}
+
+/* --- page Agenda --- */
+function rendreAgenda() {
+  var z = el("page-agenda"), now = new Date(), auj = new Date(now.getFullYear(), now.getMonth(), now.getDate()), h = "";
+  for (var j = 0; j < 8; j++) {
+    var jour = new Date(auj.getFullYear(), auj.getMonth(), auj.getDate() + j), l = [];
+    for (var i = 0; i < etatAgenda.length; i++) {
+      var e = etatAgenda[i], d = parseISO(e.debut), f = parseISO(e.fin);
+      if (d < new Date(jour.getTime() + 86400000) && f > jour) l.push({ e: e, d: d });
+    }
+    var titre = j === 0 ? "Aujourd'hui" : j === 1 ? "Demain" : JOURS[jour.getDay()] + " " + jour.getDate();
+    var c = "", max = 6;
+    for (i = 0; i < l.length && i < max; i++)
+      c += '<div class="a-evt"><b>' + (l[i].e.journee || l[i].d < jour ? "Journée" : hm(l[i].d)) + "</b>" + echap(l[i].e.titre) + "</div>";
+    if (l.length > max) c += '<div class="a-plus">+ ' + (l.length - max) + " autre" + (l.length - max > 1 ? "s" : "") + "</div>";
+    h += '<div class="carte a-jour' + (j === 0 ? " auj" : "") + '"><div class="etiquette">' + titre + "</div>" + (c || '<div class="a-vide">Rien de prévu</div>') + "</div>";
+  }
+  z.innerHTML = "<h2>Agenda<span>8 prochains jours</span></h2><div class=\"a-grille\">" + h + "</div>";
+}
+
+/* --- page Maison --- */
+function rendreMaisonPage() {
+  var z = el("page-maison"), g = sonosGroupe, mus;
+  if (g && g.titre) {
+    mus = '<div class="pochette" style="background-image:url(\'' + (g.pochette || "").replace(/'/g, "%27") + '\')">' + (g.pochette ? "" : SVG_NOTE) + "</div>" +
+      '<div class="etiquette">' + (enLecture(g) ? "En écoute" : "En pause") + " · " + echap(g.nom) + "</div>" +
+      '<div class="titre">' + echap(g.titre) + '</div><div class="artiste">' + echap(g.artiste) + "</div>" +
+      '<div class="bts"><button onclick="cmdSonos(\'prev\');setTimeout(rendrePage,300)">' + '<svg viewBox="0 0 24 24"><path d="M6 5h2.5v14H6zM20 5v14L9.5 12z"/></svg></button>' +
+      '<button class="lecture" onclick="cmdSonos(\'basculer\');setTimeout(rendrePage,300)">' + (enLecture(g) ? SVG_PAUSE : SVG_LECTURE) + "</button>" +
+      '<button onclick="cmdSonos(\'next\');setTimeout(rendrePage,300)"><svg viewBox="0 0 24 24"><path d="M15.5 5H18v14h-2.5zM4 5l10.5 7L4 19z"/></svg></button></div>' +
+      '<div class="bts vol"><button onclick="cmdSonos(\'voldown\');setTimeout(rendrePage,300)"><svg viewBox="0 0 24 24"><path d="M5 10.8h14v2.4H5z"/></svg></button><span>' +
+      (g.volume === null || g.volume === undefined ? "–" : g.volume) + '</span><button onclick="cmdSonos(\'volup\');setTimeout(rendrePage,300)"><svg viewBox="0 0 24 24"><path d="M10.8 5h2.4v5.8H19v2.4h-5.8V19h-2.4v-5.8H5v-2.4h5.8z"/></svg></button></div>';
+  } else mus = SVG_NOTE.replace("<svg ", '<svg style="width:10vh;height:10vh;opacity:0.3;margin:0 auto 2vh;display:block" ') + '<div class="rien">Aucune musique en cours</div>';
+  var l = maisonEq || [], lum = "", vol = "";
+  for (var i = 0; i < l.length; i++) {
+    var e = l[i];
+    if (e.type === "lumiere" || e.type === "prise")
+      lum += '<div class="carte eq lum' + (e.allume ? " on" : "") + '" onclick="cmdMaison(\'' + e.id + '\',\'basculer\');rendrePage()">' + SVG_AMPOULE(e.allume) +
+        '<div class="n">' + echap(e.nom) + '</div><div class="e">' + (e.allume ? (e.niveau && e.niveau < 100 ? e.niveau + " %" : "Allumée") : "Éteinte") + "</div></div>";
+    else if (e.type === "volet") {
+      var p = e.position, txt = p === undefined || p === null ? "" : p >= 98 ? "Ouvert" : p <= 2 ? "Fermé" : p + " %";
+      vol += '<div class="carte eq vol"><div class="n">' + echap(e.nom) + '</div><div class="e">' + txt + '</div><div class="jauge"><i style="width:' + (p || 0) + '%"></i></div><div class="bts">' +
+        '<button onclick="cmdMaison(\'' + e.id + '\',\'haut\');rendrePage()">' + SVG_HAUT + '</button><button onclick="cmdMaison(\'' + e.id + '\',\'stop\')">' + SVG_STOP +
+        '</button><button onclick="cmdMaison(\'' + e.id + '\',\'bas\');rendrePage()">' + SVG_BAS + "</button></div></div>";
+    }
+  }
+  var eq = (lum ? '<div class="etiquette rubrique">Lumières</div><div class="grille">' + lum + "</div>" : "") +
+           (vol ? '<div class="etiquette rubrique deux">Volets</div><div class="grille">' + vol + "</div>" : "") +
+           (!lum && !vol ? '<div class="etiquette rubrique">Lumières & volets</div><div class="mz-vide">La box Delta Dore n\'est pas encore reliée.</div>' : "");
+  z.innerHTML = '<h2>Maison</h2><div class="mz"><div class="carte mz-musique">' + mus + '</div><div class="mz-equip">' + eq + "</div></div>";
+}
+
+/* --- page PSG --- */
+function rendreFoot() {
+  var z = el("page-foot"), f = etatFoot;
+  if (!f) { z.innerHTML = "<h2>" + (CONFIG.equipe ? CONFIG.equipe.court : "Football") + "</h2>"; return; }
+  var t = "";
+  if (f.table) for (var i = 0; i < f.table.length; i++) {
+    var r = f.table[i];
+    t += '<tr' + (r.nous ? ' class="nous"' : "") + '><td class="r">' + r.rang + '</td><td class="e">' + echap(r.nom) + "</td><td>" + r.j + "</td><td>" + r.g + "</td><td>" + r.n + "</td><td>" + r.p +
+      "</td><td>" + (r.diff > 0 ? "+" : "") + r.diff + '</td><td class="pts">' + r.pts + "</td></tr>";
+  }
+  var table = t ? '<div class="carte f-table"><div class="etiquette">Classement Ligue 1</div><table><tr><th></th><th class="e"></th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>' + t + "</table></div>" : "";
+  function ligne(m, fini) {
+    var d = m.date, q = JOURS[d.getDay()].substr(0, 3) + ". " + d.getDate() + " " + MOISCOURT[d.getMonth()] + (fini ? "" : " " + hm(d));
+    var res = "";
+    if (fini) { var n2 = m.nousDom ? m.sd : m.se, e2 = m.nousDom ? m.se : m.sd, x = n2 > e2 ? "V" : n2 < e2 ? "D" : "N"; res = '<span class="res ' + x + '">' + x + "</span>"; }
+    return '<div class="f-ligne"><span class="d">' + q + '</span><span class="m">' + nomEquipe(m.dom) + (fini ? " <b>" + m.sd + " – " + m.se + "</b> " : " – ") + nomEquipe(m.ext) +
+      '<span class="c">' + COMPET_COURT[m.compet] + "</span></span>" + res + "</div>";
+  }
+  var a = "", b = "", k;
+  if (f.passes) for (k = 0; k < f.passes.length && k < 5; k++) a += ligne(f.passes[k], true);
+  if (f.avenir) for (k = 0; k < f.avenir.length && k < 5; k++) b += ligne(f.avenir[k], false);
+  z.innerHTML = "<h2>" + CONFIG.equipe.court + (f.classement ? "<span>" + (f.classement.rang === 1 ? "1er" : f.classement.rang + "e") + " de Ligue 1 · " + f.classement.points + " pts</span>" : "") + "</h2>" +
+    '<div class="f">' + table + '<div class="f-cote"><div class="carte"><div class="etiquette">Derniers résultats</div>' + a + '</div><div class="carte"><div class="etiquette">Prochains matchs</div>' + b + "</div></div></div>";
+}
+
 /* ---------- Rechargement automatique ----------
    Le relais du NAS remplace index.html quand une nouvelle version est publiée :
    la page vérifie toutes les 30 min si elle a changé et se recharge. Rechargement aussi chaque nuit à 3h. */
@@ -1799,6 +2140,7 @@ chargerMaison();
 chargerActus();
 chargerAgenda();
 alignerColonnes();
+allerA(PAGE_ACCUEIL, true);
 </script>
 </body>
 </html>
