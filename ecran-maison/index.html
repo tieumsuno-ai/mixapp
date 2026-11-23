@@ -243,6 +243,10 @@
   .infos .contenu { min-height: 10.5vh; -webkit-transition: opacity 0.45s; transition: opacity 0.45s; }
   .infos .contenu.cache { opacity: 0; }
   .infos .grand { font-size: 3.5vh; font-weight: 300; margin-top: 0.7vh; line-height: 1.2; }
+  .infos .vignette { float: right; width: 10vh; height: 10vh; border-radius: 10px; margin: 0.8vh 0 0 1.4vw;
+    background: rgba(255,255,255,0.1) center/cover no-repeat; }
+  .infos .actu .grand { font-size: 2.7vh; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .infos .actu .petit { font-size: 1.95vh; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
   .infos .petit { font-size: 2.1vh; font-weight: 300; opacity: 0.72; margin-top: 0.6vh; line-height: 1.3; }
   .tag { display: inline-block; font-size: 1.9vh; font-weight: 500; padding: 0.3vh 0.9vw;
     border-radius: 100px; margin-left: 0.8vw; vertical-align: middle; position: relative; top: -0.3vh; }
@@ -390,7 +394,7 @@ var CONFIG_DEFAUT = {
   nomLieu: "Paris", sonos: null, latitude: 48.86, longitude: 2.35,
   joursPrevision: 3, rafraichirMinutes: 15, attenuerDebut: 22, attenuerFin: 7,
   collecte: [], equipe: null, anniversaires: [], evenements: [],
-  urlInterieur: null, secondesParInfo: 8, animerIcones: true, interrupteurs: null
+  urlInterieur: null, urlActus: "actus.json", joursActus: 30, secondesParInfo: 8, animerIcones: true, interrupteurs: null
 };
 var CONFIG = {};
 (function () {
@@ -1221,6 +1225,8 @@ function construireInfos() {
   function ajoute(v) { if (v) s.push(v); }
   if (etatInterieur && etatInterieur.length) ajoute(slideInterieur());
   ajoute(slideEvenement(auj));
+  var ac = slidesActus(now);
+  for (x = 0; x < ac.length; x++) ajoute(ac[x]);
   ajoute(slideVacances(auj));
   ajoute(slideFerie(auj));
   if (etatAir) ajoute(slideAir());
@@ -1233,7 +1239,8 @@ function afficherSlide() {
   if (!SLIDES.length) return;
   var s = SLIDES[idxSlide], pts = "";
   el("infos-titre").innerHTML = s.titre;
-  el("infos-contenu").innerHTML = '<div class="grand">' + s.grand + '</div>' + (s.petit ? '<div class="petit">' + s.petit + '</div>' : "");
+  el("infos-contenu").innerHTML = (s.image ? '<div class="vignette" style="background-image:url(\'' + s.image.replace(/'/g, "%27") + '\')"></div>' : "") +
+    '<div class="' + (s.classe || "") + '"><div class="grand">' + s.grand + '</div>' + (s.petit ? '<div class="petit">' + s.petit + '</div>' : "") + "</div>";
   for (var i = 0; i < SLIDES.length; i++) pts += '<span class="pt' + (i === idxSlide ? ' on' : '') + '"></span>';
   el("infos-points").innerHTML = pts;
 }
@@ -1379,6 +1386,32 @@ document.addEventListener("touchstart", function () {}, true);   // active :acti
 setInterval(function () { if (sonosGroupe && enLecture(sonosGroupe)) majBarreSonos(); }, 1000);
 setInterval(afficherSonos, 60000);
 
+/* ---------- Actualités des mairies (actus.json, écrit par le relais du NAS) ----------
+   Les 3 plus récentes de moins de 30 jours (réglable : joursActus) rejoignent l'encadré qui défile. */
+var etatActus = [];
+function chargerActus() {
+  setTimeout(chargerActus, 30 * 60000);
+  if (location.hash === "#demo") { etatActus = actusDemo(); construireInfos(); return; }
+  if (!CONFIG.urlActus) return;
+  chargerJSON(CONFIG.urlActus + "?t=" + new Date().getTime(), function (d) { etatActus = d || []; construireInfos(); });
+}
+function slidesActus(now) {
+  var r = [], lim = now.getTime() - CONFIG.joursActus * 86400000;
+  for (var i = 0; i < etatActus.length && r.length < 3; i++) {
+    var a = etatActus[i], d = parseISO(a.date);
+    if (!d || d.getTime() < lim) continue;
+    r.push({ titre: "Actu · " + echap(a.source) + " · " + d.getDate() + " " + MOISCOURT[d.getMonth()],
+             grand: echap(a.titre), petit: echap(a.resume), image: a.image, classe: "actu" });
+  }
+  return r;
+}
+function actusDemo() {
+  return [{ source: "Chauvry", titre: "🍷🍇 À Chauvry, on se retrouve autour du Beaujolais nouveau !", date: "2026-11-06T11:55",
+            resume: "Rendez-vous jeudi 19 novembre à 19h30 à la mairie pour fêter ensemble l'arrivée du Beaujolais nouveau, offert par la municipalité.", image: "" },
+          { source: "Béthemont", titre: "Fête du Beaujolais – Samedi 28 novembre", date: "2026-10-27T17:36",
+            resume: "Dans la cour de l'école. Réservation obligatoire, 12 € par personne.", image: "" }];
+}
+
 /* ---------- Lumières & volets (Delta Dore, via le relais du NAS) ----------
    Bouton en haut à droite (avec le nombre de lumières allumées) → panneau plein écran.
    CONFIG.interrupteurs : liste des noms à afficher, dans l'ordre voulu (null = tous). */
@@ -1511,6 +1544,7 @@ chargerFoot();
 chargerInterieur();
 chargerSonos();
 chargerMaison();
+chargerActus();
 </script>
 </body>
 </html>

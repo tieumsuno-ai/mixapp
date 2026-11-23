@@ -2,7 +2,8 @@
 # Relais de l'écran maison — tourne en continu sur le NAS (Container Station).
 # Toutes les 15 minutes :
 #   1. met à jour la page (index.html) dans le dossier Web si une nouvelle version est publiée ;
-#   2. si les codes Netatmo sont fournis, relève la température de chaque pièce
+#   2. relève les dernières actualités des sites des mairies (ACTUS) et les écrit dans actus.json ;
+#   3. si les codes Netatmo sont fournis, relève la température de chaque pièce
 #      et l'écrit dans interieur.json, que la page affiche.
 # En parallèle, une petite API (port 8099) permet à la page de piloter les enceintes Sonos
 # du réseau local (lecture, pause, titre suivant/précédent, volume du groupe),
@@ -10,7 +11,7 @@
 # Les codes Netatmo arrivent par variables d'environnement au premier démarrage ;
 # le jeton de renouvellement (il change à chaque fois) est ensuite gardé dans /config/jeton.json.
 # config.js (réglages personnels) n'est jamais touché.
-import base64, datetime, hashlib, html, ipaddress, json, os, re, socket, ssl, struct, threading, time, urllib.error, urllib.parse, urllib.request
+import base64, datetime, email.utils, hashlib, html, unicodedata, ipaddress, json, os, re, socket, ssl, struct, threading, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -53,6 +54,55 @@ def maj_page():
             log("Page mise à jour (%d octets)" % len(nouv))
     except Exception as e:
         log("Mise à jour de la page impossible :", repr(e))
+
+
+# ---------- 2 bis. Actualités des mairies (flux RSS des sites officiels) ----------
+ACTUS = [x.strip() for x in os.environ.get("ACTUS", "").split(",") if x.strip()]   # « Nom=https://site/feed/ »
+
+
+def texte_propre(t):
+    t = re.sub(r"<[^>]+>", " ", html.unescape(t or ""))
+    t = unicodedata.normalize("NFKC", t).replace("...", "…")   # 𝗔𝗕𝗖 (gras « Facebook ») → ABC
+    t = re.sub(r"\s*\[(…|&hellip;|\.\.\.)\]\s*$", "…", t)
+    t = re.sub(r"(Lire la suite|Continue reading|The post .*? appeared first on).*$", "", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def maj_actus():
+    tout = []
+    for source in ACTUS:
+        nom, _, url = source.partition("=")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (ecran-maison)"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                xml = r.read().decode("utf-8", "replace")
+            for item in re.findall(r"<item>(.*?)</item>", xml, re.S)[:6]:
+                def c(nom_champ):
+                    m = re.search(r"<%s[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</%s>" % (nom_champ, nom_champ), item, re.S)
+                    return m.group(1) if m else ""
+                try:
+                    date = email.utils.parsedate_to_datetime(c("pubDate")).astimezone().strftime("%Y-%m-%dT%H:%M")
+                except Exception:
+                    continue
+                contenu = c("content:encoded")
+                img = re.search(r'<img[^>]+src="([^"]+)"', html.unescape(contenu))
+                resume = texte_propre(c("description")) or texte_propre(contenu)
+                titre = texte_propre(c("title"))
+                lettres = [x for x in titre if x.isalpha()]
+                if lettres and sum(x.isupper() for x in lettres) > 0.7 * len(lettres):   # titre tout en capitales
+                    titre = titre.lower()
+                    titre = re.sub(r"\b" + re.escape(nom.strip().lower()) + r"\b", nom.strip(), titre)
+                    i = next((k for k, x in enumerate(titre) if x.isalpha()), 0)
+                    titre = titre[:i] + titre[i:i + 1].upper() + titre[i + 1:]
+                resume = re.sub(r"[.…]\s*…$", ".", resume)
+                tout.append({"source": nom.strip(), "titre": titre, "date": date,
+                             "resume": resume[:220] + ("…" if len(resume) > 220 else ""),
+                             "image": img.group(1) if img else "", "lien": texte_propre(c("link"))})
+        except Exception as e:
+            log("Actus %s indisponibles :" % nom, repr(e))
+    if tout:
+        tout.sort(key=lambda x: x["date"], reverse=True)
+        ecrire("actus.json", json.dumps(tout, ensure_ascii=False).encode("utf-8"))
 
 
 # ---------- 2. Netatmo ----------
@@ -659,6 +709,8 @@ if SONOS or TYDOM:
         log("API Sonos impossible :", repr(e))
 while True:
     maj_page()
+    if ACTUS:
+        maj_actus()
     if NETATMO:
         maj_netatmo()
     time.sleep(INTERVALLE)
