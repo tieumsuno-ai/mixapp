@@ -241,8 +241,8 @@
 
   /* ---------- Ambiance animée (légère pour iOS 12 : transform + opacity seulement) ---------- */
   #ambiance { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; }
-  .goutte { position: absolute; top: -12vh; width: 1px; height: 7vh; opacity: 0.35;
-    background: -webkit-linear-gradient(top, rgba(190,220,255,0), rgba(190,220,255,0.9)); background: linear-gradient(to bottom, rgba(190,220,255,0), rgba(190,220,255,0.9));
+  .goutte { position: absolute; top: -12vh; width: 2px; height: 9vh; opacity: 0.75; border-radius: 2px;
+    background: -webkit-linear-gradient(top, rgba(200,228,255,0), rgba(200,228,255,1)); background: linear-gradient(to bottom, rgba(200,228,255,0), rgba(200,228,255,1));
     -webkit-animation: chute linear infinite; animation: chute linear infinite; }
   .flocon { position: absolute; top: -3vh; -webkit-animation: chute linear infinite; animation: chute linear infinite; }
   .flocon i { display: block; width: 0.8vh; height: 0.8vh; border-radius: 50%; background: #fff; opacity: 0.75;
@@ -278,14 +278,6 @@
     11% { -webkit-transform: rotate(-8deg); } 15% { -webkit-transform: rotate(5deg); } }
   @keyframes secoue { 0%, 18%, 100% { transform: rotate(0); } 3% { transform: rotate(-14deg); } 7% { transform: rotate(12deg); }
     11% { transform: rotate(-8deg); } 15% { transform: rotate(5deg); } }
-  /* confettis d'anniversaire */
-  #confettis { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; z-index: 20; }
-  .confetti { position: absolute; top: -4vh; width: 1.1vh; height: 1.8vh; border-radius: 2px;
-    -webkit-animation: tombe ease-in forwards; animation: tombe ease-in forwards; }
-  @-webkit-keyframes tombe { 0% { -webkit-transform: translate3d(0,0,0) rotate(0); opacity: 1; } 85% { opacity: 1; }
-    100% { -webkit-transform: translate3d(4vw,110vh,0) rotate(720deg); opacity: 0; } }
-  @keyframes tombe { 0% { transform: translate3d(0,0,0) rotate(0); opacity: 1; } 85% { opacity: 1; }
-    100% { transform: translate3d(4vw,110vh,0) rotate(720deg); opacity: 0; } }
 
   /* Météo */
   .actuel {
@@ -377,7 +369,6 @@
 <div id="ciel"></div>
 <div id="etoiles"></div>
 <div id="ambiance"></div>
-<div id="confettis"></div>
 <div id="voile"></div>
 
 <div class="page">
@@ -840,7 +831,6 @@ function majHorloge() {
   var soir = h >= 17 && h <= 23;
   if (soir !== (document.body.className.indexOf("soiree") >= 0))
     document.body.className = document.body.className.replace(/\s*soiree/g, "") + (soir ? " soiree" : "");
-  if (d.getMinutes() === 0 && h >= 8 && h <= 21 && annivDuJour(d).length) confettis();
 
   if (d.getDate() !== dernierJour) {
     dernierJour = d.getDate();
@@ -1539,7 +1529,7 @@ function majAmbiance(code, temp, nuit) {
   ambianceCle = cle;
   clearTimeout(filanteMinuteur);
   var h = "", i;
-  if (pluie) for (i = 0; i < 34; i++)
+  if (pluie) for (i = 0; i < 55; i++)
     h += '<div class="goutte" style="left:' + hasard(0, 104).toFixed(1) + '%;-webkit-animation-duration:' + hasard(0.9, 1.4).toFixed(2) +
       's;animation-duration:' + hasard(0.9, 1.4).toFixed(2) + 's;-webkit-animation-delay:-' + hasard(0, 1.4).toFixed(2) + 's;animation-delay:-' + hasard(0, 1.4).toFixed(2) + 's"></div>';
   if (neige) for (i = 0; i < 28; i++) {
@@ -1568,17 +1558,6 @@ function etoileFilante() {
   f.style.left = hasard(5, 60).toFixed(0) + "%"; f.style.top = hasard(4, 35).toFixed(0) + "%";
   setTimeout(function () { f.className = "filante go"; }, 50);
   filanteMinuteur = setTimeout(etoileFilante, hasard(60000, 150000));
-}
-function confettis() {
-  if (!CONFIG.animerIcones) return;
-  var couleurs = ["#ffd36b", "#ff7b6b", "#5fd38d", "#8fc6ff", "#e59cff", "#ffffff"], h = "";
-  for (var i = 0; i < 70; i++) {
-    var t = hasard(3.2, 5.5).toFixed(2), r = hasard(0, 1.6).toFixed(2);
-    h += '<div class="confetti" style="left:' + hasard(0, 100).toFixed(1) + '%;background:' + couleurs[i % couleurs.length] +
-      ';-webkit-animation-duration:' + t + 's;animation-duration:' + t + 's;-webkit-animation-delay:' + r + 's;animation-delay:' + r + 's"></div>';
-  }
-  el("confettis").innerHTML = h;
-  setTimeout(function () { el("confettis").innerHTML = ""; }, 8000);
 }
 
 /* ---------- Agenda Google (agenda.json, écrit par le relais du NAS) ----------
