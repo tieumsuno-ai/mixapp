@@ -241,7 +241,7 @@
 
   /* ---------- Ambiance animée (légère pour iOS 12 : transform + opacity seulement) ---------- */
   #ambiance { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; }
-  .goutte { position: absolute; top: -12vh; width: 2px; height: 9vh; opacity: 0.75; border-radius: 2px;
+  .goutte { position: absolute; top: -12vh; width: 1.5px; height: 8vh; opacity: 0.5; border-radius: 2px;
     background: -webkit-linear-gradient(top, rgba(200,228,255,0), rgba(200,228,255,1)); background: linear-gradient(to bottom, rgba(200,228,255,0), rgba(200,228,255,1));
     -webkit-animation: chute linear infinite; animation: chute linear infinite; }
   .flocon { position: absolute; top: -3vh; -webkit-animation: chute linear infinite; animation: chute linear infinite; }
@@ -1529,9 +1529,9 @@ function majAmbiance(code, temp, nuit) {
   ambianceCle = cle;
   clearTimeout(filanteMinuteur);
   var h = "", i;
-  if (pluie) for (i = 0; i < 55; i++)
-    h += '<div class="goutte" style="left:' + hasard(0, 104).toFixed(1) + '%;-webkit-animation-duration:' + hasard(0.9, 1.4).toFixed(2) +
-      's;animation-duration:' + hasard(0.9, 1.4).toFixed(2) + 's;-webkit-animation-delay:-' + hasard(0, 1.4).toFixed(2) + 's;animation-delay:-' + hasard(0, 1.4).toFixed(2) + 's"></div>';
+  if (pluie) for (i = 0; i < 40; i++)
+    h += '<div class="goutte" style="left:' + hasard(0, 104).toFixed(1) + '%;-webkit-animation-duration:' + hasard(1.8, 2.6).toFixed(2) +
+      's;animation-duration:' + hasard(1.8, 2.6).toFixed(2) + 's;-webkit-animation-delay:-' + hasard(0, 2.6).toFixed(2) + 's;animation-delay:-' + hasard(0, 2.6).toFixed(2) + 's"></div>';
   if (neige) for (i = 0; i < 28; i++) {
     var t = hasard(9, 16).toFixed(1), r = hasard(0, 16).toFixed(1);
     h += '<div class="flocon" style="left:' + hasard(0, 104).toFixed(1) + '%;-webkit-animation-duration:' + t + 's;animation-duration:' + t +
