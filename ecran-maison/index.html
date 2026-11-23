@@ -239,6 +239,54 @@
   .lumieres .bt .e { font-size: 1.7vh; font-weight: 300; opacity: 0.65; }
   .lumieres .bt.on { background: rgba(255,211,107,0.22); border-color: rgba(255,211,107,0.55); }
 
+  /* ---------- Ambiance animée (légère pour iOS 12 : transform + opacity seulement) ---------- */
+  #ambiance { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; }
+  .goutte { position: absolute; top: -12vh; width: 1px; height: 7vh; opacity: 0.35;
+    background: -webkit-linear-gradient(top, rgba(190,220,255,0), rgba(190,220,255,0.9)); background: linear-gradient(to bottom, rgba(190,220,255,0), rgba(190,220,255,0.9));
+    -webkit-animation: chute linear infinite; animation: chute linear infinite; }
+  .flocon { position: absolute; top: -3vh; -webkit-animation: chute linear infinite; animation: chute linear infinite; }
+  .flocon i { display: block; width: 0.8vh; height: 0.8vh; border-radius: 50%; background: #fff; opacity: 0.75;
+    -webkit-animation: balance 3s ease-in-out infinite alternate; animation: balance 3s ease-in-out infinite alternate; }
+  @-webkit-keyframes chute { from { -webkit-transform: translate3d(0,0,0); } to { -webkit-transform: translate3d(-3vw,118vh,0); } }
+  @keyframes chute { from { transform: translate3d(0,0,0); } to { transform: translate3d(-3vw,118vh,0); } }
+  @-webkit-keyframes balance { from { -webkit-transform: translateX(-1.2vw); } to { -webkit-transform: translateX(1.2vw); } }
+  @keyframes balance { from { transform: translateX(-1.2vw); } to { transform: translateX(1.2vw); } }
+  .nuage { position: absolute; left: 0; width: 46vw; height: 16vh; border-radius: 50%; background: rgba(255,255,255,0.055);
+    box-shadow: 9vw -3vh 0 1vh rgba(255,255,255,0.04), -7vw 1vh 0 -1vh rgba(255,255,255,0.04);
+    -webkit-animation: derive linear infinite; animation: derive linear infinite; }
+  @-webkit-keyframes derive { from { -webkit-transform: translate3d(-60vw,0,0); } to { -webkit-transform: translate3d(120vw,0,0); } }
+  @keyframes derive { from { transform: translate3d(-60vw,0,0); } to { transform: translate3d(120vw,0,0); } }
+  .filante { position: absolute; width: 14vw; height: 2px; border-radius: 2px; opacity: 0;
+    background: -webkit-linear-gradient(left, rgba(255,255,255,0), #fff); background: linear-gradient(to right, rgba(255,255,255,0), #fff);
+    -webkit-transform: rotate(-24deg); transform: rotate(-24deg); }
+  .filante.go { -webkit-animation: file 1.3s ease-out; animation: file 1.3s ease-out; }
+  @-webkit-keyframes file { 0% { opacity: 0; -webkit-transform: rotate(-24deg) translateX(0); } 15% { opacity: 1; }
+    100% { opacity: 0; -webkit-transform: rotate(-24deg) translateX(30vw); } }
+  @keyframes file { 0% { opacity: 0; transform: rotate(-24deg) translateX(0); } 15% { opacity: 1; }
+    100% { opacity: 0; transform: rotate(-24deg) translateX(30vw); } }
+  .givre { position: absolute; width: 34vh; height: 34vh; opacity: 0.55;
+    background: -webkit-radial-gradient(center, circle, rgba(225,240,255,0.55) 0%, rgba(225,240,255,0.18) 35%, rgba(225,240,255,0) 70%);
+    background: radial-gradient(circle at center, rgba(225,240,255,0.55) 0%, rgba(225,240,255,0.18) 35%, rgba(225,240,255,0) 70%);
+    -webkit-animation: respire 7s ease-in-out infinite alternate; animation: respire 7s ease-in-out infinite alternate; }
+  .givre svg { position: absolute; width: 40%; height: 40%; left: 30%; top: 30%; opacity: 0.6; }
+  @-webkit-keyframes respire { from { opacity: 0.35; } to { opacity: 0.65; } }
+  @keyframes respire { from { opacity: 0.35; } to { opacity: 0.65; } }
+  /* poubelle à sortir : petite secousse toutes les 4 s, le soir */
+  body.soiree .crow.demain .bac svg { -webkit-transform-origin: 50% 90%; transform-origin: 50% 90%;
+    -webkit-animation: secoue 4s ease-in-out infinite; animation: secoue 4s ease-in-out infinite; }
+  @-webkit-keyframes secoue { 0%, 18%, 100% { -webkit-transform: rotate(0); } 3% { -webkit-transform: rotate(-14deg); } 7% { -webkit-transform: rotate(12deg); }
+    11% { -webkit-transform: rotate(-8deg); } 15% { -webkit-transform: rotate(5deg); } }
+  @keyframes secoue { 0%, 18%, 100% { transform: rotate(0); } 3% { transform: rotate(-14deg); } 7% { transform: rotate(12deg); }
+    11% { transform: rotate(-8deg); } 15% { transform: rotate(5deg); } }
+  /* confettis d'anniversaire */
+  #confettis { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; z-index: 20; }
+  .confetti { position: absolute; top: -4vh; width: 1.1vh; height: 1.8vh; border-radius: 2px;
+    -webkit-animation: tombe ease-in forwards; animation: tombe ease-in forwards; }
+  @-webkit-keyframes tombe { 0% { -webkit-transform: translate3d(0,0,0) rotate(0); opacity: 1; } 85% { opacity: 1; }
+    100% { -webkit-transform: translate3d(4vw,110vh,0) rotate(720deg); opacity: 0; } }
+  @keyframes tombe { 0% { transform: translate3d(0,0,0) rotate(0); opacity: 1; } 85% { opacity: 1; }
+    100% { transform: translate3d(4vw,110vh,0) rotate(720deg); opacity: 0; } }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -328,6 +376,8 @@
 <body>
 <div id="ciel"></div>
 <div id="etoiles"></div>
+<div id="ambiance"></div>
+<div id="confettis"></div>
 <div id="voile"></div>
 
 <div class="page">
@@ -746,7 +796,7 @@ function majCollecte(now) {
     var quand = e.dans === 0 ? "Aujourd'hui" : e.dans === 1 ? "Demain"
               : JOURS[d.getDay()].charAt(0).toUpperCase() + JOURS[d.getDay()].substr(1) + " " + d.getDate() +
                 (d.getMonth() !== now.getMonth() ? " " + MOISCOURT[d.getMonth()] : "");
-    h += '<div class="crow' + (e.dans <= 1 ? ' first' : '') + '">' +
+    h += '<div class="crow' + (e.dans <= 1 ? ' first' : '') + (e.dans === 1 ? ' demain' : '') + '">' +
          '<span class="bac">' + svgBac(fl.couleur) + '<span>' + fl.court + '</span></span>' +
          '<span class="cquand">' + quand + (e.dans === 1 ? '<span class="soir"> · à sortir ce soir</span>' : '') + '</span></div>';
   }
@@ -787,6 +837,10 @@ function majHorloge() {
 
   majCiel(m);
   majEphemeride(d);
+  var soir = h >= 17 && h <= 23;
+  if (soir !== (document.body.className.indexOf("soiree") >= 0))
+    document.body.className = document.body.className.replace(/\s*soiree/g, "") + (soir ? " soiree" : "");
+  if (d.getMinutes() === 0 && h >= 8 && h <= 21 && annivDuJour(d).length) confettis();
 
   if (d.getDate() !== dernierJour) {
     dernierJour = d.getDate();
@@ -884,6 +938,7 @@ function afficherMeteo(m) {
   var faitNuit = mn < etatSoleil.lever || mn > etatSoleil.coucher;
   var info = meteoInfo(c.weather_code);
   couvert = info[3];
+  majAmbiance(c.weather_code, c.temperature_2m, faitNuit);
 
   // Alertes : gel et rafales
   var al = "";
@@ -1466,6 +1521,64 @@ function actusDemo() {
             resume: "Rendez-vous jeudi 19 novembre à 19h30 à la mairie pour fêter ensemble l'arrivée du Beaujolais nouveau, offert par la municipalité.", image: "" },
           { source: "Béthemont", titre: "Fête du Beaujolais – Samedi 28 novembre", date: "2026-10-27T17:36",
             resume: "Dans la cour de l'école. Réservation obligatoire, 12 € par personne.", image: "" }];
+}
+
+/* ---------- Ambiance animée selon la météo réelle ----------
+   pluie ou neige qui tombe, nuages qui passent, givre les jours de gel, étoile filante les nuits claires.
+   Une seule ambiance à la fois, peu d'éléments, pour rester fluide sur un vieil iPad. */
+var ambianceCle = "", filanteMinuteur = null;
+function hasard(a, b) { return a + Math.random() * (b - a); }
+function majAmbiance(code, temp, nuit) {
+  if (!CONFIG.animerIcones) return;
+  var pluie = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+  var neige = (code >= 71 && code <= 77) || code === 85 || code === 86;
+  var nuages = code === 2 || code === 3 || code === 45 || code === 48;
+  var gel = temp !== undefined && temp <= 0.5;
+  var cle = (neige ? "neige" : pluie ? "pluie" : nuages ? "nuages" : nuit ? "nuitclaire" : "rien") + (gel ? "+gel" : "");
+  if (cle === ambianceCle) return;
+  ambianceCle = cle;
+  clearTimeout(filanteMinuteur);
+  var h = "", i;
+  if (pluie) for (i = 0; i < 34; i++)
+    h += '<div class="goutte" style="left:' + hasard(0, 104).toFixed(1) + '%;-webkit-animation-duration:' + hasard(0.9, 1.4).toFixed(2) +
+      's;animation-duration:' + hasard(0.9, 1.4).toFixed(2) + 's;-webkit-animation-delay:-' + hasard(0, 1.4).toFixed(2) + 's;animation-delay:-' + hasard(0, 1.4).toFixed(2) + 's"></div>';
+  if (neige) for (i = 0; i < 28; i++) {
+    var t = hasard(9, 16).toFixed(1), r = hasard(0, 16).toFixed(1);
+    h += '<div class="flocon" style="left:' + hasard(0, 104).toFixed(1) + '%;-webkit-animation-duration:' + t + 's;animation-duration:' + t +
+      's;-webkit-animation-delay:-' + r + 's;animation-delay:-' + r + 's"><i style="-webkit-animation-delay:-' + hasard(0, 3).toFixed(1) + 's;animation-delay:-' +
+      hasard(0, 3).toFixed(1) + 's;-webkit-transform:scale(' + hasard(0.6, 1.3).toFixed(2) + ')"></i></div>';
+  }
+  if (nuages || pluie || neige) for (i = 0; i < 3; i++) {
+    var dur = hasard(140, 220).toFixed(0);
+    h += '<div class="nuage" style="top:' + (6 + i * 22) + 'vh;-webkit-animation-duration:' + dur + 's;animation-duration:' + dur +
+      's;-webkit-animation-delay:-' + (i * dur / 3).toFixed(0) + 's;animation-delay:-' + (i * dur / 3).toFixed(0) + 's"></div>';
+  }
+  if (gel) {
+    var cristal = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M12 2l-2 2.5M12 2l2 2.5M12 22l-2-2.5M12 22l2-2.5"/></svg>';
+    h += '<div class="givre" style="left:-12vh;top:-12vh">' + cristal + '</div><div class="givre" style="right:-12vh;top:-12vh">' + cristal + '</div>' +
+         '<div class="givre" style="left:-12vh;bottom:-12vh">' + cristal + '</div><div class="givre" style="right:-12vh;bottom:-12vh">' + cristal + '</div>';
+  }
+  if (!pluie && !neige && !nuages && nuit) { h += '<div class="filante" id="filante"></div>'; filanteMinuteur = setTimeout(etoileFilante, hasard(20000, 60000)); }
+  el("ambiance").innerHTML = h;
+}
+function etoileFilante() {
+  var f = el("filante");
+  if (!f) return;
+  f.className = "filante";
+  f.style.left = hasard(5, 60).toFixed(0) + "%"; f.style.top = hasard(4, 35).toFixed(0) + "%";
+  setTimeout(function () { f.className = "filante go"; }, 50);
+  filanteMinuteur = setTimeout(etoileFilante, hasard(60000, 150000));
+}
+function confettis() {
+  if (!CONFIG.animerIcones) return;
+  var couleurs = ["#ffd36b", "#ff7b6b", "#5fd38d", "#8fc6ff", "#e59cff", "#ffffff"], h = "";
+  for (var i = 0; i < 70; i++) {
+    var t = hasard(3.2, 5.5).toFixed(2), r = hasard(0, 1.6).toFixed(2);
+    h += '<div class="confetti" style="left:' + hasard(0, 100).toFixed(1) + '%;background:' + couleurs[i % couleurs.length] +
+      ';-webkit-animation-duration:' + t + 's;animation-duration:' + t + 's;-webkit-animation-delay:' + r + 's;animation-delay:' + r + 's"></div>';
+  }
+  el("confettis").innerHTML = h;
+  setTimeout(function () { el("confettis").innerHTML = ""; }, 8000);
 }
 
 /* ---------- Agenda Google (agenda.json, écrit par le relais du NAS) ----------
