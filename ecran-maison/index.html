@@ -231,6 +231,10 @@
   .grande-icone svg { display: block; width: 17vh; height: 17vh; }
   .temp { font-size: 18vh; font-weight: 100; line-height: 1; margin-left: 1.5vw; letter-spacing: -0.03em; }
   .temp sup { font-size: 7.5vh; font-weight: 200; vertical-align: top; position: relative; top: 2vh; margin-left: 0.3vw; }
+  .interieur { margin-left: 3vw; padding-left: 2.4vw; border-left: 1px solid rgba(255,255,255,0.18); display: none; }
+  .interieur.visible { display: block; }
+  .interieur .v { font-size: 7vh; font-weight: 200; line-height: 1.05; }
+  .interieur .c { font-size: 1.9vh; font-weight: 300; opacity: 0.65; }
   .desc { font-size: 4.2vh; font-weight: 300; margin-top: 0.3vh; }
   .alerte { display: inline-block; vertical-align: middle; font-size: 2.1vh; font-weight: 400;
     color: #ffe1b0; background: rgba(255,150,40,0.30); border-radius: 100px;
@@ -270,7 +274,11 @@
   .tag.d { background: rgba(255,107,90,0.30); color: #ffd0c9; }
 
   /* Anniversaire du jour (en petit, sous la fête) */
-  .fete .sous { font-size: 2.2vh; color: #ffd36b; margin-top: 0.6vh; }
+  .fete { padding-top: 1.3vh; padding-bottom: 1.3vh; display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-flex-wrap: wrap; flex-wrap: wrap; -webkit-box-align: baseline; -webkit-align-items: baseline; align-items: baseline; }
+  .fete .etiquette { margin-right: 1.4vw; }
+  .fete .nom { font-size: 3.3vh !important; margin-top: 0 !important; }
+  .fete .sous { font-size: 2.1vh; color: #ffd36b; margin-top: 0.4vh; width: 100%; }
   .fete .sous:empty { display: none; }
   .pastille {
     display: inline-block;
@@ -371,6 +379,7 @@
     <div class="actuel">
       <div class="grande-icone" id="icone"></div>
       <div class="temp" id="temp"></div>
+      <div class="interieur" id="interieur"><div class="etiquette">Intérieur</div><div class="v" id="int-v"></div><div class="c" id="int-c"></div></div>
     </div>
     <div class="desc" id="desc">Chargement de la météo…</div>
     <div class="pastilles" id="details"></div>
@@ -769,7 +778,7 @@ function majHorloge() {
     var ann = annivDuJour(d);
     el("fete-titre").innerHTML = titreFete;
     el("fete").innerHTML = nomFete;
-    el("fete-sous").innerHTML = ann.length ? "Joyeux anniversaire " + ann.join(" et ") + " !" : "";
+    el("fete-sous").innerHTML = ann.length ? "&#127874; Joyeux anniversaire " + ann.join(" et ") + " !" : "";
     var L = infoLune(d);
     el("lune-svg").innerHTML = svgLune(L);
     el("lune-nom").innerHTML = L.nom;
@@ -829,13 +838,14 @@ function erreurMeteo() {
 
 var pastillesMeteo = "";
 function majPastilles() {
-  var p = "";
   if (etatInterieur && etatInterieur.length) {
-    var s = 0;
-    for (var i = 0; i < etatInterieur.length; i++) s += etatInterieur[i].temp;
-    p += '<span class="pastille">Intérieur <b>' + (Math.round(s / etatInterieur.length * 10) / 10).toString().replace(".", ",") + '°</b></span>';
+    var s = 0, c = null;
+    for (var i = 0; i < etatInterieur.length; i++) { s += etatInterieur[i].temp; if (etatInterieur[i].consigne !== null && etatInterieur[i].consigne !== undefined) c = etatInterieur[i].consigne; }
+    el("int-v").innerHTML = (Math.round(s / etatInterieur.length * 10) / 10).toString().replace(".", ",") + "°";
+    el("int-c").innerHTML = c !== null ? "chauffage " + String(c).replace(".", ",") + "°" : "";
+    el("interieur").className = "interieur visible";
   }
-  el("details").innerHTML = p + pastillesMeteo;
+  el("details").innerHTML = pastillesMeteo;
 }
 
 function afficherMeteo(m) {
@@ -1110,7 +1120,8 @@ function afficherFoot() {
 /* ---------- Température intérieure (plus tard, via Home Assistant) ---------- */
 var etatInterieur = null; // format attendu : [{ "nom": "Salon", "temp": 20.5 }, …]
 function chargerInterieur() {
-  if (!CONFIG.urlInterieur || location.hash === "#demo") return;
+  if (location.hash === "#demo") { etatInterieur = [{ nom: "Maison", temp: 19.4, consigne: 19 }]; majPastilles(); construireInfos(); return; }
+  if (!CONFIG.urlInterieur) return;
   var u = CONFIG.urlInterieur + (CONFIG.urlInterieur.indexOf("?") < 0 ? "?" : "&") + "t=" + new Date().getTime();
   chargerJSON(u, function (a) { if (a && a.length) { etatInterieur = a; majPastilles(); construireInfos(); } });
   setTimeout(chargerInterieur, 5 * 60000);
@@ -1244,7 +1255,7 @@ var SLIDES = [], idxSlide = 0;
 function construireInfos() {
   var now = new Date(), auj = new Date(now.getFullYear(), now.getMonth(), now.getDate()), s = [], x;
   function ajoute(v) { if (v) s.push(v); }
-  if (etatInterieur && etatInterieur.length) ajoute(slideInterieur());
+  // la température intérieure est affichée à côté de la météo : plus de diapositive dédiée
   ajoute(slideEvenement(auj));
   var ac = slidesActus(now);
   for (x = 0; x < ac.length; x++) ajoute(ac[x]);
