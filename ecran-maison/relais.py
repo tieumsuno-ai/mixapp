@@ -338,9 +338,9 @@ def attr(balise, nom):
     return html.unescape(m.group(1)) if m else ""
 
 
-def adresses_reseau():
+def adresses_reseau(reseau=None):
     res = []
-    for r in [x.strip() for x in SONOS_RESEAU.split(",") if x.strip()]:
+    for r in [x.strip() for x in (reseau if reseau is not None else SONOS_RESEAU).split(",") if x.strip()]:
         if "/" not in r:
             r = r.rstrip(".") + ".0/24"
         res += [str(h) for h in ipaddress.ip_network(r, strict=False).hosts()]
@@ -470,7 +470,8 @@ def commande(g, a):
 TYDOM_HOTE = os.environ.get("TYDOM_HOTE", "")
 TYDOM_PORT = int(os.environ.get("TYDOM_PORT", "443"))
 TYDOM_MAC = os.environ.get("TYDOM_MAC", "").replace(":", "").replace("-", "").upper()
-TYDOM = bool(TYDOM_HOTE and TYDOM_MAC)
+TYDOM_RESEAU = os.environ.get("TYDOM_RESEAU", "")         # sinon SONOS_RESEAU ; sert à trouver la box si TYDOM_HOTE est vide
+TYDOM = bool(TYDOM_MAC)
 TYDOM_ACCUEIL = [x.strip() for x in os.environ.get("TYDOM_ACCUEIL", "").split(",") if x.strip()]   # lumières de l'écran principal
 TYDOM_CONF = "/config/tydom.json"
 DD_AUTH = ("https://deltadoreadb2ciot.b2clogin.com/deltadoreadb2ciot.onmicrosoft.com/v2.0/"
@@ -654,15 +655,65 @@ TYPES = {"light": "lumiere", "shutter": "volet", "awning": "volet", "window": "v
          "klineShutter": "volet", "plug": "prise", "gate": "portail", "garage_door": "portail"}
 
 
+def est_tydom(ip):
+    """Vrai si l'appareil répond comme une box Tydom (demande d'authentification sur /mediation/client)."""
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+        ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+        try:
+            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        except ssl.SSLError:
+            pass
+        with socket.create_connection((ip, TYDOM_PORT), timeout=1.5) as brut:
+            with ctx.wrap_socket(brut, server_hostname=ip) as s:
+                s.settimeout(3)
+                s.sendall(("GET /mediation/client?mac=%s&appli=1 HTTP/1.1\r\nHost: %s\r\n\r\n" % (TYDOM_MAC, ip)).encode())
+                tete = s.recv(2048).decode("latin-1")
+        return ip if (" 401" in tete.split("\r\n")[0] and "Digest" in tete) else None
+    except Exception:
+        return None
+
+
+def trouver_tydom():
+    reseau = TYDOM_RESEAU or SONOS_RESEAU
+    if not reseau:
+        return None
+    cand = adresses_reseau(reseau)
+    log("Delta Dore : recherche de la box sur %d adresses…" % len(cand))
+    with ThreadPoolExecutor(64) as ex:
+        ouverts = [i for i in ex.map(lambda ip: ip if port_ouvert_n(ip, TYDOM_PORT) else None, cand) if i]
+    for ip in ouverts:
+        if est_tydom(ip):
+            log("Delta Dore : box trouvée à l'adresse", ip)
+            return ip
+    log("Delta Dore : aucune box Tydom trouvée (%d appareils avec le port %d ouvert)" % (len(ouverts), TYDOM_PORT))
+    return None
+
+
+def port_ouvert_n(ip, port):
+    try:
+        with socket.create_connection((ip, port), timeout=0.6):
+            return True
+    except OSError:
+        return False
+
+
 class Tydom:
     def __init__(self):
         self.ws, self.equip, self.verrou, self.pret = None, {}, threading.Lock(), False
 
     def boucle(self):
         attente = 10
+        hote = TYDOM_HOTE
         while True:
             try:
-                self.ws = WS(TYDOM_HOTE, TYDOM_PORT, "/mediation/client?mac=%s&appli=1" % TYDOM_MAC, TYDOM_MAC, mdp_tydom())
+                if not hote:
+                    hote = trouver_tydom()
+                    if not hote:
+                        time.sleep(1800)
+                        continue
+                self.ws = WS(hote, TYDOM_PORT, "/mediation/client?mac=%s&appli=1" % TYDOM_MAC, TYDOM_MAC, mdp_tydom())
                 log("Delta Dore : connecté à la box")
                 attente = 10
                 for m, u in (("GET", "/ping"), ("GET", "/configs/file"), ("POST", "/refresh/all"), ("GET", "/devices/data")):
@@ -687,6 +738,8 @@ class Tydom:
                 attente = 600
             except Exception as e:
                 log("Delta Dore : liaison perdue", repr(e))
+                if not TYDOM_HOTE:
+                    hote = None                      # l'adresse a pu changer : on cherchera de nouveau
             self.pret = False
             if self.ws:
                 self.ws.fermer()
