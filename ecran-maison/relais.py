@@ -471,6 +471,7 @@ TYDOM_HOTE = os.environ.get("TYDOM_HOTE", "")
 TYDOM_PORT = int(os.environ.get("TYDOM_PORT", "443"))
 TYDOM_MAC = os.environ.get("TYDOM_MAC", "").replace(":", "").replace("-", "").upper()
 TYDOM = bool(TYDOM_HOTE and TYDOM_MAC)
+TYDOM_ACCUEIL = [x.strip() for x in os.environ.get("TYDOM_ACCUEIL", "").split(",") if x.strip()]   # lumières de l'écran principal
 TYDOM_CONF = "/config/tydom.json"
 DD_AUTH = ("https://deltadoreadb2ciot.b2clogin.com/deltadoreadb2ciot.onmicrosoft.com/v2.0/"
            ".well-known/openid-configuration?p=B2C_1_AccountProviderROPC_SignIn")
@@ -790,7 +791,7 @@ class ApiSonos(BaseHTTPRequestHandler):
             if u.path == "/maison":
                 if not tydom:
                     return self.repondre(404, {"erreur": "Delta Dore non configuré"})
-                self.repondre(200, {"connecte": tydom.pret, "equipements": tydom.liste()})
+                self.repondre(200, {"connecte": tydom.pret, "equipements": tydom.liste(), "accueil": TYDOM_ACCUEIL})
             elif u.path == "/maison/cmd":
                 if not tydom:
                     return self.repondre(404, {"erreur": "Delta Dore non configuré"})
