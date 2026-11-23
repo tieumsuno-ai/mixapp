@@ -780,13 +780,15 @@ class Tydom:
                 attente = 600
             except Exception as e:
                 log("Delta Dore : liaison perdue", repr(e))
+                if "compte Delta Dore refusée" in str(e):
+                    attente = 6 * 3600        # identifiants refusés : ne pas insister (éviter un blocage du compte)
                 if not TYDOM_HOTE:
                     hote = None                      # l'adresse a pu changer : on cherchera de nouveau
             self.pret = False
             if self.ws:
                 self.ws.fermer()
             time.sleep(attente)
-            attente = min(attente * 2, 600)
+            attente = min(attente * 2, 600) if attente < 600 else 600
 
     def traiter(self, brut):
         uri, d = lire_reponse(brut)
