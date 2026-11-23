@@ -222,6 +222,23 @@
   .agenda .alieu { opacity: 0.55; }
   .agenda .encours { color: #ffd36b; }
 
+  /* 3 interrupteurs sur l'écran principal */
+  .lumieres { margin-top: 1.8vh; padding-top: 1.4vh; padding-bottom: 1.6vh; display: none; }
+  .lumieres.visible { display: block; }
+  body.musique .lumieres { display: none; }
+  .lumieres .rang { display: -webkit-box; display: -webkit-flex; display: flex; margin-top: 1vh; }
+  .lumieres .bt { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; margin-right: 1.2vw; border-radius: 16px; padding: 1.2vh 1vw;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); -webkit-tap-highlight-color: rgba(0,0,0,0);
+    display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    -webkit-transition: background 0.2s, -webkit-transform 0.12s; transition: background 0.2s, transform 0.12s; min-width: 0; }
+  .lumieres .bt:last-child { margin-right: 0; }
+  .lumieres .bt:active { -webkit-transform: scale(0.95); transform: scale(0.95); }
+  .lumieres .bt svg { width: 4.2vh; height: 4.2vh; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .lumieres .bt .t { margin-left: 0.8vw; min-width: 0; }
+  .lumieres .bt .n { font-size: 2.1vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lumieres .bt .e { font-size: 1.7vh; font-weight: 300; opacity: 0.65; }
+  .lumieres .bt.on { background: rgba(255,211,107,0.22); border-color: rgba(255,211,107,0.55); }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -335,6 +352,11 @@
       <div id="agenda"></div>
     </div>
 
+    <div class="carte lumieres" id="lumieres">
+      <div class="etiquette">Lumières</div>
+      <div class="rang" id="lumieres-rang"></div>
+    </div>
+
     <div class="pousse"></div>
 
 
@@ -421,7 +443,7 @@ var CONFIG_DEFAUT = {
   nomLieu: "Paris", sonos: null, latitude: 48.86, longitude: 2.35,
   joursPrevision: 3, rafraichirMinutes: 15, attenuerDebut: 22, attenuerFin: 7,
   collecte: [], equipe: null, anniversaires: [], evenements: [],
-  urlInterieur: null, urlActus: "actus.json", urlAgenda: "agenda.json", agendaLignes: 3, joursActus: 30, secondesParInfo: 8, animerIcones: true, interrupteurs: null
+  urlInterieur: null, urlActus: "actus.json", urlAgenda: "agenda.json", agendaLignes: 3, lumieresAccueil: null, joursActus: 30, secondesParInfo: 8, animerIcones: true, interrupteurs: null
 };
 var CONFIG = {};
 (function () {
@@ -1507,7 +1529,7 @@ function chargerMaison() {
   var u = urlSonos();
   if (!u) return;
   chargerJSON(u + "/maison?t=" + new Date().getTime(), function (d) {
-    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert ? 3000 : 60000);
+    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert ? 3000 : 20000);
     if (new Date().getTime() - maisonOccupe > 2500) { maisonEq = d.equipements || []; afficherMaison(); }
   }, function () { maisonMinuteur = setTimeout(chargerMaison, 5 * 60000); });
 }
@@ -1522,6 +1544,7 @@ function afficherMaison() {
   document.getElementById("btn-maison").className = l.length ? "visible" : "";
   for (i = 0; i < l.length; i++) if (l[i].type === "lumiere" && l[i].allume) nb++;
   document.getElementById("badge-maison").innerHTML = nb || "";
+  majLumieresAccueil();
   if (!maisonOuvert) return;
   for (i = 0; i < l.length; i++) {
     var e = l[i];
@@ -1542,6 +1565,35 @@ function afficherMaison() {
     (vol ? '<div class="etiquette rubrique">Volets</div><div class="grille">' + vol + "</div>" : "") +
     (!lum && !vol ? '<div class="vide">Aucun équipement Delta Dore trouvé.</div>' : "");
 }
+// 3 lumières sur l'écran principal : CONFIG.lumieresAccueil = ["Salon", "Cuisine", "Entrée"] (sinon les 3 premières)
+var appuiLong = null, appuiLongFait = false;
+function lumieresAccueil() {
+  var l = maisonEq || [], c = CONFIG.lumieresAccueil, r = [], i, j;
+  if (c && c.length) { for (i = 0; i < c.length; i++) for (j = 0; j < l.length; j++) if (l[j].nom === c[i]) r.push(l[j]); }
+  else for (i = 0; i < l.length && r.length < 3; i++) if (l[i].type === "lumiere") r.push(l[i]);
+  return r.slice(0, 3);
+}
+function majLumieresAccueil() {
+  var l = lumieresAccueil(), h = "";
+  for (var i = 0; i < l.length; i++) {
+    var e = l[i];
+    h += '<div class="bt' + (e.allume ? " on" : "") + '" ontouchstart="debutAppui()" ontouchend="finAppui()" onmousedown="debutAppui()" onmouseup="finAppui()"' +
+      ' onclick="toucheLumiere(\'' + e.id + '\')">' + SVG_AMPOULE(e.allume) + '<div class="t"><div class="n">' + echap(e.nom) + '</div><div class="e">' +
+      (e.allume ? (e.niveau && e.niveau < 100 ? e.niveau + " %" : "Allumée") : "Éteinte") + "</div></div></div>";
+  }
+  el("lumieres-rang").innerHTML = h;
+  el("lumieres").className = "carte lumieres" + (l.length ? " visible" : "");
+}
+function debutAppui() {
+  appuiLongFait = false; clearTimeout(appuiLong);
+  appuiLong = setTimeout(function () { appuiLongFait = true; ouvrirMaison(); }, 650);   // appui long → panneau complet
+}
+function finAppui() { clearTimeout(appuiLong); }
+function toucheLumiere(id) {
+  if (appuiLongFait) { appuiLongFait = false; return; }
+  cmdMaison(id, "basculer");
+}
+
 function trouverEq(id) { var l = maisonEq || []; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
 function cmdMaison(id, a) {
   var e = trouverEq(id);
