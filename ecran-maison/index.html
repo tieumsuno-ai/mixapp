@@ -207,6 +207,20 @@
   #maison .vol button:active { background: rgba(255,255,255,0.35); }
   #maison .vide { font-size: 2.4vh; font-weight: 300; opacity: 0.7; margin-top: 4vh; }
 
+  /* Agenda (Google, via le relais) */
+  .agenda { margin-top: 1.8vh; padding-top: 1.4vh; padding-bottom: 1.2vh; display: none; }
+  .agenda.visible { display: block; }
+  body.agenda-on .heure { font-size: 18.5vh; }
+  body.agenda-on .fete { padding-top: 1.3vh; padding-bottom: 1.3vh; }
+  body.agenda-on .fete .nom { font-size: 3.5vh; }
+  .agenda .arow { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: baseline; -webkit-align-items: baseline; align-items: baseline;
+    padding-top: 0.75vh; font-size: 2.1vh; font-weight: 300; }
+  .agenda .aquand { width: 9.5vw; -webkit-flex-shrink: 0; flex-shrink: 0; font-weight: 500; }
+  .agenda .aquand.dem { font-weight: 300; opacity: 0.7; }
+  .agenda .atitre { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agenda .alieu { opacity: 0.55; }
+  .agenda .encours { color: #ffd36b; }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -307,6 +321,11 @@
       <div id="collecte"></div>
     </div>
 
+    <div class="carte agenda" id="agenda-carte">
+      <div class="etiquette" id="agenda-titre">Agenda</div>
+      <div id="agenda"></div>
+    </div>
+
     <div class="pousse"></div>
 
 
@@ -394,7 +413,7 @@ var CONFIG_DEFAUT = {
   nomLieu: "Paris", sonos: null, latitude: 48.86, longitude: 2.35,
   joursPrevision: 3, rafraichirMinutes: 15, attenuerDebut: 22, attenuerFin: 7,
   collecte: [], equipe: null, anniversaires: [], evenements: [],
-  urlInterieur: null, urlActus: "actus.json", joursActus: 30, secondesParInfo: 8, animerIcones: true, interrupteurs: null
+  urlInterieur: null, urlActus: "actus.json", urlAgenda: "agenda.json", agendaLignes: 2, joursActus: 30, secondesParInfo: 8, animerIcones: true, interrupteurs: null
 };
 var CONFIG = {};
 (function () {
@@ -1412,6 +1431,50 @@ function actusDemo() {
             resume: "Dans la cour de l'école. Réservation obligatoire, 12 € par personne.", image: "" }];
 }
 
+/* ---------- Agenda Google (agenda.json, écrit par le relais du NAS) ----------
+   Rendez-vous d'aujourd'hui (pas encore terminés) puis de demain ; carte masquée s'il n'y a rien. */
+var etatAgenda = [];
+function chargerAgenda() {
+  setTimeout(chargerAgenda, 15 * 60000);
+  if (location.hash === "#demo") { etatAgenda = agendaDemo(); majAgenda(); return; }
+  if (!CONFIG.urlAgenda) return;
+  chargerJSON(CONFIG.urlAgenda + "?t=" + new Date().getTime(), function (d) { etatAgenda = d || []; majAgenda(); });
+}
+function majAgenda() {
+  var now = new Date(), l = [], i, carte = el("agenda-carte");
+  for (i = 0; i < etatAgenda.length; i++) {
+    var e = etatAgenda[i], d = parseISO(e.debut), f = parseISO(e.fin), nj = joursEntre(now, d);
+    if (f <= now) continue;
+    if (nj > 1) continue;
+    if (nj < 0) nj = 0;                     // commencé avant aujourd'hui, toujours en cours
+    l.push({ e: e, d: d, f: f, nj: nj, encours: d <= now });
+  }
+  document.body.className = document.body.className.replace(/\s*agenda-on/g, "") + (l.length ? " agenda-on" : "");
+  if (!l.length) { carte.className = "carte agenda"; return; }
+  var n = CONFIG.agendaLignes, h = "", aujN = 0;
+  for (i = 0; i < l.length; i++) if (l[i].nj === 0) aujN++;
+  for (i = 0; i < l.length && i < n; i++) {
+    var x = l[i], quand;
+    if (x.e.journee) quand = x.nj === 0 ? "Aujourd'hui" : "Demain";
+    else if (x.encours) quand = "En cours";
+    else quand = (x.nj === 1 ? "Dem. " : "") + hm(x.d);
+    h += '<div class="arow"><span class="aquand' + (x.nj === 1 ? " dem" : "") + (x.encours && !x.e.journee ? " encours" : "") + '">' + quand + "</span>" +
+      '<span class="atitre">' + echap(x.e.titre) + (x.e.lieu ? ' <span class="alieu">· ' + echap(x.e.lieu) + "</span>" : "") + "</span></div>";
+  }
+  var reste = l.length - Math.min(n, l.length);
+  el("agenda-titre").innerHTML = (aujN ? "Agenda · aujourd'hui" : "Agenda · demain") + (reste > 0 ? " · +" + reste : "");
+  el("agenda").innerHTML = h;
+  carte.className = "carte agenda visible";
+}
+setInterval(majAgenda, 60000);
+function agendaDemo() {
+  var d = new Date(), j = d.getFullYear() + "-" + deux(d.getMonth() + 1) + "-" + deux(d.getDate()),
+      t = new Date(d.getTime() + 86400000), k = t.getFullYear() + "-" + deux(t.getMonth() + 1) + "-" + deux(t.getDate());
+  return [{ titre: "Piscine Matt", lieu: "Piscine de Domont", debut: j + "T18:30", fin: j + "T19:30", journee: false },
+          { titre: "Dîner chez Paul et Léa", lieu: "", debut: j + "T20:30", fin: j + "T23:00", journee: false },
+          { titre: "Réunion école", lieu: "École", debut: k + "T08:45", fin: k + "T09:30", journee: false }];
+}
+
 /* ---------- Lumières & volets (Delta Dore, via le relais du NAS) ----------
    Bouton en haut à droite (avec le nombre de lumières allumées) → panneau plein écran.
    CONFIG.interrupteurs : liste des noms à afficher, dans l'ordre voulu (null = tous). */
@@ -1545,6 +1608,7 @@ chargerInterieur();
 chargerSonos();
 chargerMaison();
 chargerActus();
+chargerAgenda();
 </script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 # Toutes les 15 minutes :
 #   1. met à jour la page (index.html) dans le dossier Web si une nouvelle version est publiée ;
 #   2. une fois par jour, relève les actualités des sites des mairies (ACTUS) dans actus.json ;
+#   2 ter. si l'adresse iCal secrète d'un agenda Google est fournie (AGENDA_ICS), écrit agenda.json ;
 #   3. si les codes Netatmo sont fournis, relève la température de chaque pièce
 #      et l'écrit dans interieur.json, que la page affiche.
 # En parallèle, une petite API (port 8099) permet à la page de piloter les enceintes Sonos
@@ -115,6 +116,115 @@ def maj_actus():
     if tout:
         tout.sort(key=lambda x: x["date"], reverse=True)
         ecrire("actus.json", json.dumps(tout, ensure_ascii=False).encode("utf-8"))
+
+
+# ---------- 2 ter. Agenda Google (adresse secrète au format iCal) ----------
+AGENDA_ICS = os.environ.get("AGENDA_ICS", "")
+AGENDA_JOURS = int(os.environ.get("AGENDA_JOURS", "14"))
+JOURS_ICS = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+
+def date_ics(valeur, params):
+    """→ (datetime local naïf, journée entière ?)"""
+    v = valeur.strip()
+    if "VALUE=DATE" in params or len(v) == 8:
+        return datetime.datetime.strptime(v[:8], "%Y%m%d"), True
+    d = datetime.datetime.strptime(v[:15], "%Y%m%dT%H%M%S")
+    if v.endswith("Z"):
+        d = d.replace(tzinfo=datetime.timezone.utc).astimezone().replace(tzinfo=None)
+    else:
+        m = re.search(r"TZID=([^;:]+)", params)
+        if m:
+            try:
+                from zoneinfo import ZoneInfo
+                d = d.replace(tzinfo=ZoneInfo(m.group(1))).astimezone().replace(tzinfo=None)
+            except Exception:
+                pass
+    return d, False
+
+
+def occurrences(debut, regle, exdates, fin_fenetre):
+    """Dates de début d'un événement répétitif (RRULE simple : DAILY/WEEKLY/MONTHLY/YEARLY)."""
+    r = dict(x.split("=", 1) for x in regle.split(";") if "=" in x)
+    freq, pas = r.get("FREQ"), int(r.get("INTERVAL", "1"))
+    compte = int(r["COUNT"]) if "COUNT" in r else None
+    jusqua = date_ics(r["UNTIL"], "")[0] if "UNTIL" in r else None
+    jours = [JOURS_ICS[j[-2:]] for j in r.get("BYDAY", "").split(",") if j[-2:] in JOURS_ICS] if freq == "WEEKLY" else []
+    res, n, i = [], 0, 0
+    while i < 3000:
+        if freq == "DAILY":
+            cands = [debut + datetime.timedelta(days=i * pas)]
+        elif freq == "WEEKLY":
+            lundi = debut - datetime.timedelta(days=debut.weekday()) + datetime.timedelta(weeks=i * pas)
+            cands = [lundi + datetime.timedelta(days=j) for j in sorted(jours)] if jours else [debut + datetime.timedelta(weeks=i * pas)]
+        elif freq in ("MONTHLY", "YEARLY"):
+            mois = debut.month - 1 + (i * pas if freq == "MONTHLY" else i * pas * 12)
+            try:
+                cands = [debut.replace(year=debut.year + mois // 12, month=mois % 12 + 1)]
+            except ValueError:
+                cands = []
+        else:
+            return [debut]
+        i += 1
+        for c in cands:
+            if c < debut:
+                continue
+            if (jusqua and c > jusqua) or c > fin_fenetre or (compte is not None and n >= compte):
+                return res
+            n += 1
+            if c not in exdates:
+                res.append(c)
+    return res
+
+
+def maj_agenda():
+    try:
+        with urllib.request.urlopen(AGENDA_ICS, timeout=30) as r:
+            ics = r.read().decode("utf-8", "replace")
+    except Exception as e:
+        log("Agenda indisponible :", type(e).__name__)      # l'adresse est secrète : pas de détail dans le journal
+        return
+    ics = re.sub(r"\r?\n[ \t]", "", ics)                     # lignes repliées
+    auj = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    fin = auj + datetime.timedelta(days=AGENDA_JOURS)
+    evts, annules = [], set()
+    for bloc in re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", ics, re.S):
+        champs, exdates = {}, set()
+        for ligne in bloc.strip().splitlines():
+            if ":" not in ligne:
+                continue
+            tete, _, val = ligne.partition(":")
+            nom, _, params = tete.partition(";")
+            if nom == "EXDATE":
+                for v in val.split(","):
+                    exdates.add(date_ics(v, params)[0])
+            else:
+                champs.setdefault(nom, (val, params))
+        if "DTSTART" not in champs or champs.get("STATUS", ("",))[0] == "CANCELLED":
+            if "RECURRENCE-ID" in champs:
+                annules.add((champs.get("UID", ("",))[0], date_ics(*champs["RECURRENCE-ID"])[0]))
+            continue
+        debut, journee = date_ics(*champs["DTSTART"])
+        fin_evt = date_ics(*champs["DTEND"])[0] if "DTEND" in champs else debut + datetime.timedelta(days=1 if journee else 0, hours=0 if journee else 1)
+        duree = fin_evt - debut
+        uid = champs.get("UID", ("",))[0]
+        if "RECURRENCE-ID" in champs:                          # occurrence modifiée d'une série
+            annules.add((uid, date_ics(*champs["RECURRENCE-ID"])[0]))
+        dates = occurrences(debut, champs["RRULE"][0], exdates, fin) if "RRULE" in champs else [debut]
+        titre = champs.get("SUMMARY", ("(sans titre)",))[0].replace("\\,", ",").replace("\\;", ";").replace("\\n", " ").strip()
+        lieu = champs.get("LOCATION", ("",))[0].replace("\\,", ",").replace("\\n", " ").strip()
+        for d in dates:
+            f = d + duree
+            if f <= auj or d >= fin:
+                continue
+            evts.append({"uid": uid, "rid": d, "mod": "RECURRENCE-ID" in champs, "titre": titre, "lieu": lieu.split(",")[0],
+                         "debut": d.strftime("%Y-%m-%dT%H:%M"), "fin": f.strftime("%Y-%m-%dT%H:%M"), "journee": journee})
+    evts = [e for e in evts if e["mod"] or (e["uid"], e["rid"]) not in annules]
+    for e in evts:
+        for k in ("uid", "rid", "mod"):
+            e.pop(k, None)
+    evts.sort(key=lambda e: (e["debut"], not e["journee"]))
+    ecrire("agenda.json", json.dumps(evts, ensure_ascii=False).encode("utf-8"))
 
 
 # ---------- 2. Netatmo ----------
@@ -723,6 +833,8 @@ while True:
     maj_page()
     if ACTUS and actus_a_faire():
         maj_actus()
+    if AGENDA_ICS:
+        maj_agenda()
     if NETATMO:
         maj_netatmo()
     time.sleep(INTERVALLE)
