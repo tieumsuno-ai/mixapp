@@ -386,6 +386,75 @@
     color: #0b1026; margin-left: 0.8vw; -webkit-flex-shrink: 0; flex-shrink: 0; }
   .f-ligne .res.V { background: #5fd38d; } .f-ligne .res.N { background: #c9cbd6; } .f-ligne .res.D { background: #ff7b6b; }
 
+  /* ---------- Mode match plein écran ---------- */
+  #match { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9; display: none; overflow: hidden;
+    background: #071233; background: -webkit-linear-gradient(top, #0a1a4a, #050b22); background: linear-gradient(to bottom, #0a1a4a, #050b22); }
+  #match.ouvert { display: block; }
+  #match .bande { position: absolute; top: -10%; bottom: -10%; left: 50%; width: 15vw; margin-left: -7.5vw;
+    background: -webkit-linear-gradient(left, rgba(218,41,28,0), rgba(218,41,28,0.55) 20%, rgba(218,41,28,0.55) 80%, rgba(218,41,28,0));
+    background: linear-gradient(to right, rgba(218,41,28,0), rgba(218,41,28,0.55) 20%, rgba(218,41,28,0.55) 80%, rgba(218,41,28,0)); }
+  #match .balayage { position: absolute; top: 0; bottom: 0; width: 40vw; left: -50vw;
+    background: -webkit-linear-gradient(left, rgba(255,255,255,0), rgba(255,255,255,0.07), rgba(255,255,255,0));
+    background: linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0.07), rgba(255,255,255,0));
+    -webkit-animation: balaie 9s ease-in-out infinite; animation: balaie 9s ease-in-out infinite; }
+  @-webkit-keyframes balaie { 0% { -webkit-transform: translate3d(0,0,0) skewX(-20deg); } 60%, 100% { -webkit-transform: translate3d(200vw,0,0) skewX(-20deg); } }
+  @keyframes balaie { 0% { transform: translate3d(0,0,0) skewX(-20deg); } 60%, 100% { transform: translate3d(200vw,0,0) skewX(-20deg); } }
+  #match .contenu { position: relative; height: 100%; padding: 4vh 5vw 5vh; box-sizing: border-box; text-align: center;
+    display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-orient: vertical; -webkit-flex-direction: column; flex-direction: column;
+    -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center; }
+  #match .compet { font-size: 2.2vh; letter-spacing: 0.35em; text-transform: uppercase; opacity: 0.75; }
+  #match .chrono { margin-top: 1.6vh; display: inline-block; -webkit-align-self: center; align-self: center; padding: 0.8vh 2.2vw; border-radius: 100px; background: rgba(255,255,255,0.1);
+    font-size: 3.4vh; font-weight: 700; letter-spacing: 0.04em; }
+  #match .chrono i { display: inline-block; width: 1.4vh; height: 1.4vh; border-radius: 50%; background: #ff3b30; margin-right: 1vw; vertical-align: 0.3vh;
+    -webkit-animation: clignote 1.2s infinite; animation: clignote 1.2s infinite; }
+  #match .chrono.pause i, #match .chrono.fin i { display: none; }
+  #match .duel { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center; margin-top: 4vh; }
+  #match .equipe { width: 30vw; }
+  #match .equipe img, #match .equipe .sigle { display: block; width: 24vh; height: 24vh; margin: 0 auto; -webkit-filter: drop-shadow(0 1vh 2vh rgba(0,0,0,0.5)); filter: drop-shadow(0 1vh 2vh rgba(0,0,0,0.5)); }
+  #match .equipe .sigle { border-radius: 50%; background: rgba(255,255,255,0.12); line-height: 24vh; font-size: 7vh; font-weight: 700; }
+  #match .equipe .nom { font-size: 3.2vh; font-weight: 600; margin-top: 2vh; }
+  #match .score { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; font-size: 26vh; font-weight: 700; line-height: 1; letter-spacing: -0.02em; white-space: nowrap; }
+  #match .score span { display: inline-block; }
+  #match .score .tiret { opacity: 0.35; margin: 0 1.2vw; font-weight: 200; font-size: 60%; vertical-align: 0.15em; }
+  #match .score .rebond { -webkit-animation: rebond 0.9s cubic-bezier(.2,1.6,.4,1); animation: rebond 0.9s cubic-bezier(.2,1.6,.4,1); }
+  @-webkit-keyframes rebond { 0% { -webkit-transform: scale(0.3); opacity: 0; } 100% { -webkit-transform: scale(1); opacity: 1; } }
+  @keyframes rebond { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  #match .buts { display: -webkit-box; display: -webkit-flex; display: flex; margin-top: 3.5vh; font-size: 2.8vh; font-weight: 300; min-height: 12vh; }
+  #match .buts > div { width: 50%; padding: 0 3vw; box-sizing: border-box; }
+  #match .buts .g { text-align: right; } #match .buts .d { text-align: left; }
+  #match .buts p { margin: 0 0 0.7vh; } #match .buts b { font-weight: 600; }
+  #match .stats { margin: 3vh auto 0; width: 64vw; }
+  #match .stat { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center; font-size: 2.5vh; margin-top: 1.8vh; }
+  #match .stat .v { width: 6vw; font-weight: 700; }
+  #match .stat .barre { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; height: 0.9vh; border-radius: 1vh; background: rgba(255,255,255,0.12); position: relative; overflow: hidden; }
+  #match .stat .barre i { position: absolute; top: 0; bottom: 0; left: 0; background: #fff; border-radius: 1vh; }
+  #match .stat .lib { width: 14vw; opacity: 0.65; font-size: 1.8vh; letter-spacing: 0.1em; text-transform: uppercase; }
+  #match .fermer { position: absolute; top: 3vh; right: 3vw; width: 6vh; height: 6vh; border-radius: 50%; border: 0; outline: none; color: #fff;
+    background: rgba(255,255,255,0.12); font-size: 3.4vh; line-height: 6vh; padding: 0; -webkit-appearance: none; z-index: 2; }
+  /* explosion « BUT ! » */
+  #but { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 12; display: none; text-align: center; overflow: hidden; pointer-events: none; }
+  #but.go { display: block; }
+  #but .flash { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #da291c; opacity: 0;
+    -webkit-animation: flash 4.5s ease-out forwards; animation: flash 4.5s ease-out forwards; }
+  #but.eux .flash { background: #0a1a4a; }
+  @-webkit-keyframes flash { 0% { opacity: 0; } 6% { opacity: 0.95; } 14% { opacity: 0.7; } 20% { opacity: 0.95; } 80% { opacity: 0.9; } 100% { opacity: 0; } }
+  @keyframes flash { 0% { opacity: 0; } 6% { opacity: 0.95; } 14% { opacity: 0.7; } 20% { opacity: 0.95; } 80% { opacity: 0.9; } 100% { opacity: 0; } }
+  #but .onde { position: absolute; left: 50%; top: 50%; width: 30vh; height: 30vh; margin: -15vh 0 0 -15vh; border-radius: 50%; border: 1.2vh solid rgba(255,255,255,0.8);
+    -webkit-animation: onde 1.6s ease-out 3; animation: onde 1.6s ease-out 3; opacity: 0; }
+  @-webkit-keyframes onde { 0% { -webkit-transform: scale(0.2); opacity: 1; } 100% { -webkit-transform: scale(5); opacity: 0; } }
+  @keyframes onde { 0% { transform: scale(0.2); opacity: 1; } 100% { transform: scale(5); opacity: 0; } }
+  #but .mot { position: absolute; left: 0; right: 0; top: 50%; margin-top: -16vh; font-size: 26vh; font-weight: 900; letter-spacing: -0.02em; line-height: 1;
+    -webkit-animation: mot 4.5s cubic-bezier(.2,1.4,.4,1) forwards; animation: mot 4.5s cubic-bezier(.2,1.4,.4,1) forwards; }
+  #but.eux .mot { font-size: 12vh; margin-top: -8vh; font-weight: 700; }
+  @-webkit-keyframes mot { 0% { -webkit-transform: scale(0.2) rotate(-8deg); opacity: 0; } 12% { -webkit-transform: scale(1.12) rotate(2deg); opacity: 1; }
+    20% { -webkit-transform: scale(1) rotate(0); } 85% { -webkit-transform: scale(1.04); opacity: 1; } 100% { -webkit-transform: scale(1.6); opacity: 0; } }
+  @keyframes mot { 0% { transform: scale(0.2) rotate(-8deg); opacity: 0; } 12% { transform: scale(1.12) rotate(2deg); opacity: 1; }
+    20% { transform: scale(1) rotate(0); } 85% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+  #but .qui { position: absolute; left: 0; right: 0; top: 50%; margin-top: 12vh; font-size: 5vh; font-weight: 600; opacity: 0;
+    -webkit-animation: qui 4.5s ease-out forwards; animation: qui 4.5s ease-out forwards; }
+  @-webkit-keyframes qui { 0%, 15% { opacity: 0; -webkit-transform: translateY(3vh); } 25%, 85% { opacity: 1; -webkit-transform: translateY(0); } 100% { opacity: 0; } }
+  @keyframes qui { 0%, 15% { opacity: 0; transform: translateY(3vh); } 25%, 85% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+
   /* Météo */
   .actuel {
     display: -webkit-box; display: -webkit-flex; display: flex;
@@ -579,6 +648,11 @@
 <section class="ecran"><div class="annexe" id="page-maison"></div></section>
 <section class="ecran"><div class="annexe" id="page-foot"></div></section>
 </div>
+<div id="match"><div class="bande"></div><div class="balayage"></div>
+  <button class="fermer" onclick="reduireMatch()">&times;</button>
+  <div class="contenu" id="match-contenu"></div>
+</div>
+<div id="but"></div>
 <div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i></div>
 
 <div id="btn-maison" onclick="allerA(3)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
@@ -1240,25 +1314,46 @@ function chargerButeurs(m) {
   });
 }
 // Score en direct : du coup d'envoi à 2 h 30 après, toutes les 90 s
+// Score en direct : du coup d'envoi à 2 h 30 après, toutes les 30 s → mode match plein écran
+var directMinuteur = null;
 function surveillerDirect() {
+  clearTimeout(directMinuteur);
   var f = etatFoot, p = f && f.prochain;
   if (!p) return;
   var t = new Date().getTime(), debut = p.date.getTime();
-  if (t < debut - 5 * 60000) {   // réveil au coup d'envoi
-    if (debut - t < 24 * 3600000) setTimeout(surveillerDirect, debut - t - 4 * 60000);
+  if (t < debut - 5 * 60000) {   // réveil juste avant le coup d'envoi
+    if (debut - t < 24 * 3600000) directMinuteur = setTimeout(surveillerDirect, debut - t - 4 * 60000);
     return;
   }
-  if (t > debut + 150 * 60000) { footDirect = null; afficherFoot(); return; }
+  if (t > debut + 180 * 60000) { footDirect = null; afficherFoot(); return; }
   chargerJSON(ESPN + p.compet + "/summary?event=" + p.id, function (s) {
-    try {
-      var c = s.header.competitions[0], st = c.status.type, sc = {};
-      for (var i = 0; i < c.competitors.length; i++) sc[c.competitors[i].homeAway] = scoreESPN(c.competitors[i].score);
-      footDirect = { etat: st.state, minute: c.status.displayClock || "", detail: st.shortDetail || "", sd: sc.home, se: sc.away, buts: lireButs(s, p) };
-      if (st.state === "post") { footDirect = null; chargerFoot(); return; }
-      afficherFoot();
-    } catch (e) {}
+    try { recevoirDirect(s, p); } catch (e) {}
   });
-  setTimeout(surveillerDirect, 90000);
+  directMinuteur = setTimeout(surveillerDirect, 30000);
+}
+function recevoirDirect(s, p) {
+  var c = s.header.competitions[0], st = c.status.type, sc = {}, eq = {};
+  for (var i = 0; i < c.competitors.length; i++) {
+    var k = c.competitors[i], tm = k.team || {};
+    sc[k.homeAway] = scoreESPN(k.score);
+    eq[k.homeAway] = { nom: tm.displayName, logo: tm.logo || (tm.logos && tm.logos[0] && tm.logos[0].href) || "", id: String(tm.id) };
+  }
+  var stats = {};
+  try {
+    var bt = s.boxscore.teams;
+    for (i = 0; i < bt.length; i++) {
+      var cote = String(bt[i].team.id) === eq.home.id ? "home" : "away", v = {};
+      for (var j = 0; j < bt[i].statistics.length; j++) v[bt[i].statistics[j].name] = bt[i].statistics[j].displayValue;
+      stats[cote] = v;
+    }
+  } catch (e) {}
+  var avant = footDirect;
+  footDirect = { etat: st.state, minute: c.status.displayClock || "", detail: st.shortDetail || "", nomEtat: st.name || "",
+                 sd: sc.home, se: sc.away, buts: lireButs(s, p), dom: eq.home, ext: eq.away, stats: stats, compet: p.compet };
+  if (st.state === "post" && !footDirect.finA) footDirect.finA = avant && avant.finA ? avant.finA : new Date().getTime();
+  afficherFoot();
+  majMatch(avant);
+  if (st.state === "post" && new Date().getTime() - footDirect.finA > 15 * 60000) { footDirect = null; fermerMatch(); chargerFoot(); }
 }
 function nomEquipe(n) { return CONFIG.equipe && n === CONFIG.equipe.nom ? CONFIG.equipe.court : (n || "").replace(/^(AS|FC|OGC|RC|AJ|SCO|ESTAC|SL|SC|AC|SS|CF|RB|PSV) /, "").replace(/ (FC|CF|AC)$/, ""); }
 function lignesButs(buts) {
@@ -2098,6 +2193,84 @@ function rendreFoot() {
   if (f.avenir) for (k = 0; k < f.avenir.length && k < 5; k++) b += ligne(f.avenir[k], false);
   z.innerHTML = "<h2>" + CONFIG.equipe.court + (f.classement ? "<span>" + (f.classement.rang === 1 ? "1er" : f.classement.rang + "e") + " de Ligue 1 · " + f.classement.points + " pts</span>" : "") + "</h2>" +
     '<div class="f">' + table + '<div class="f-cote"><div class="carte"><div class="etiquette">Derniers résultats</div>' + a + '</div><div class="carte"><div class="etiquette">Prochains matchs</div>' + b + "</div></div></div>";
+}
+
+/* ---------- Mode match plein écran (PSG, toutes compétitions) ---------- */
+var matchReduit = false, matchOuvert = false, dernierScore = null;
+function sigleEquipe(e) {
+  if (e && e.logo) return '<img src="' + echap(e.logo) + '" alt="">';
+  return '<div class="sigle">' + echap(nomEquipe(e && e.nom).substr(0, 3).toUpperCase()) + "</div>";
+}
+function majMatch(avant) {
+  var d = footDirect;
+  if (!d || !d.dom) return;
+  var actif = d.etat === "in" || d.etat === "post";
+  if (!actif) return;
+  // nouveau but ?
+  var cle = d.sd + "-" + d.se;
+  if (dernierScore !== null && cle !== dernierScore) {
+    var nousDom = d.dom.nom === CONFIG.equipe.nom, ancien = dernierScore.split("-");
+    var butDom = d.sd > +ancien[0], butExt = d.se > +ancien[1];
+    var pourNous = (butDom && nousDom) || (butExt && !nousDom);
+    var dernierBut = null;
+    for (var i = d.buts.length - 1; i >= 0; i--) if (d.buts[i].nous === pourNous) { dernierBut = d.buts[i]; break; }
+    if (butDom || butExt) celebrerBut(pourNous, dernierBut, pourNous ? null : nomEquipe(nousDom ? d.ext.nom : d.dom.nom));
+    matchReduit = false;   // un but ré-ouvre le mode match
+  }
+  dernierScore = cle;
+  if (!matchReduit) ouvrirMatch();
+  rendreMatch(avant && (avant.sd !== d.sd || avant.se !== d.se));
+}
+function rendreMatch(rebond) {
+  var d = footDirect, z = el("match-contenu");
+  if (!d || !d.dom) return;
+  var pause = d.nomEtat === "STATUS_HALFTIME" || /^(HT|Halftime|Mi-temps)$/i.test(d.detail), fin = d.etat === "post";
+  var chrono = fin ? "Terminé" : pause ? "Mi-temps" : (d.minute || d.detail);
+  var nousDom = d.dom.nom === CONFIG.equipe.nom, g = "", dr = "";
+  for (var i = 0; i < d.buts.length; i++) {
+    var b = d.buts[i], ligne = "<p>&#9917; <b>" + echap(b.nom) + "</b> " + echap(b.min) + "</p>";
+    if (b.nous === nousDom) g += ligne; else dr += ligne;
+  }
+  function stat(lib, cle, pct) {
+    var a = d.stats.home && d.stats.home[cle], b2 = d.stats.away && d.stats.away[cle];
+    if (a === undefined || b2 === undefined) return "";
+    var na = parseFloat(a) || 0, nb = parseFloat(b2) || 0, tot = na + nb || 1;
+    return '<div class="stat"><span class="v">' + a + (pct ? "%" : "") + '</span><span class="barre"><i style="width:' + (na / tot * 100).toFixed(0) + '%"></i></span>' +
+      '<span class="lib">' + lib + '</span><span class="barre" style="-webkit-transform:scaleX(-1);transform:scaleX(-1)"><i style="width:' + (nb / tot * 100).toFixed(0) + '%"></i></span><span class="v">' + b2 + (pct ? "%" : "") + "</span></div>";
+  }
+  z.innerHTML = '<div class="compet">' + echap(ESPN_COMPET[d.compet] || "") + "</div>" +
+    '<div class="chrono' + (pause ? " pause" : "") + (fin ? " fin" : "") + '"><i></i>' + echap(chrono) + "</div>" +
+    '<div class="duel"><div class="equipe">' + sigleEquipe(d.dom) + '<div class="nom">' + echap(nomEquipe(d.dom.nom)) + "</div></div>" +
+    '<div class="score"><span' + (rebond ? ' class="rebond"' : "") + ">" + d.sd + '</span><span class="tiret">–</span><span' + (rebond ? ' class="rebond"' : "") + ">" + d.se + "</span></div>" +
+    '<div class="equipe">' + sigleEquipe(d.ext) + '<div class="nom">' + echap(nomEquipe(d.ext.nom)) + "</div></div></div>" +
+    '<div class="buts"><div class="g">' + g + '</div><div class="d">' + dr + "</div></div>" +
+    '<div class="stats">' + stat("Possession", "possessionPct", true) + stat("Tirs", "totalShots") + stat("Cadrés", "shotsOnTarget") + "</div>";
+}
+function ouvrirMatch() { if (!matchOuvert) { matchOuvert = true; el("match").className = "ouvert"; } }
+function fermerMatch() { matchOuvert = false; el("match").className = ""; dernierScore = null; matchReduit = false; }
+function reduireMatch() { matchReduit = true; matchOuvert = false; el("match").className = ""; }
+function celebrerBut(pourNous, but, adversaire) {
+  if (!CONFIG.animerIcones) return;
+  var z = el("but");
+  z.className = "";
+  z.innerHTML = '<div class="flash"></div>' + (pourNous ? '<div class="onde"></div><div class="onde" style="-webkit-animation-delay:.5s;animation-delay:.5s"></div>' : "") +
+    '<div class="mot">' + (pourNous ? "BUT !" : "But " + (adversaire ? "de " + echap(adversaire) : "adverse")) + "</div>" +
+    (but ? '<div class="qui">' + echap(but.nom) + " · " + echap(but.min) + "</div>" : "");
+  setTimeout(function () { z.className = "go" + (pourNous ? "" : " eux"); }, 30);
+  setTimeout(function () { z.className = ""; z.innerHTML = ""; }, 4800);
+}
+// aperçu : match simulé (#demo + matchDemo() dans la console)
+function matchDemo() {
+  footDirect = { etat: "in", minute: "67'", detail: "67'", nomEtat: "STATUS_SECOND_HALF", sd: 1, se: 1, compet: "uefa.champions",
+    dom: { nom: "Paris Saint-Germain", logo: "" }, ext: { nom: "AS Roma", logo: "" },
+    buts: [{ nom: "Dembélé", min: "23'", nous: true }, { nom: "Dybala", min: "51'", nous: false }],
+    stats: { home: { possessionPct: "61", totalShots: "14", shotsOnTarget: "6" }, away: { possessionPct: "39", totalShots: "7", shotsOnTarget: "3" } } };
+  dernierScore = "1-1"; majMatch(null);
+}
+function matchDemoBut() {
+  var avant = { sd: footDirect.sd, se: footDirect.se };
+  footDirect.sd = 2; footDirect.minute = "74'"; footDirect.buts.push({ nom: "Doué", min: "74'", nous: true });
+  majMatch(avant);
 }
 
 /* ---------- Rechargement automatique ----------
