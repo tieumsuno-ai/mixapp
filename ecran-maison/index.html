@@ -1390,7 +1390,7 @@ setInterval(afficherSonos, 60000);
    Les 3 plus récentes de moins de 30 jours (réglable : joursActus) rejoignent l'encadré qui défile. */
 var etatActus = [];
 function chargerActus() {
-  setTimeout(chargerActus, 30 * 60000);
+  setTimeout(chargerActus, 3 * 3600000);
   if (location.hash === "#demo") { etatActus = actusDemo(); construireInfos(); return; }
   if (!CONFIG.urlActus) return;
   chargerJSON(CONFIG.urlActus + "?t=" + new Date().getTime(), function (d) { etatActus = d || []; construireInfos(); });

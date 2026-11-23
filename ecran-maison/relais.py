@@ -2,7 +2,7 @@
 # Relais de l'écran maison — tourne en continu sur le NAS (Container Station).
 # Toutes les 15 minutes :
 #   1. met à jour la page (index.html) dans le dossier Web si une nouvelle version est publiée ;
-#   2. relève les dernières actualités des sites des mairies (ACTUS) et les écrit dans actus.json ;
+#   2. une fois par jour, relève les actualités des sites des mairies (ACTUS) dans actus.json ;
 #   3. si les codes Netatmo sont fournis, relève la température de chaque pièce
 #      et l'écrit dans interieur.json, que la page affiche.
 # En parallèle, une petite API (port 8099) permet à la page de piloter les enceintes Sonos
@@ -58,6 +58,16 @@ def maj_page():
 
 # ---------- 2 bis. Actualités des mairies (flux RSS des sites officiels) ----------
 ACTUS = [x.strip() for x in os.environ.get("ACTUS", "").split(",") if x.strip()]   # « Nom=https://site/feed/ »
+ACTUS_HEURE = int(os.environ.get("ACTUS_HEURE", "6"))   # une seule lecture par jour, à partir de 6 h
+actus_jour = None
+
+
+def actus_a_faire():
+    """Vrai au démarrage, puis une fois par jour après ACTUS_HEURE."""
+    maintenant = datetime.datetime.now()
+    if actus_jour is None:
+        return True
+    return actus_jour != maintenant.date() and maintenant.hour >= ACTUS_HEURE
 
 
 def texte_propre(t):
@@ -69,6 +79,8 @@ def texte_propre(t):
 
 
 def maj_actus():
+    global actus_jour
+    actus_jour = datetime.datetime.now().date()
     tout = []
     for source in ACTUS:
         nom, _, url = source.partition("=")
@@ -709,7 +721,7 @@ if SONOS or TYDOM:
         log("API Sonos impossible :", repr(e))
 while True:
     maj_page()
-    if ACTUS:
+    if ACTUS and actus_a_faire():
         maj_actus()
     if NETATMO:
         maj_netatmo()
