@@ -83,7 +83,6 @@ def texte_propre(t):
 
 def maj_actus():
     global actus_jour
-    actus_jour = datetime.datetime.now().date()
     tout = []
     for source in ACTUS:
         nom, _, url = source.partition("=")
@@ -116,6 +115,7 @@ def maj_actus():
         except Exception as e:
             log("Actus %s indisponibles :" % nom, repr(e))
     if tout:
+        actus_jour = datetime.datetime.now().date()
         tout.sort(key=lambda x: x["date"], reverse=True)
         ecrire("actus.json", json.dumps(tout, ensure_ascii=False).encode("utf-8"))
 
@@ -479,8 +479,30 @@ TYDOM_CONF = "/config/tydom.json"
 DD_AUTH = ("https://deltadoreadb2ciot.b2clogin.com/deltadoreadb2ciot.onmicrosoft.com/v2.0/"
            ".well-known/openid-configuration?p=B2C_1_AccountProviderROPC_SignIn")
 DD_CLIENT = "8782839f-3264-472a-ab87-4d4e23524da4"
-DD_SCOPE = ("openid profile offline_access https://deltadoreadb2ciot.onmicrosoft.com/iotapi/sites_management_allowed "
-            "https://deltadoreadb2ciot.onmicrosoft.com/iotapi/sites_management_gateway_credentials")
+DD_SCOPE = "openid profile offline_access " + " ".join("https://deltadoreadb2ciot.onmicrosoft.com/iotapi/" + x for x in (
+    "video_config", "video_allowed", "sites_management_allowed", "sites_management_gateway_credentials",
+    "sites_management_camera_credentials", "comptage_europe_collect_reader", "comptage_europe_site_config_contributor",
+    "pilotage_allowed", "consent_mgt_contributor", "b2caccountprovider_manage_account", "b2caccountprovider_allow_view_account",
+    "tydom_backend_allowed", "websocket_remote_access", "orkestrator_device", "orkestrator_view", "orkestrator_space",
+    "orkestrator_connector", "orkestrator_endpoint", "rule_management_allowed", "collect_read_datas"))
+
+
+def post_multipart(url, champs):
+    """Envoi « multipart/form-data », comme l'appli Tydom."""
+    borne = "----ecran" + os.urandom(8).hex()
+    corps = b"".join(("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n" % (borne, k)).encode() + v.encode("utf-8") + b"\r\n"
+                     for k, v in champs.items()) + ("--%s--\r\n" % borne).encode()
+    req = urllib.request.Request(url, data=corps, method="POST", headers={"Content-Type": "multipart/form-data; boundary=" + borne})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read().decode("utf-8", "replace"))
+            detail = "%s — %s" % (err.get("error", ""), (err.get("error_description") or "").split("\r\n")[0][:160])
+        except Exception:
+            detail = "HTTP %d" % e.code
+        raise RuntimeError("connexion au compte Delta Dore refusée : " + detail)
 DD_SITES = "https://prod.iotdeltadore.com/sitesmanagement/api/v1/sites?gateway_mac="
 
 
@@ -497,8 +519,8 @@ def mdp_tydom():
         raise RuntimeError("mot de passe de la box Tydom absent (TYDOM_MDP ou DELTADORE_EMAIL/DELTADORE_MDP)")
     with urllib.request.urlopen(DD_AUTH, timeout=30) as r:
         jeton_url = json.load(r)["token_endpoint"]
-    t = post(jeton_url, {"username": email, "password": mdp, "grant_type": "password",
-                         "client_id": DD_CLIENT, "scope": DD_SCOPE})
+    t = post_multipart(jeton_url, {"username": email, "password": mdp, "grant_type": "password",
+                                   "client_id": DD_CLIENT, "scope": DD_SCOPE})
     sites = get(DD_SITES + TYDOM_MAC, t["access_token"]).get("sites", [])
     for site in sites:
         gw = site.get("gateway") or {}
@@ -557,7 +579,7 @@ class WS:
         self.s, self.verrou = s, threading.Lock()
 
     def _ouvrir(self):
-        brut = socket.create_connection((self.hote, self.port), timeout=20)
+        brut = socket.create_connection((self.hote, self.port), timeout=40)
         return self.ctx.wrap_socket(brut, server_hostname=self.hote)
 
     @staticmethod
@@ -676,9 +698,9 @@ def est_tydom(ip):
             ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
         except (ssl.SSLError, ValueError, AttributeError):
             pass
-        with socket.create_connection((ip, TYDOM_PORT), timeout=1.5) as brut:
+        with socket.create_connection((ip, TYDOM_PORT), timeout=15) as brut:
             with ctx.wrap_socket(brut, server_hostname=ip) as s:
-                s.settimeout(3)
+                s.settimeout(20)
                 s.sendall(("GET /mediation/client?mac=%s&appli=1 HTTP/1.1\r\nHost: %s\r\n\r\n" % (TYDOM_MAC, ip)).encode())
                 tete = s.recv(2048).decode("latin-1")
         diag[ip] = tete.split("\r\n")[0][:60] + (" [Digest]" if "Digest" in tete else "")
