@@ -148,14 +148,32 @@
   .sonos .vol span { font-size: 2.6vh; font-weight: 400; min-width: 5vh; text-align: center; }
   .sonos.attente .commandes, .sonos.attente .pochette { opacity: 0.6; }
 
-  /* Tuile PSG */
-  .foot { margin-top: 1.6vh; padding-top: 1.5vh; padding-bottom: 1.4vh; display: none; }
+  /* Tuile Foot (défilante : une diapo par équipe) */
+  .foot { margin-top: 1.6vh; padding-top: 1.5vh; padding-bottom: 1.4vh; display: none; position: relative; }
   .foot.visible { display: block; }
+  .foot .diapos { display: -ms-grid; display: grid; }
+  .foot .diapo { grid-row: 1; grid-column: 1; min-width: 0; opacity: 0; visibility: hidden;
+    -webkit-transform: translateX(2.5vw); transform: translateX(2.5vw);
+    -webkit-transition: opacity 0.7s, -webkit-transform 0.7s, visibility 0s 0.7s; transition: opacity 0.7s, transform 0.7s, visibility 0s 0.7s; }
+  .foot .diapo.on { opacity: 1; visibility: visible; -webkit-transform: none; transform: none;
+    -webkit-transition: opacity 0.7s 0.25s, -webkit-transform 0.7s 0.25s; transition: opacity 0.7s 0.25s, transform 0.7s 0.25s; }
+  .foot .points { position: absolute; right: 2vw; bottom: 2.1vh; line-height: 0; }
+  .foot.plusieurs .diapo .ligne:last-child { padding-right: 4.5vw; }
+  .foot .pt { display: inline-block; width: 0.8vh; height: 0.8vh; border-radius: 50%; background: rgba(255,255,255,0.28); margin: 0 0.35vh; }
+  .foot .pt.on { background: #fff; }
+  .foot .ecu { display: inline-block; width: 2.6vh; height: 2.6vh; border-radius: 50%; background: #fff; margin-right: 0.6vw;
+    vertical-align: -0.45vh; overflow: hidden; text-align: center; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .foot .ecu img { width: 80%; height: 80%; margin-top: 10%; -o-object-fit: contain; object-fit: contain; display: inline-block; vertical-align: top; }
+  .foot .ecu.droite { margin-right: 0; margin-left: 0.6vw; }
+  .foot .ecu.grand { width: 4.2vh; height: 4.2vh; margin-right: 0.9vw; }
+  .foot .haut .etiquette b { font-weight: 600; }
+  .foot .diapo .score { font-size: 3.1vh; }
+  .foot .diapo .haut .etiquette { letter-spacing: 0.14em; }
   .foot .haut { display: -webkit-box; display: -webkit-flex; display: flex;
     -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between;
     -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
   .foot .forme { white-space: nowrap; margin-left: 1vw; -webkit-flex-shrink: 0; flex-shrink: 0; }
-  .foot .haut .etiquette { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .foot .haut .etiquette { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; }
   .foot .forme span { display: inline-block; width: 2.3vh; height: 2.3vh; line-height: 2.3vh; border-radius: 50%;
     font-size: 1.35vh; font-weight: 600; text-align: center; margin-left: 0.35vw; color: #0b1026; }
   .foot .forme .V { background: #5fd38d; } .foot .forme .N { background: #c9cbd6; } .foot .forme .D { background: #ff7b6b; }
@@ -1247,24 +1265,38 @@ var ESPN_COMPET = { "fra.1": "Ligue 1", "uefa.champions": "Ligue des champions",
 var COMPET_COURT = { "fra.1": "Ligue 1", "uefa.champions": "C1", "fra.coupe_de_france": "Coupe de France" };
 var ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/";
 function idESPN() { return CONFIG.equipe && (CONFIG.equipe.espn || ESPN_EQUIPES[String(CONFIG.equipe.id)]); }
-function chargerFoot() {
-  if (!CONFIG.equipe) return;
-  clearTimeout(footMinuteur);
-  if (location.hash === "#demo") { etatFoot = footDemo(); afficherFoot(); return; }
-  footMinuteur = setTimeout(chargerFoot, 30 * 60000);
-  var id = idESPN();
-  if (!id) return;
-  var urls = [], tous = [], n = 0, ok = 0, res = { classement: null };
-  for (var c in ESPN_COMPET) {
+// Équipes de la tuile Foot (en plus du club principal) : sélection nationale via ESPN, clubs amateurs via le relais (foot_fff.json)
+var FOOT_FRANCE = { cle: "fra", nom: "France", court: "France", espn: 478, logo: "https://a.espncdn.com/i/teamlogos/countries/500/fra.png",
+  compet: { "uefa.nations": "Ligue des nations", "fifa.world": "Coupe du monde", "uefa.euro": "Euro", "uefa.euroq": "Qualifications Euro",
+            "fifa.worldq.uefa": "Qualifications Mondial", "fifa.friendly": "Match amical" },
+  court_: { "uefa.nations": "Ligue des nations", "fifa.world": "Mondial", "uefa.euro": "Euro", "uefa.euroq": "Qualif. Euro",
+           "fifa.worldq.uefa": "Qualif. Mondial", "fifa.friendly": "Amical" }, table: "uefa.nations" };
+var PAYS = { "Spain": "Espagne", "Belgium": "Belgique", "Italy": "Italie", "Türkiye": "Turquie", "Turkey": "Turquie", "Germany": "Allemagne",
+  "England": "Angleterre", "Netherlands": "Pays-Bas", "Croatia": "Croatie", "Sweden": "Suède", "Norway": "Norvège", "Senegal": "Sénégal",
+  "Iraq": "Irak", "Brazil": "Brésil", "Colombia": "Colombie", "Ivory Coast": "Côte d'Ivoire", "Northern Ireland": "Irlande du Nord",
+  "Switzerland": "Suisse", "Denmark": "Danemark", "Austria": "Autriche", "Poland": "Pologne", "Scotland": "Écosse", "Wales": "Pays de Galles",
+  "Republic of Ireland": "Irlande", "Iceland": "Islande", "Greece": "Grèce", "Morocco": "Maroc", "Argentina": "Argentine",
+  "Mexico": "Mexique", "United States": "États-Unis", "USA": "États-Unis", "Japan": "Japon", "Czechia": "Tchéquie", "Czech Republic": "Tchéquie",
+  "Hungary": "Hongrie", "Serbia": "Serbie", "Slovenia": "Slovénie", "Slovakia": "Slovaquie", "Romania": "Roumanie", "Algeria": "Algérie",
+  "Tunisia": "Tunisie", "Cameroon": "Cameroun", "Egypt": "Égypte", "South Korea": "Corée du Sud", "Australia": "Australie",
+  "Canada": "Canada", "Finland": "Finlande", "Georgia": "Géorgie", "Albania": "Albanie", "Israel": "Israël", "Kazakhstan": "Kazakhstan",
+  "Luxembourg": "Luxembourg", "Gibraltar": "Gibraltar", "Azerbaijan": "Azerbaïdjan", "Uruguay": "Uruguay", "Chile": "Chili", "Ecuador": "Équateur" };
+var etatFrance = null, etatFFF = [];
+// Calendrier + classement d'une équipe ESPN ; fin(res) reçoit { dernier, prochain, passes, avenir, forme, classement, table }
+function chargerEquipeESPN(eq, fin) {
+  var id = eq.espn, urls = [], tous = [], n = 0, ok = 0, res = { classement: null };
+  for (var c in eq.compet) {
     urls.push([c, ESPN + c + "/teams/" + id + "/schedule"]);
     urls.push([c, ESPN + c + "/teams/" + id + "/schedule?fixture=true"]);
   }
   function fini() {
-    if (++n < urls.length + 1) return;
+    if (++n < urls.length + (eq.table ? 1 : 0)) return;
     if (!ok) return;
-    var maintenant = new Date().getTime(), passes = [], futurs = [];
+    var maintenant = new Date().getTime(), passes = [], futurs = [], vus = {};
     for (var i = 0; i < tous.length; i++) {
       var m = tous[i];
+      if (vus[m.id]) continue;
+      vus[m.id] = 1;
       if (m.termine) passes.push(m);
       else if (m.date.getTime() > maintenant - 3 * 3600000) futurs.push(m);
     }
@@ -1275,37 +1307,92 @@ function chargerFoot() {
     res.passes = passes.slice(0, 6);
     res.avenir = futurs.slice(0, 6);
     res.forme = passes.slice(0, 5).reverse();
-    etatFoot = res;
-    afficherFoot();
-    if (res.dernier) chargerButeurs(res.dernier);
-    surveillerDirect();
+    fin(res);
   }
   for (var k = 0; k < urls.length; k++) (function (compet, u) {
     chargerJSON(u, function (a) {
       ok++;
       var ev = a.events || [];
-      for (var i = 0; i < ev.length; i++) { var m = matchESPN(ev[i], compet); if (m) tous.push(m); }
+      for (var i = 0; i < ev.length; i++) { var m = matchESPN(ev[i], compet, id, eq); if (m) tous.push(m); }
       fini();
     }, fini);
   })(urls[k][0], urls[k][1]);
-  chargerJSON("https://site.api.espn.com/apis/v2/sports/soccer/fra.1/standings", function (a) {
+  if (eq.table) chargerJSON("https://site.api.espn.com/apis/v2/sports/soccer/" + eq.table + "/standings", function (a) {
     try {
-      var en = a.children[0].standings.entries;
+      var gr = a.children || [], en = null, nomGr = "";
+      for (var g = 0; g < gr.length && !en; g++) {
+        var e0 = gr[g].standings.entries;
+        for (var x = 0; x < e0.length; x++) if (String(e0[x].team.id) === String(id)) { en = e0; nomGr = gr.length > 1 ? gr[g].name || "" : ""; }
+      }
+      if (!en) { fini(); return; }
       res.table = [];
       for (var i = 0; i < en.length; i++) {
         var st = {}; for (var j = 0; j < en[i].stats.length; j++) st[en[i].stats[j].name] = en[i].stats[j].value;
         var nous = String(en[i].team.id) === String(id);
-        res.table.push({ rang: st.rank, nom: en[i].team.shortDisplayName || en[i].team.displayName, j: st.gamesPlayed, pts: st.points,
+        res.table.push({ rang: st.rank, nom: PAYS[en[i].team.displayName] || en[i].team.shortDisplayName || en[i].team.displayName, j: st.gamesPlayed, pts: st.points,
                          diff: st.pointDifferential, g: st.wins, n: st.ties, p: st.losses, nous: nous });
-        if (nous) res.classement = { rang: st.rank, points: st.points, joues: st.gamesPlayed };
+        if (nous) res.classement = { rang: st.rank, points: st.points, joues: st.gamesPlayed,
+                                     ou: nomGr ? "" + nomGr.replace(/^(Group|League)\s+/i, "") : eq.ouClassement || "L1" };
       }
       res.table.sort(function (x, y) { return x.rang - y.rang; });
     } catch (e) {}
     fini();
   }, fini);
 }
+function equipePrincipale() {
+  var e = CONFIG.equipe;
+  return { cle: "club", nom: e.nom, court: e.court, espn: idESPN(), compet: ESPN_COMPET, court_: COMPET_COURT, table: "fra.1", ouClassement: "L1",
+           logo: e.logo || (idESPN() ? "https://a.espncdn.com/i/teamlogos/soccer/500/" + idESPN() + ".png" : "") };
+}
+function chargerFoot() {
+  clearTimeout(footMinuteur);
+  footMinuteur = setTimeout(chargerFoot, 30 * 60000);
+  chargerFFF();
+  if (location.hash === "#demo") { if (CONFIG.equipe) etatFoot = footDemo(); if (CONFIG.footFrance !== false) etatFrance = franceDemo(); afficherFoot(); return; }
+  if (CONFIG.footFrance !== false) chargerEquipeESPN(FOOT_FRANCE, function (res) {
+    etatFrance = res;
+    afficherFoot();
+    if (res.dernier) chargerButeurs(res.dernier);
+  });
+  if (!CONFIG.equipe || !idESPN()) return;
+  chargerEquipeESPN(equipePrincipale(), function (res) {
+    etatFoot = res;
+    afficherFoot();
+    if (res.dernier) chargerButeurs(res.dernier);
+    surveillerDirect();
+  });
+}
+// Clubs amateurs : fichier écrit par le relais du NAS (API FFF)
+function chargerFFF() {
+  chargerJSON(CONFIG.urlFootFFF || "foot_fff.json", function (a) {
+    var l = [], now = new Date().getTime();
+    for (var i = 0; i < (a.equipes || []).length; i++) {
+      var e = a.equipes[i], passes = [], futurs = [];
+      for (var j = 0; j < (e.matchs || []).length; j++) {
+        var x = e.matchs[j], s = x.date;
+        var m = { id: "fff" + i + "-" + j, date: new Date(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2)),
+                  sansHeure: !x.heure, termine: x.termine, dom: x.nousDom ? e.court : x.dom, ext: x.nousDom ? x.ext : e.court, nousDom: x.nousDom,
+                  sd: x.sd, se: x.se, tab: x.tab, cNom: x.compet + (x.poule && x.poule[4] ? " · " + x.poule[4] + "e journée" : ""),
+                  cCourt: x.compet, ldom: x.logoDom, lext: x.logoExt };
+        if (m.termine) passes.push(m); else if (m.date.getTime() > now - 3 * 3600000) futurs.push(m);
+      }
+      passes.sort(function (x, y) { return y.date - x.date; });
+      futurs.sort(function (x, y) { return x.date - y.date; });
+      var cl = null;
+      for (j = 0; j < (e.table || []).length; j++) if (e.table[j].nous) cl = { rang: e.table[j].rang, points: e.table[j].pts, joues: e.table[j].j, ou: e.competCourt || "" };
+      l.push({ eq: { cle: "fff" + e.club, nom: e.court, court: e.court, logo: e.logo, compet: e.compet },
+               f: { dernier: passes[0] || null, prochain: futurs[0] || null, passes: passes.slice(0, 6), avenir: futurs.slice(0, 6),
+                    forme: passes.slice(0, 5).reverse(), classement: cl, table: e.table || null } });
+    }
+    etatFFF = l;
+    afficherFoot();
+  });
+}
 function scoreESPN(s) { if (s === undefined || s === null) return null; if (typeof s === "object") s = s.displayValue !== undefined ? s.displayValue : s.value; return s === "" || s === undefined ? null : Math.round(+s); }
-function matchESPN(e, compet) {
+function logoESPN(tm) {
+  return (tm.logos && tm.logos[0] && tm.logos[0].href) || tm.logo || "";
+}
+function matchESPN(e, compet, idEq, eq) {
   var c = e.competitions && e.competitions[0];
   if (!c || !c.competitors || c.competitors.length < 2 || !e.date) return null;
   var dom = null, ext = null;
@@ -1313,9 +1400,11 @@ function matchESPN(e, compet) {
   if (!dom || !ext) return null;
   var st = (c.status && c.status.type) || (e.status && e.status.type) || {};
   if (st.name === "STATUS_POSTPONED" || st.name === "STATUS_CANCELED") return null;
-  var termine = !!st.completed || st.state === "post", id = String(idESPN());
+  var termine = !!st.completed || st.state === "post", id = String(idEq || idESPN());
+  eq = eq || { compet: ESPN_COMPET, court_: COMPET_COURT };
   return { id: e.id, compet: compet, date: dateUTC(e.date), termine: termine,
            dom: dom.team.displayName, ext: ext.team.displayName, nousDom: String(dom.team.id) === id,
+           ldom: logoESPN(dom.team), lext: logoESPN(ext.team), cNom: eq.compet[compet], cCourt: eq.court_[compet],
            sd: termine ? scoreESPN(dom.score) : null, se: termine ? scoreESPN(ext.score) : null };
 }
 function dateUTC(s) { return new Date(Date.UTC(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2))); }
@@ -1382,7 +1471,7 @@ function recevoirDirect(s, p) {
   majMatch(avant);
   if (st.state === "post" && new Date().getTime() - footDirect.finA > 15 * 60000) { footDirect = null; fermerMatch(); chargerFoot(); }
 }
-function nomEquipe(n) { return CONFIG.equipe && n === CONFIG.equipe.nom ? CONFIG.equipe.court : (n || "").replace(/^(AS|FC|OGC|RC|AJ|SCO|ESTAC|SL|SC|AC|SS|CF|RB|PSV) /, "").replace(/ (FC|CF|AC)$/, ""); }
+function nomEquipe(n) { return CONFIG.equipe && n === CONFIG.equipe.nom ? CONFIG.equipe.court : PAYS[n] || (n || "").replace(/^(AS|FC|OGC|RC|AJ|SCO|ESTAC|SL|SC|AC|SS|CF|RB|PSV) /, "").replace(/ (FC|CF|AC)$/, ""); }
 function lignesButs(buts) {
   if (!buts || !buts.length) return "";
   var a = [], b = [];
@@ -1390,50 +1479,93 @@ function lignesButs(buts) {
   var ballon = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M12 7.5l3.6 2.6-1.4 4.2H9.8L8.4 10.1z" fill="#fff"/></svg>';
   return '<div class="ligne">' + ballon + (a.length ? a.join(" · ") : "—") + (b.length ? ' <span class="eux">· ' + b.join(" · ") + "</span>" : "") + "</div>";
 }
-function quandMatch(d, now) {
-  var nj = joursEntre(now, d);
-  if (nj === 0) return (d.getHours() >= 18 ? "ce soir " : "aujourd'hui ") + hm(d);
-  if (nj === 1) return "demain " + hm(d);
-  return JOURS[d.getDay()].substr(0, 3) + ". " + d.getDate() + " " + MOISCOURT[d.getMonth()] + " " + hm(d);
+function quandMatch(d, now, sansHeure) {
+  var nj = joursEntre(now, d), h = sansHeure ? "" : " " + hm(d);
+  if (nj === 0) return sansHeure ? "aujourd'hui" : (d.getHours() >= 18 ? "ce soir" : "aujourd'hui") + h;
+  if (nj === 1) return "demain" + h;
+  return JOURS[d.getDay()].substr(0, 3) + ". " + d.getDate() + " " + MOISCOURT[d.getMonth()] + h;
 }
-function afficherFoot() {
-  var z = document.getElementById("foot"), f = etatFoot, now = new Date();
-  if (!f || (!f.dernier && !f.prochain)) { z.className = "carte foot"; return; }
-  var court = CONFIG.equipe.court, h = "", titre = court, cl = f.classement;
-  if (cl && cl.rang) titre += " · " + (cl.rang === 1 ? "1er" : cl.rang + "e") + " de L1 · " + cl.points + " pts";
+/* Tuile Foot défilante : une diapo par équipe (club principal, équipe de France, clubs amateurs) */
+var footDiapo = 0, footCles = [], footRotation = null;
+function ecusson(url, cls) {
+  if (!url) return "";
+  return '<span class="ecu' + (cls ? " " + cls : "") + '"><img src="' + echap(url) + '" onerror="this.parentNode.style.display=\'none\'"></span>';
+}
+function diapoFoot(eq, f, now, enDirect) {
+  var nomM = eq.fff ? function (n) { return n; } : nomEquipe, h = "", titre = '<b>' + echap(eq.court) + "</b>", cl = f.classement;
+  if (cl && cl.rang) titre += " · " + (cl.rang === 1 ? (eq.cle === "fra" ? "1re" : "1er") : cl.rang + "e") + " " + (cl.ou || eq.ouClassement || "") + " · " + cl.points + " pts";
+  var jourM = function (m) { return JOURS[m.date.getDay()].substr(0, 3) + ". " + m.date.getDate() + " " + MOISCOURT[m.date.getMonth()]; };
   var forme = "";
   if (f.forme) for (var i = 0; i < f.forme.length; i++) {
     var m = f.forme[i], nous = m.nousDom ? m.sd : m.se, eux = m.nousDom ? m.se : m.sd, r = nous > eux ? "V" : nous < eux ? "D" : "N";
+    if (r === "N" && m.tab) r = (m.nousDom ? m.tab[0] > m.tab[1] : m.tab[1] > m.tab[0]) ? "V" : "D";
     forme += '<span class="' + r + '">' + r + "</span>";
   }
+  var haut = '<div class="haut">' + ecusson(eq.logo, "grand") + '<div class="etiquette">' + titre + '</div><div class="forme">' + forme + "</div></div>";
+  function affiche(m, score) {
+    return ecusson(m.ldom) + echap(nomM(m.dom)) + (score ? " <b>" + score + "</b> " : " – ") + echap(nomM(m.ext)) + ecusson(m.lext, "droite");
+  }
   var p = f.prochain;
-  if (footDirect && p && footDirect.etat === "in") {
-    h += '<div class="haut"><div class="etiquette direct"><i></i>' + court + " · en direct · " + echap(footDirect.detail || footDirect.minute) + '</div></div>' +
-      '<div class="score">' + nomEquipe(p.dom) + " <b>" + footDirect.sd + " – " + footDirect.se + "</b> " + nomEquipe(p.ext) + "</div>" +
-      lignesButs(footDirect.buts) + '<div class="ligne">' + ESPN_COMPET[p.compet] + "</div>";
+  if (enDirect) {
+    h += '<div class="haut">' + ecusson(eq.logo, "grand") + '<div class="etiquette direct"><i></i>' + echap(eq.court) + " · en direct · " + echap(footDirect.detail || footDirect.minute) + '</div></div>' +
+      '<div class="score">' + affiche(p, footDirect.sd + " – " + footDirect.se) + "</div>" +
+      lignesButs(footDirect.buts) + '<div class="ligne">' + echap(p.cNom || "") + "</div>";
   } else if (p && joursEntre(now, p.date) === 0) {
-    h += '<div class="haut"><div class="etiquette">' + titre + '</div><div class="forme">' + forme + "</div></div>" +
-      '<div class="score">' + nomEquipe(p.dom) + " – " + nomEquipe(p.ext) + '<span class="quand">' + quandMatch(p.date, now) + "</span></div>" +
-      '<div class="ligne">Match ' + (p.date.getHours() >= 18 ? "ce soir" : "aujourd'hui") + " · " + ESPN_COMPET[p.compet] + "</div>";
+    h += haut + '<div class="score">' + affiche(p) + '<span class="quand">' + quandMatch(p.date, now, p.sansHeure) + "</span></div>" +
+      '<div class="ligne">Match ' + (p.sansHeure ? "aujourd'hui" : p.date.getHours() >= 18 ? "ce soir" : "aujourd'hui") + " · " + echap(p.cNom || "") + "</div>";
     var d0 = f.dernier;
-    if (d0) h += '<div class="ligne eux">Dernier : ' + nomEquipe(d0.dom) + " " + d0.sd + " – " + d0.se + " " + nomEquipe(d0.ext) + "</div>";
+    if (d0) h += '<div class="ligne eux">Dernier : ' + echap(nomM(d0.dom)) + " " + d0.sd + " – " + d0.se + " " + echap(nomM(d0.ext)) + "</div>";
   } else {
     var d = f.dernier;
-    h += '<div class="haut"><div class="etiquette">' + titre + '</div><div class="forme">' + forme + "</div></div>";
+    h += haut;
     if (d) {
       var n2 = d.nousDom ? d.sd : d.se, e2 = d.nousDom ? d.se : d.sd;
-      var tag = n2 > e2 ? '<span class="tag v">Victoire</span>' : n2 < e2 ? '<span class="tag d">Défaite</span>' : '<span class="tag n">Nul</span>';
-      h += '<div class="score">' + nomEquipe(d.dom) + " <b>" + d.sd + " – " + d.se + "</b> " + nomEquipe(d.ext) + tag +
-        '<span class="quand">' + JOURS[d.date.getDay()].substr(0, 3) + ". " + d.date.getDate() + " " + MOISCOURT[d.date.getMonth()] + "</span></div>" +
-        lignesButs(d.buts);
+      if (n2 === e2 && d.tab) { n2 = d.nousDom ? d.tab[0] : d.tab[1]; e2 = d.nousDom ? d.tab[1] : d.tab[0]; }
+      var tag = (nomM(d.dom) + nomM(d.ext)).length > 14 ? "" : n2 > e2 ? '<span class="tag v">Victoire</span>' : n2 < e2 ? '<span class="tag d">Défaite</span>' : '<span class="tag n">Nul</span>';
+      h += '<div class="score">' + affiche(d, d.sd + " – " + d.se) + tag + "</div>" +
+        (d.buts && d.buts.length ? lignesButs(d.buts) : '<div class="ligne eux">' + jourM(d) + " · " + echap(d.cNom || "") + (d.tab ? " · tab " + d.tab[0] + "-" + d.tab[1] : "") + "</div>");
     }
-    if (p) h += '<div class="ligne">Prochain : <b>' + nomEquipe(p.dom) + " – " + nomEquipe(p.ext) + "</b> · " + quandMatch(p.date, now) +
-      ' <span class="eux">· ' + COMPET_COURT[p.compet] + "</span></div>";
+    if (p) h += '<div class="ligne">Prochain : <b>' + echap(nomM(p.dom)) + " – " + echap(nomM(p.ext)) + "</b> · " + quandMatch(p.date, now, p.sansHeure) +
+      ' <span class="eux">· ' + echap(p.cCourt || "") + "</span></div>";
+    else if (d) h += '<div class="ligne eux">Prochain match pas encore programmé</div>';
   }
-  z.innerHTML = h;
-  z.className = "carte foot visible";
+  return h;
+}
+function afficherFoot() {
+  var z = document.getElementById("foot"), now = new Date(), l = [];
+  if (etatFoot && CONFIG.equipe) l.push({ eq: equipePrincipale(), f: etatFoot });
+  if (etatFrance) l.push({ eq: FOOT_FRANCE, f: etatFrance });
+  for (var i = 0; i < etatFFF.length; i++) { etatFFF[i].eq.fff = true; l.push(etatFFF[i]); }
+  var dispo = [];
+  for (i = 0; i < l.length; i++) if (l[i].f && (l[i].f.dernier || l[i].f.prochain)) dispo.push(l[i]);
+  if (!dispo.length) { z.className = "carte foot"; return; }
+  var cleActive = footCles[footDiapo], direct = footDirect && etatFoot && etatFoot.prochain && footDirect.etat === "in";
+  footCles = [];
+  var h = "", pts = "";
+  for (i = 0; i < dispo.length; i++) footCles.push(dispo[i].eq.cle);
+  footDiapo = direct ? 0 : Math.max(0, footCles.indexOf(cleActive));
+  for (i = 0; i < dispo.length; i++) {
+    h += '<div class="diapo' + (i === footDiapo ? " on" : "") + '">' + diapoFoot(dispo[i].eq, dispo[i].f, now, direct && dispo[i].eq.cle === "club") + "</div>";
+    pts += '<span class="pt' + (i === footDiapo ? " on" : "") + '"></span>';
+  }
+  z.innerHTML = '<div class="diapos">' + h + "</div>" + (dispo.length > 1 ? '<div class="points">' + pts + "</div>" : "");
+  z.className = "carte foot visible" + (dispo.length > 1 ? " plusieurs" : "");
   demanderAlignement();
 }
+// Défilement : une équipe toutes les 10 s ; on reste sur le club principal pendant un match en direct
+function tournerFoot() {
+  var z = document.getElementById("foot");
+  if (!z || footCles.length < 2) return;
+  if (footDirect && footDirect.etat === "in" && footDiapo === 0) return;
+  var d = z.querySelectorAll(".diapo"), p = z.querySelectorAll(".points .pt");
+  if (d.length !== footCles.length) return;
+  d[footDiapo].className = "diapo";
+  if (p[footDiapo]) p[footDiapo].className = "pt";
+  footDiapo = (footDiapo + 1) % footCles.length;
+  d[footDiapo].className = "diapo on";
+  if (p[footDiapo]) p[footDiapo].className = "pt on";
+}
+setInterval(tournerFoot, (CONFIG.secondesParEquipe || 10) * 1000);
 
 /* ---------- Température intérieure (plus tard, via Home Assistant) ---------- */
 var etatInterieur = null; // format attendu : [{ "nom": "Salon", "temp": 20.5 }, …]
@@ -1641,12 +1773,26 @@ function donneesDemo() {
     }
   };
 }
+function franceDemo() {
+  var L = "https://a.espncdn.com/i/teamlogos/countries/500/";
+  return {
+    dernier: { id: "f1", compet: "uefa.nations", date: new Date(2026, 10, 15, 20, 45), termine: true, dom: "France", ext: "Türkiye", nousDom: true, sd: 3, se: 1,
+               cNom: "Ligue des nations", cCourt: "Ligue des nations", ldom: L + "fra.png", lext: L + "tur.png",
+               buts: [{ nom: "Mbappé", min: "12'", nous: true }, { nom: "Olise", min: "54'", nous: true }, { nom: "Güler", min: "71'", nous: false }, { nom: "Doué", min: "88'", nous: true }] },
+    prochain: { id: "f2", compet: "uefa.nations", date: new Date(2027, 2, 25, 20, 45), termine: false, dom: "Spain", ext: "France", nousDom: false,
+                cNom: "Ligue des nations", cCourt: "Ligue des nations", ldom: L + "esp.png", lext: L + "fra.png" },
+    classement: { rang: 1, points: 13, joues: 6, ou: "A1" },
+    forme: [{ nousDom: false, sd: 0, se: 2 }, { nousDom: false, sd: 1, se: 1 }, { nousDom: true, sd: 2, se: 0 }, { nousDom: true, sd: 1, se: 1 }, { nousDom: true, sd: 3, se: 1 }]
+  };
+}
 function footDemo() {
   return {
     dernier: { id: "1", compet: "fra.1", date: new Date(2026, 10, 21, 17, 15), termine: true, dom: "Nice", ext: "Paris Saint-Germain", nousDom: false, sd: 2, se: 3,
+               cNom: "Ligue 1", cCourt: "Ligue 1", ldom: "https://a.espncdn.com/i/teamlogos/soccer/500/2502.png", lext: "https://a.espncdn.com/i/teamlogos/soccer/500/160.png",
                buts: [{ nom: "Amoura", min: "8'", nous: false }, { nom: "Mayulu", min: "31'", nous: true }, { nom: "Doué", min: "32'", nous: true },
                       { nom: "Torres", min: "85'", nous: true }, { nom: "Abdi", min: "90+5'", nous: false }] },
-    prochain: { id: "2", compet: "uefa.champions", date: new Date(2026, 10, 25, 21, 0), termine: false, dom: "Paris Saint-Germain", ext: "AS Roma", nousDom: true },
+    prochain: { id: "2", compet: "uefa.champions", date: new Date(2026, 10, 25, 21, 0), termine: false, dom: "Paris Saint-Germain", ext: "AS Roma", nousDom: true,
+                cNom: "Ligue des champions", cCourt: "C1", ldom: "https://a.espncdn.com/i/teamlogos/soccer/500/160.png", lext: "https://a.espncdn.com/i/teamlogos/soccer/500/104.png" },
     classement: { rang: 1, points: 26, joues: 11 },
     table: (function () {
       var n = ["PSG", "Paris FC", "Lille", "Marseille", "Monaco", "Lyon", "Lens", "Strasbourg", "Nice", "Rennes", "Brest", "Toulouse", "Nantes", "Auxerre", "Angers", "Le Havre", "Lorient", "Troyes"], t = [];

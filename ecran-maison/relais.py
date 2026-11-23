@@ -3,6 +3,7 @@
 # Toutes les 15 minutes :
 #   1. met à jour la page (index.html) dans le dossier Web si une nouvelle version est publiée ;
 #   2. une fois par jour, relève les actualités des sites des mairies (ACTUS) dans actus.json ;
+#   2 bis. si FOOT_FFF est fourni, résultats et classement de clubs amateurs (API FFF) dans foot_fff.json ;
 #   2 ter. si l'adresse iCal secrète d'un agenda Google est fournie (AGENDA_ICS), écrit agenda.json ;
 #   3. si les codes Netatmo sont fournis, relève la température de chaque pièce
 #      et l'écrit dans interieur.json, que la page affiche.
@@ -372,6 +373,142 @@ def maj_cantine():
     if menus:
         ecrire("cantine.json", json.dumps(menus, ensure_ascii=False).encode("utf-8"))
         log("Cantine : %d jours de menus (%s → %s)" % (len(menus), min(menus), max(menus)))
+
+
+# ---------- 2 quinquies. Clubs amateurs (championnats et coupes FFF) ----------
+# FOOT_FFF = « 17767=Chambly » (numéro de club FFF = nom court ; plusieurs clubs séparés par des virgules).
+# Résultats, calendrier et classement de l'équipe première senior, lus sur l'API publique de la FFF
+# (celle des sites des districts et ligues) ; la page ne peut pas la lire elle-même (pas de CORS) → foot_fff.json.
+FOOT_FFF = [x.strip() for x in os.environ.get("FOOT_FFF", "").split(",") if x.strip()]
+FFF = "https://api-dofa.fff.fr"
+fff_derniere = 0
+SIGLES = {"SAS", "ASC", "FCSR", "USCO", "ESTAC", "OGC", "AJA", "SCO", "USL", "USM", "ESA", "ASPTT"}
+PETITS_MOTS = {"DE", "DU", "DES", "LA", "LE", "LES", "ST", "STE", "SUR", "EN", "AU", "ET"}
+
+
+def fff_json(chemin):
+    req = urllib.request.Request(FFF + chemin, headers={"User-Agent": "Mozilla/5.0 (ecran-maison)", "Accept": "application/ld+json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def nom_club(n):
+    """« CHAMBLY OISE FC » → « Chambly Oise FC » ; sigles (FC, US, AS…) gardés en capitales."""
+    mots = []
+    for m in (n or "").split():
+        if m in PETITS_MOTS:
+            mots.append(m.capitalize() if m in ("ST", "STE") else m.lower())
+        elif m == "S/MER":
+            mots.append("s/Mer")
+        elif len(m.strip(".")) <= 3 and "." not in m[:-1] or m in SIGLES:
+            mots.append(m)
+        else:
+            mots.append(re.sub(r"[^\W\d_]+", lambda x: x.group(0).capitalize(), m))
+    t = " ".join(mots)
+    return t[:1].upper() + t[1:]
+
+
+def est_nous(eq, club):
+    return bool(eq) and (eq.get("club") or {}).get("cl_no") == club and eq.get("category_code") == "SEM" and eq.get("number") == 1
+
+
+def match_fff(x, club):
+    dom, ext = x.get("home") or {}, x.get("away") or {}
+    if not x.get("date") or not (est_nous(dom, club) or est_nous(ext, club)):
+        return None
+    c = x.get("competition") or {}
+    if c.get("type") not in ("CH", "CP") or x.get("seems_postponed") == "O":   # pas les amicaux
+        return None
+    h = re.match(r"(\d{1,2})H(\d{2})", x.get("time") or "")
+    date = x["date"][:10] + ("T%02d:%s" % (int(h.group(1)), h.group(2)) if h else "T00:00")
+    sd, se = x.get("home_score"), x.get("away_score")
+    nom_c = c.get("name") or ""
+    if c.get("type") == "CP" and "COUPE DE FRANCE" in nom_c.upper():
+        nom_c = "Coupe de France"
+    elif c.get("type") == "CP":
+        nom_c = nom_club(nom_c)
+    m = {"date": date, "heure": bool(h), "compet": nom_c, "type": c.get("type"),
+         "dom": nom_club(dom.get("short_name")), "ext": nom_club(ext.get("short_name")),
+         "logoDom": (dom.get("club") or {}).get("logo") or "", "logoExt": (ext.get("club") or {}).get("logo") or "",
+         "nousDom": est_nous(dom, club), "termine": sd is not None and se is not None, "sd": sd, "se": se}
+    if x.get("home_nb_tir_but") is not None and x.get("away_nb_tir_but") is not None:
+        m["tab"] = [x["home_nb_tir_but"], x["away_nb_tir_but"]]
+    if c.get("type") == "CH":
+        m["poule"] = [c.get("cp_no"), (x.get("phase") or {}).get("number"), (x.get("poule") or {}).get("stage_number"),
+                      (x.get("poule") or {}).get("name") or "", (x.get("poule_journee") or {}).get("number")]
+    return m
+
+
+def classement_fff(cp, phase, poule, club):
+    l = fff_json("/api/compets/%s/phases/%s/poules/%s/classement_journees" % (cp, phase, poule)).get("hydra:member") or []
+    table = []
+    for e in l:
+        eq = e.get("equipe") or {}
+        bp, bc = e.get("goals_for_count"), e.get("goals_against_count")
+        table.append({"rang": e.get("rank"), "nom": nom_club(eq.get("short_name")), "pts": e.get("point_count"),
+                      "j": e.get("total_games_count"), "g": e.get("won_games_count"), "n": e.get("draw_games_count"),
+                      "p": e.get("lost_games_count"),
+                      "diff": bp - bc if isinstance(bp, int) and isinstance(bc, int) else e.get("goals_diff"),
+                      "nous": est_nous(eq, club)})
+    table.sort(key=lambda t: t["rang"] or 99)
+    return table
+
+
+def equipe_fff(club, court):
+    debut = (datetime.date.today() - datetime.timedelta(days=90)).isoformat()
+    chemin, matchs, vus, logo = "/api/clubs/%d/matchs?ma_dat%%5Bafter%%5D=%s" % (club, debut), [], set(), ""
+    for _ in range(25):
+        a = fff_json(chemin)
+        for x in a.get("hydra:member") or []:
+            m = match_fff(x, club)
+            if m and x.get("ma_no") not in vus:
+                vus.add(x.get("ma_no"))
+                matchs.append(m)
+            for cote in ("home", "away"):
+                if est_nous(x.get(cote), club) and (x[cote].get("club") or {}).get("logo"):
+                    logo = x[cote]["club"]["logo"]
+        suite = (a.get("hydra:view") or {}).get("hydra:next")
+        if not suite:
+            break
+        chemin = suite
+    matchs.sort(key=lambda m: m["date"])
+    res = {"nom": court, "court": court, "club": club, "logo": logo, "matchs": matchs}
+    champ_ = [m for m in matchs if m.get("poule")]
+    if champ_:
+        p = champ_[-1]["poule"]
+        res["compet"] = champ_[-1]["compet"] + (" · " + nom_club(p[3]) if p[3] else "")
+        res["competCourt"] = champ_[-1]["compet"]
+        try:
+            res["table"] = classement_fff(p[0], p[1], p[2], club)
+        except Exception as e:
+            log("FFF : classement indisponible", repr(e))
+    return res
+
+
+def maj_fff():
+    global fff_derniere
+    maintenant = time.time()
+    aujourdhui = datetime.date.today().isoformat()
+    jour_de_match = False
+    try:
+        with open(os.path.join(WEB, "foot_fff.json"), encoding="utf-8") as f:
+            for e in json.load(f).get("equipes", []):
+                jour_de_match |= any(m["date"][:10] == aujourdhui for m in e.get("matchs", []))
+    except Exception:
+        pass
+    if maintenant - fff_derniere < (14 * 60 if jour_de_match else 55 * 60):
+        return
+    equipes = []
+    for x in FOOT_FFF:
+        num, _, court = x.partition("=")
+        try:
+            equipes.append(equipe_fff(int(num), court.strip() or num))
+        except Exception as e:
+            log("FFF : club %s indisponible" % num, repr(e))
+    if equipes:
+        fff_derniere = maintenant
+        ecrire("foot_fff.json", json.dumps({"maj": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M"), "equipes": equipes},
+                                           ensure_ascii=False).encode("utf-8"))
 
 
 # ---------- 2. Netatmo ----------
@@ -1079,6 +1216,8 @@ while True:
     if AGENDA_ICS:
         maj_agenda()
     maj_cantine()
+    if FOOT_FFF:
+        maj_fff()
     if NETATMO:
         maj_netatmo()
     time.sleep(INTERVALLE)
