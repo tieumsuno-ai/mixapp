@@ -12,6 +12,8 @@
 # Les codes Netatmo arrivent par variables d'environnement au premier démarrage ;
 # le jeton de renouvellement (il change à chaque fois) est ensuite gardé dans /config/jeton.json.
 # config.js (réglages personnels) n'est jamais touché.
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 import base64, datetime, email.utils, hashlib, html, unicodedata, ipaddress, json, os, re, socket, ssl, struct, threading, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -514,15 +516,18 @@ def mdp_tydom():
 class WS:
     """Client websocket minimal (sans dépendance) avec authentification digest, comme l'appli Tydom."""
 
-    def __init__(self, hote, port, chemin, utilisateur, mdp):
+    def __init__(self, hote, port, chemin, utilisateur, mdp, distant=False):
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE          # la box utilise un certificat auto-signé
         ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
-        try:
-            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
-        except ssl.SSLError:
-            pass
+        if not distant:                           # la box utilise un certificat auto-signé et un vieux TLS
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            try:
+                ctx.minimum_version = ssl.TLSVersion.TLSv1
+                ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+            except (ssl.SSLError, ValueError, AttributeError):
+                pass
+        self.prefixe = b"\x02" if distant else b""
         self.ctx, self.hote, self.port, self.chemin = ctx, hote, port, chemin
         # 1) demande sans authentification pour obtenir le « nonce »
         s = self._ouvrir()
@@ -566,6 +571,7 @@ class WS:
         return d.decode("latin-1")
 
     def envoyer(self, donnees):
+        donnees = self.prefixe + donnees
         n = len(donnees)
         tete = bytes([0x82]) + (bytes([0x80 | n]) if n < 126 else
                                 bytes([0x80 | 126]) + struct.pack(">H", n) if n < 65536 else
@@ -609,7 +615,11 @@ class WS:
                 continue
             morceaux += d
             if a & 0x80:
-                return morceaux
+                return morceaux.lstrip(b"\x02")
+
+    def ping(self):
+        with self.verrou:
+            self.s.sendall(bytes([0x89, 0x80]) + os.urandom(4))
 
     def fermer(self):
         try:
@@ -662,17 +672,23 @@ def est_tydom(ip):
         ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
         ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
         try:
+            ctx.minimum_version = ssl.TLSVersion.TLSv1
             ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
-        except ssl.SSLError:
+        except (ssl.SSLError, ValueError, AttributeError):
             pass
         with socket.create_connection((ip, TYDOM_PORT), timeout=1.5) as brut:
             with ctx.wrap_socket(brut, server_hostname=ip) as s:
                 s.settimeout(3)
                 s.sendall(("GET /mediation/client?mac=%s&appli=1 HTTP/1.1\r\nHost: %s\r\n\r\n" % (TYDOM_MAC, ip)).encode())
                 tete = s.recv(2048).decode("latin-1")
+        diag[ip] = tete.split("\r\n")[0][:60] + (" [Digest]" if "Digest" in tete else "")
         return ip if (" 401" in tete.split("\r\n")[0] and "Digest" in tete) else None
-    except Exception:
+    except Exception as e:
+        diag[ip] = type(e).__name__
         return None
+
+
+diag = {}
 
 
 def trouver_tydom():
@@ -687,7 +703,7 @@ def trouver_tydom():
         if est_tydom(ip):
             log("Delta Dore : box trouvée à l'adresse", ip)
             return ip
-    log("Delta Dore : aucune box Tydom trouvée (%d appareils avec le port %d ouvert)" % (len(ouverts), TYDOM_PORT))
+    log("Delta Dore : pas de box Tydom sur le réseau local (%s)" % ", ".join("%s → %s" % (k, v) for k, v in diag.items()))
     return None
 
 
@@ -708,23 +724,27 @@ class Tydom:
         hote = TYDOM_HOTE
         while True:
             try:
+                distant = False
                 if not hote:
                     hote = trouver_tydom()
-                    if not hote:
-                        time.sleep(1800)
-                        continue
-                self.ws = WS(hote, TYDOM_PORT, "/mediation/client?mac=%s&appli=1" % TYDOM_MAC, TYDOM_MAC, mdp_tydom())
-                log("Delta Dore : connecté à la box")
+                if not hote or hote == "mediation.tydom.com":
+                    hote, distant = "mediation.tydom.com", True
+                    log("Delta Dore : connexion par le serveur Delta Dore")
+                self.ws = WS(hote, 443 if distant else TYDOM_PORT, "/mediation/client?mac=%s&appli=1" % TYDOM_MAC, TYDOM_MAC, mdp_tydom(), distant)
+                log("Delta Dore : connecté à la box" + (" (via le serveur Delta Dore)" if distant else " (" + hote + ")"))
                 attente = 10
                 for m, u in (("GET", "/ping"), ("GET", "/configs/file"), ("POST", "/refresh/all"), ("GET", "/devices/data")):
                     self.ws.envoyer(requete_tydom(m, u))
-                dernier = time.time()
-                self.ws.s.settimeout(30)
+                dernier = dernier_ping = time.time()
+                self.ws.s.settimeout(10 if distant else 30)
                 while True:
                     try:
                         self.traiter(self.ws.recevoir())
                     except socket.timeout:
                         pass
+                    if distant and time.time() - dernier_ping > 15:      # le serveur coupe les liaisons muettes
+                        self.ws.ping()
+                        dernier_ping = time.time()
                     if time.time() - dernier > 60:          # garder la liaison et rafraîchir les états
                         self.ws.envoyer(requete_tydom("GET", "/ping"))
                         self.ws.envoyer(requete_tydom("GET", "/devices/data"))
