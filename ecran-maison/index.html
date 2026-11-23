@@ -267,13 +267,12 @@
     100% { opacity: 0; -webkit-transform: rotate(-24deg) translateX(30vw); } }
   @keyframes file { 0% { opacity: 0; transform: rotate(-24deg) translateX(0); } 15% { opacity: 1; }
     100% { opacity: 0; transform: rotate(-24deg) translateX(30vw); } }
-  .givre { position: absolute; width: 34vh; height: 34vh; opacity: 0.55;
-    background: -webkit-radial-gradient(center, circle, rgba(225,240,255,0.55) 0%, rgba(225,240,255,0.18) 35%, rgba(225,240,255,0) 70%);
-    background: radial-gradient(circle at center, rgba(225,240,255,0.55) 0%, rgba(225,240,255,0.18) 35%, rgba(225,240,255,0) 70%);
+  .givre { position: absolute; width: 30vh; height: 30vh; opacity: 0.3;
+    background: -webkit-radial-gradient(center, circle, rgba(225,240,255,0.35) 0%, rgba(225,240,255,0.1) 40%, rgba(225,240,255,0) 70%);
+    background: radial-gradient(circle at center, rgba(225,240,255,0.35) 0%, rgba(225,240,255,0.1) 40%, rgba(225,240,255,0) 70%);
     -webkit-animation: respire 7s ease-in-out infinite alternate; animation: respire 7s ease-in-out infinite alternate; }
-  .givre svg { position: absolute; width: 40%; height: 40%; left: 30%; top: 30%; opacity: 0.6; }
-  @-webkit-keyframes respire { from { opacity: 0.35; } to { opacity: 0.65; } }
-  @keyframes respire { from { opacity: 0.35; } to { opacity: 0.65; } }
+  @-webkit-keyframes respire { from { opacity: 0.2; } to { opacity: 0.35; } }
+  @keyframes respire { from { opacity: 0.2; } to { opacity: 0.35; } }
   /* poubelle à sortir : petite secousse toutes les 4 s, le soir */
   body.soiree .crow.demain .bac svg { -webkit-transform-origin: 50% 90%; transform-origin: 50% 90%;
     -webkit-animation: secoue 4s ease-in-out infinite; animation: secoue 4s ease-in-out infinite; }
@@ -1550,7 +1549,7 @@ function majAmbiance(code, temp, nuit) {
       's;-webkit-animation-delay:-' + (i * dur / 3).toFixed(0) + 's;animation-delay:-' + (i * dur / 3).toFixed(0) + 's"></div>';
   }
   if (gel) {
-    var cristal = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M12 2l-2 2.5M12 2l2 2.5M12 22l-2-2.5M12 22l2-2.5"/></svg>';
+    var cristal = "";   // voile givré discret, sans motif
     h += '<div class="givre" style="left:-12vh;top:-12vh">' + cristal + '</div><div class="givre" style="right:-12vh;top:-12vh">' + cristal + '</div>' +
          '<div class="givre" style="left:-12vh;bottom:-12vh">' + cristal + '</div><div class="givre" style="right:-12vh;bottom:-12vh">' + cristal + '</div>';
   }
