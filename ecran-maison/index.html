@@ -282,11 +282,11 @@
     11% { transform: rotate(-8deg); } 15% { transform: rotate(5deg); } }
 
   /* ---------- Pages en glissant ---------- */
-  #pages { position: fixed; top: 0; left: 0; height: 100%; width: 500%;
+  #pages { position: fixed; top: 0; left: 0; height: 100%; width: 600%;
     display: -webkit-box; display: -webkit-flex; display: flex;
-    -webkit-transform: translate3d(-40%,0,0); transform: translate3d(-40%,0,0); }
+    -webkit-transform: translate3d(-33.3333%,0,0); transform: translate3d(-33.3333%,0,0); }
   #pages.anim { -webkit-transition: -webkit-transform 0.38s cubic-bezier(.2,.8,.2,1); transition: transform 0.38s cubic-bezier(.2,.8,.2,1); }
-  .ecran { width: 20%; height: 100%; position: relative; overflow: hidden; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .ecran { width: 16.6667%; height: 100%; position: relative; overflow: hidden; -webkit-flex-shrink: 0; flex-shrink: 0; }
   .annexe { padding: 5vh 4.5vw 4vh; box-sizing: border-box; height: 100%; -webkit-transition: opacity 2s; transition: opacity 2s; }
   body.attenue .annexe { opacity: 0.55; }
   .annexe h2 { font-size: 4.4vh; font-weight: 600; margin: 0 0 2.4vh; letter-spacing: -0.01em; }
@@ -465,6 +465,20 @@
     background: center/contain no-repeat; -webkit-animation: respire2w 6s ease-in-out infinite alternate; animation: respire2 6s ease-in-out infinite alternate; }
   @-webkit-keyframes respire2w { from { opacity: 0.07; } to { opacity: 0.12; } }
   @keyframes respire2 { from { opacity: 0.07; } to { opacity: 0.12; } }
+
+  /* page Cantine */
+  .c-grille { display: -webkit-box; display: -webkit-flex; display: flex; }
+  .c-jour { -webkit-box-flex: 1; -webkit-flex: 1 1 0; flex: 1 1 0; width: 0; margin-right: 1.4vh; padding: 2.2vh 1.4vw; min-height: 76vh; box-sizing: border-box; }
+  .c-jour:last-child { margin-right: 0; }
+  .c-jour.auj { background: rgba(255,255,255,0.17); border-color: rgba(255,211,107,0.6); }
+  .c-jour .etiquette { margin-bottom: 1.6vh; }
+  .c-jour.auj .etiquette { color: #ffd36b; opacity: 1; }
+  .c-plat { margin-bottom: 1.8vh; }
+  .c-plat .r { font-size: 1.5vh; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.5; }
+  .c-plat .t { font-size: 2.35vh; font-weight: 400; line-height: 1.25; margin-top: 0.3vh; }
+  .c-plat.principal .t { font-size: 2.8vh; font-weight: 600; }
+  .c-plat .sp { font-size: 1.8vh; opacity: 0.6; margin-top: 0.3vh; }
+  .c-vide { font-size: 2.4vh; opacity: 0.6; font-weight: 300; margin-top: 4vh; }
 
   /* Météo */
   .actuel {
@@ -658,13 +672,14 @@
 </section>
 <section class="ecran"><div class="annexe" id="page-maison"></div></section>
 <section class="ecran"><div class="annexe" id="page-foot"></div></section>
+<section class="ecran"><div class="annexe" id="page-cantine"></div></section>
 </div>
 <div id="match"><div class="bande"></div><div class="filigrane" id="filigrane"></div><div class="balayage"></div>
   <button class="fermer" onclick="reduireMatch()">&times;</button>
   <div class="contenu" id="match-contenu"></div>
 </div>
 <div id="but"></div>
-<div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i></div>
+<div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i><i></i></div>
 
 <div id="btn-maison" onclick="allerA(3)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
 <div id="maison" onclick="toucheMaison()">
@@ -2019,13 +2034,13 @@ function demanderAlignement() { clearTimeout(alignMinuteur); alignMinuteur = set
 /* ---------- Pages en glissant : Agenda · Météo · ACCUEIL · Maison · PSG ----------
    Glisser du doigt (ou de la souris, ou flèches du clavier). Retour à l'accueil après 2 min sans toucher. */
 var PAGE_ACCUEIL = 2, pageActuelle = 2, dernierContact = new Date().getTime(), glisse = null;
-var RENDUS_PAGES = [rendreAgenda, rendreMeteo, null, rendreMaisonPage, rendreFoot];
+var RENDUS_PAGES = [rendreAgenda, rendreMeteo, null, rendreMaisonPage, rendreFoot, rendreCantine], NB_PAGES = 6;
 function allerA(n, sansAnim) {
-  n = Math.max(0, Math.min(4, n));
+  n = Math.max(0, Math.min(NB_PAGES - 1, n));
   var p = el("pages");
   p.className = sansAnim ? "" : "anim";
   pageActuelle = n;
-  var x = "translate3d(" + (-n * 20) + "%,0,0)";
+  var x = "translate3d(" + (-n * 100 / NB_PAGES).toFixed(4) + "%,0,0)";
   p.style.webkitTransform = x; p.style.transform = x;
   var pts = el("points").children;
   for (var i = 0; i < pts.length; i++) pts[i].className = i === n ? "actif" : "";
@@ -2055,7 +2070,7 @@ function suiteGlisse(x, y, ev) {
   if (ev && ev.preventDefault) ev.preventDefault();
   glisse.dx = dx;
   var largeur = window.innerWidth, base = -pageActuelle * largeur;
-  if ((pageActuelle === 0 && dx > 0) || (pageActuelle === 4 && dx < 0)) dx = dx / 3;   // résistance aux bords
+  if ((pageActuelle === 0 && dx > 0) || (pageActuelle === NB_PAGES - 1 && dx < 0)) dx = dx / 3;   // résistance aux bords
   var p = el("pages"), t = "translate3d(" + (base + dx) + "px,0,0)";
   p.className = ""; p.style.webkitTransform = t; p.style.transform = t;
 }
@@ -2207,6 +2222,48 @@ function rendreFoot() {
     '<div class="f">' + table + '<div class="f-cote"><div class="carte"><div class="etiquette">Derniers résultats</div>' + a + '</div><div class="carte"><div class="etiquette">Prochains matchs</div>' + b + "</div></div></div>";
 }
 
+/* --- page Cantine (cantine.json, écrit par le relais à partir des PDF du dossier Web/cantine) --- */
+var etatCantine = null;
+function chargerCantine() {
+  setTimeout(chargerCantine, 3 * 3600000);
+  if (location.hash === "#demo") { etatCantine = cantineDemo(); return; }
+  chargerJSON("cantine.json?t=" + new Date().getTime(), function (d) { etatCantine = d; });
+}
+function platCantine(r, t, cl, sp) {
+  return t ? '<div class="c-plat' + (cl ? " " + cl : "") + '"><div class="r">' + r + '</div><div class="t">' + echap(t) + "</div>" +
+    (sp ? '<div class="sp">Sans porc : ' + echap(sp) + "</div>" : "") + "</div>" : "";
+}
+function cleJour(d) { return d.getFullYear() + "-" + deux(d.getMonth() + 1) + "-" + deux(d.getDate()); }
+function rendreCantine() {
+  var z = el("page-cantine"), now = new Date(), j = now.getDay();
+  // semaine affichée : celle en cours ; le week-end (et le vendredi après 14 h), la suivante
+  var lundi = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((j + 6) % 7));
+  if (j === 6 || j === 0 || (j === 5 && now.getHours() >= 14)) lundi = new Date(lundi.getFullYear(), lundi.getMonth(), lundi.getDate() + 7);
+  var h = "", nb = 0;
+  for (var k = 0; k < 5; k++) {
+    var d = new Date(lundi.getFullYear(), lundi.getMonth(), lundi.getDate() + k), m = etatCantine && etatCantine[cleJour(d)];
+    if (!m) continue;
+    nb++;
+    var auj = cleJour(d) === cleJour(now);
+    h += '<div class="carte c-jour' + (auj ? " auj" : "") + '"><div class="etiquette">' + (auj ? "Aujourd'hui" : JOURS[d.getDay()] + " " + d.getDate()) + "</div>" +
+      platCantine("Entrée", m.entree, "", m.entree_sansporc) + platCantine("Plat", m.plat, "principal", m.plat_sansporc) +
+      platCantine("Accompagnement", m.garniture) + platCantine("Laitage", m.laitier) + platCantine("Dessert", m.dessert) + "</div>";
+  }
+  var ven = new Date(lundi.getFullYear(), lundi.getMonth(), lundi.getDate() + 4);
+  z.innerHTML = "<h2>Cantine<span>semaine du " + lundi.getDate() + " " + MOISCOURT[lundi.getMonth()] + " au " + ven.getDate() + " " + MOISCOURT[ven.getMonth()] + "</span></h2>" +
+    (nb ? '<div class="c-grille">' + h + "</div>" : '<div class="c-vide">' + (etatCantine ? "Pas de menu pour cette semaine (vacances ?)." : "Aucun menu : déposez le PDF du mois dans le dossier Web/cantine du NAS.") + "</div>");
+}
+function cantineDemo() {
+  var now = new Date(), j = now.getDay(), l = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((j + 6) % 7)), r = {};
+  var ex = [["Rosette et beurre", "Paupiette au veau et petits oignons", "Boulgour", "Edam", "Novly vanille"],
+            ["Salade Flersoise", "Gratin de poisson MSC dieppoise", "Brunoise de légumes à la crème", "Petits suisses sucrés", "Tarte au chocolat"], null,
+            ["Carottes râpées vinaigrette", "Hachis parmentier VBF", "Salade verte", "Camembert", "Fruit frais"],
+            ["Crêpe au fromage", "Beignets au calamar et quartier de citron", "Gratin de choux romanesco et brocolis", "Fromage blanc et dosette de sucre", "Gaufre au sucre"]];
+  for (var k = 0; k < 5; k++) if (ex[k]) r[cleJour(new Date(l.getFullYear(), l.getMonth(), l.getDate() + k))] = { entree: ex[k][0], plat: ex[k][1], garniture: ex[k][2], laitier: ex[k][3], dessert: ex[k][4] };
+  r[cleJour(l)].entree_sansporc = "Salade de boulgour tomate poivron maïs";
+  return r;
+}
+
 /* ---------- Mode match plein écran (PSG, toutes compétitions) ---------- */
 var matchReduit = false, matchOuvert = false, dernierScore = null;
 function sigleEquipe(e) {
@@ -2334,6 +2391,7 @@ chargerSonos();
 chargerMaison();
 chargerActus();
 chargerAgenda();
+chargerCantine();
 alignerColonnes();
 allerA(PAGE_ACCUEIL, true);
 // démonstration du mode match : ouvrir la page avec #match (but simulé au bout de 6 s)

@@ -229,6 +229,151 @@ def maj_agenda():
     ecrire("agenda.json", json.dumps(evts, ensure_ascii=False).encode("utf-8"))
 
 
+# ---------- 2 quater. Menus de la cantine (PDF déposés dans le dossier Web/cantine) ----------
+# Déposez chaque mois le PDF du menu dans Web/cantine ; le relais le lit et écrit cantine.json.
+CANTINE = os.path.join(WEB, "cantine")
+JOURS_MENU = ["LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI"]
+pdfminer_pret = False
+
+
+def preparer_pdfminer():
+    global pdfminer_pret
+    if pdfminer_pret:
+        return True
+    try:
+        import pdfminer  # noqa: F401
+    except ImportError:
+        import subprocess, sys
+        log("Cantine : installation du lecteur de PDF…")
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--disable-pip-version-check", "pdfminer.six"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            log("Cantine : installation impossible", r.stderr[-300:])
+            return False
+    pdfminer_pret = True
+    return True
+
+
+def lignes_pdf(page):
+    from pdfminer.layout import LTTextLine
+    res, H = [], page.height
+    def visite(o):
+        if isinstance(o, LTTextLine):
+            t = o.get_text().strip()
+            if t:
+                res.append((o.x0, o.x1, H - o.y1, t))
+        elif hasattr(o, "__iter__"):
+            for e in o:
+                visite(e)
+    visite(page)
+    return res
+
+
+def lire_menu(chemin, annee_ref=None):
+    menus = {}
+    from pdfminer.high_level import extract_pages
+    for page in extract_pages(chemin):
+        L = lignes_pdf(page)
+        tout = " ".join(t for _, _, _, t in L)
+        m = re.search(r"Semaine du (\d\d)/(\d\d) au (\d\d)/(\d\d)", tout)
+        if not m:
+            continue
+        # colonnes : centres des en-têtes de jours
+        centres = {}
+        for x0, x1, y, t in L:
+            for j in JOURS_MENU:
+                if t.upper() == j:
+                    centres[j] = (x0 + x1) / 2
+        if len(centres) < 5:
+            continue
+        cx = [centres[j] for j in JOURS_MENU]
+        bornes_x = [cx[0] - (cx[1] - cx[0]) / 2] + [(cx[i] + cx[i + 1]) / 2 for i in range(4)] + [cx[4] + (cx[4] - cx[3]) / 2]
+        haut_jours = min(y for x0, x1, y, t in L if t.upper() in JOURS_MENU)
+        # lignes : étiquettes de la colonne de gauche
+        etiq = []
+        for x0, x1, y, t in L:
+            if x1 < bornes_x[0] + 5:
+                tu = t.upper()
+                if tu.startswith("HORS"): etiq.append((y, "entree"))
+                elif tu.startswith("PLAT"): etiq.append((y, "plat"))
+                elif tu.startswith("GARNITURE"): etiq.append((y, "garniture"))
+                elif tu.startswith("PRODUIT"): etiq.append((y, "laitier"))
+                elif tu.startswith("DESSERT"): etiq.append((y, "dessert"))
+                elif tu.startswith("DÉCLINAISON") or tu.startswith("DECLINAISON"): etiq.append((y, "sansporc"))
+        etiq.sort()
+        if not etiq:
+            continue
+        # la 1re « déclinaison sans porc » suit l'entrée, la 2e suit le plat
+        noms, vu_plat = [], False
+        for y, n in etiq:
+            if n == "plat": vu_plat = True
+            if n == "sansporc": n = "plat_sansporc" if vu_plat else "entree_sansporc"
+            noms.append((y, n))
+        bornes_y = [haut_jours + 8]
+        for i in range(len(noms) - 1):
+            bornes_y.append((noms[i][0] + noms[i + 1][0]) / 2 + 4)
+        dernier = noms[-1][0]
+        bornes_y.append(dernier + 28)              # la légende commence juste sous le dessert
+        # date du lundi
+        a = annee_ref or datetime.date.today().year
+        lundi = datetime.date(a, int(m.group(2)), int(m.group(1)))
+        if annee_ref is None and (lundi - datetime.date.today()).days > 200:
+            lundi = lundi.replace(year=a - 1)
+        if annee_ref is None and (datetime.date.today() - lundi).days > 200:
+            lundi = lundi.replace(year=a + 1)
+        cases = {}
+        for x0, x1, y, t in sorted(L, key=lambda e: (e[2], e[0])):
+            xc = (x0 + x1) / 2
+            if xc < bornes_x[0] or xc > bornes_x[5] or y < bornes_y[0] or y > bornes_y[-1]:
+                continue
+            col = next(i for i in range(5) if bornes_x[i] <= xc <= bornes_x[i + 1])
+            lig = next((i for i in range(len(noms)) if bornes_y[i] <= y < bornes_y[i + 1]), None)
+            if lig is None or re.search(r"agriculture|biologique|végétarien|Fabrication maison|LE CHEF|ET SON|SOUHAITENT|clicetmiam|code à saisir|Produit de saison|contenant du porc", t, re.I):
+                continue
+            cases.setdefault((col, noms[lig][1]), []).append(t)
+        for col in range(5):
+            jour = (lundi + datetime.timedelta(days=col)).isoformat()
+            d = {}
+            for (c, n), morceaux in cases.items():
+                if c == col:
+                    texte = re.sub(r"\s+", " ", " ".join(morceaux)).strip()
+                    if texte:
+                        d[n] = texte
+            if d:
+                menus[jour] = d
+    return menus
+
+
+
+def maj_cantine():
+    try:
+        os.makedirs(CANTINE, exist_ok=True)
+        os.chmod(CANTINE, 0o777)
+    except OSError:
+        pass
+    try:
+        pdfs = [os.path.join(CANTINE, n) for n in os.listdir(CANTINE) if n.lower().endswith(".pdf")]
+    except OSError:
+        return
+    if not pdfs:
+        return
+    cible = os.path.join(WEB, "cantine.json")
+    recent = max(os.path.getmtime(x) for x in pdfs)
+    if os.path.exists(cible) and os.path.getmtime(cible) >= recent:
+        return
+    if not preparer_pdfminer():
+        return
+    menus = {}
+    for x in sorted(pdfs, key=os.path.getmtime):
+        try:
+            menus.update(lire_menu(x))
+        except Exception as e:
+            log("Cantine : PDF illisible", os.path.basename(x), repr(e))
+    if menus:
+        ecrire("cantine.json", json.dumps(menus, ensure_ascii=False).encode("utf-8"))
+        log("Cantine : %d jours de menus (%s → %s)" % (len(menus), min(menus), max(menus)))
+
+
 # ---------- 2. Netatmo ----------
 def post(url, data):
     req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode(), method="POST")
@@ -933,6 +1078,7 @@ while True:
         maj_actus()
     if AGENDA_ICS:
         maj_agenda()
+    maj_cantine()
     if NETATMO:
         maj_netatmo()
     time.sleep(INTERVALLE)
