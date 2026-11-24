@@ -302,7 +302,7 @@
   /* ---------- Pages en glissant ---------- */
   #pages { position: fixed; top: 0; left: 0; height: 100%; width: 700%;
     display: -webkit-box; display: -webkit-flex; display: flex;
-    -webkit-transform: translate3d(-28.5714%,0,0); transform: translate3d(-28.5714%,0,0); }
+    -webkit-transform: translate3d(-42.8571%,0,0); transform: translate3d(-42.8571%,0,0); }
   #pages.anim { -webkit-transition: -webkit-transform 0.38s cubic-bezier(.2,.8,.2,1); transition: transform 0.38s cubic-bezier(.2,.8,.2,1); }
   .ecran { width: 14.2857%; height: 100%; position: relative; overflow: hidden; -webkit-flex-shrink: 0; flex-shrink: 0; }
   .annexe { padding: 5vh 4.5vw 4vh; box-sizing: border-box; height: 100%; -webkit-transition: opacity 2s; transition: opacity 2s; }
@@ -697,6 +697,7 @@
 <div id="pages">
 <section class="ecran"><div class="annexe" id="page-agenda"></div></section>
 <section class="ecran"><div class="annexe" id="page-meteo"></div></section>
+<section class="ecran"><div id="page-webcams"></div></section>
 <section class="ecran">
 <div class="page">
   <div id="noel-couche"></div>
@@ -797,20 +798,19 @@
 <section class="ecran"><div class="annexe" id="page-maison"></div></section>
 <section class="ecran"><div class="annexe" id="page-foot"></div></section>
 <section class="ecran"><div class="annexe" id="page-cantine"></div></section>
-<section class="ecran"><div id="page-webcams"></div></section>
 </div>
 <div id="match"><div class="bande"></div><div class="filigrane" id="filigrane"></div><div class="balayage"></div>
   <button class="fermer" onclick="reduireMatch()">&times;</button>
   <div class="contenu" id="match-contenu"></div>
 </div>
 <div id="but"></div>
-<div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i><i></i><i></i></div>
+<div id="points"><i></i><i></i><i></i><i class="actif"></i><i></i><i></i><i></i></div>
 <style id="wc-anim"></style>
 <style id="noel-anim"></style>
 <div id="wc-video"><video id="wc-lecteur" muted playsinline webkit-playsinline loop autoplay></video><div class="wc-titre" id="wc-video-titre"></div>
   <button class="fermer" onclick="fermerVideoWebcam()">&times;</button></div>
 
-<div id="btn-maison" onclick="allerA(3)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
+<div id="btn-maison" onclick="allerA(PAGE_MAISON)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
 <div id="maison" onclick="toucheMaison()">
   <div class="entete">
     <h1>Lumières &amp; volets</h1>
@@ -1661,7 +1661,7 @@ function equipesFoot() {
 }
 function afficherFoot() {
   var z = document.getElementById("foot"), now = new Date(), i, dispo = equipesFoot();
-  if (pageActuelle === 4) rendreFoot();
+  if (pageActuelle === PAGE_FOOT) rendreFoot();
   if (!dispo.length) { z.className = "carte foot"; return; }
   var cleActive = footCles[footDiapo], direct = footDirect && etatFoot && etatFoot.prochain && footDirect.etat === "in";
   footCles = [];
@@ -2178,9 +2178,9 @@ function chargerMaison() {
   var u = urlSonos();
   if (!u) return;
   chargerJSON(u + "/maison?t=" + new Date().getTime(), function (d) {
-    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert || pageActuelle === 3 ? 3000 : 20000);
+    maisonMinuteur = setTimeout(chargerMaison, maisonOuvert || pageActuelle === PAGE_MAISON ? 3000 : 20000);
     maisonAccueil = d.accueil || [];
-    if (new Date().getTime() - maisonOccupe > 2500) { maisonEq = d.equipements || []; afficherMaison(); if (pageActuelle === 3) rendrePage(); }
+    if (new Date().getTime() - maisonOccupe > 2500) { maisonEq = d.equipements || []; afficherMaison(); if (pageActuelle === PAGE_MAISON) rendrePage(); }
   }, function () { maisonMinuteur = setTimeout(chargerMaison, 5 * 60000); });
 }
 function choisis() {
@@ -2240,7 +2240,7 @@ function majLumieresAccueil() {
 }
 function debutAppui() {
   appuiLongFait = false; clearTimeout(appuiLong);
-  appuiLong = setTimeout(function () { appuiLongFait = true; allerA(3); }, 650);   // appui long → panneau complet
+  appuiLong = setTimeout(function () { appuiLongFait = true; allerA(PAGE_MAISON); }, 650);   // appui long → panneau complet
 }
 function finAppui() { clearTimeout(appuiLong); }
 function toucheLumiere(id) {
@@ -2310,10 +2310,10 @@ setInterval(alignerColonnes, 2000);
 var alignMinuteur = null;
 function demanderAlignement() { clearTimeout(alignMinuteur); alignMinuteur = setTimeout(alignerColonnes, 30); }
 
-/* ---------- Pages en glissant : Agenda · Météo · ACCUEIL · Maison · Foot · Cantine · Webcams ----------
+/* ---------- Pages en glissant : Agenda · Météo · Webcams · ACCUEIL · Maison · Foot · Cantine ----------
    Glisser du doigt (ou de la souris, ou flèches du clavier). Retour à l'accueil après 3 min sans toucher. */
-var PAGE_ACCUEIL = 2, pageActuelle = 2, dernierContact = new Date().getTime(), glisse = null;
-var RENDUS_PAGES = [rendreAgenda, rendreMeteo, null, rendreMaisonPage, rendreFoot, rendreCantine, rendreWebcams], NB_PAGES = 7;
+var PAGE_WEBCAMS = 2, PAGE_ACCUEIL = 3, PAGE_MAISON = 4, PAGE_FOOT = 5, pageActuelle = 3, dernierContact = new Date().getTime(), glisse = null;
+var RENDUS_PAGES = [rendreAgenda, rendreMeteo, rendreWebcams, null, rendreMaisonPage, rendreFoot, rendreCantine], NB_PAGES = 7;
 function allerA(n, sansAnim) {
   n = Math.max(0, Math.min(NB_PAGES - 1, n));
   var p = el("pages");
@@ -2325,9 +2325,9 @@ function allerA(n, sansAnim) {
   for (var i = 0; i < pts.length; i++) pts[i].className = i === n ? "actif" : "";
   el("btn-maison").style.display = n === PAGE_ACCUEIL ? "" : "none";
   dernierContact = new Date().getTime();
-  if (n !== 6 && el("wc-video").className) fermerVideoWebcam();
+  if (n !== PAGE_WEBCAMS && el("wc-video").className) fermerVideoWebcam();
   rendrePage();
-  if (n === 3) chargerMaison();
+  if (n === PAGE_MAISON) chargerMaison();
 }
 function rendrePage() {
   var f = RENDUS_PAGES[pageActuelle];
@@ -2991,7 +2991,7 @@ function chargerWebcams() {
   chargerJSON((CONFIG.urlWebcams || "webcams.json") + "?t=" + new Date().getTime(), function (a) {
     etatWebcams = a.cams || [];
     for (var i = 0; i < etatWebcams.length; i++) chargerMeteoWebcam(etatWebcams[i]);
-    if (pageActuelle === 6) rendreWebcams();
+    if (pageActuelle === PAGE_WEBCAMS) rendreWebcams();
   });
 }
 // Météo sur place : température et temps ; neige pour la montagne, mer et vagues pour la côte
@@ -3007,13 +3007,13 @@ function chargerMeteoWebcam(c) {
       var cu = r.current || {};
       m.temp = cu.temperature_2m; m.code = cu.weather_code; m.vent = cu.wind_speed_10m; m.jour = cu.is_day; m.neige = cu.snow_depth;
       if (r.daily && r.daily.snowfall_sum) m.chute = (r.daily.snowfall_sum[1] || 0) + (r.daily.snowfall_sum[2] || 0);
-      if (pageActuelle === 6) majInfosWebcam();
+      if (pageActuelle === PAGE_WEBCAMS) majInfosWebcam();
     });
   if (!montagne && c.mer !== false) chargerJSON("https://marine-api.open-meteo.com/v1/marine?latitude=" + c.lat + "&longitude=" + c.lon +
     "&current=sea_surface_temperature,wave_height&timezone=Europe%2FParis", function (r) {
       var cu = r.current || {};
       m.mer = cu.sea_surface_temperature; m.vagues = cu.wave_height;
-      if (pageActuelle === 6) majInfosWebcam();
+      if (pageActuelle === PAGE_WEBCAMS) majInfosWebcam();
     });
 }
 function ageWebcam(c) {
@@ -3076,7 +3076,7 @@ function rendreWebcams() {
   // passe seule à la webcam suivante toutes les 30 s tant qu'on ne touche à rien
   clearTimeout(wcMinuteur);
   wcMinuteur = setTimeout(function () {
-    if (pageActuelle === 6 && !el("wc-video").className && new Date().getTime() - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
+    if (pageActuelle === PAGE_WEBCAMS && !el("wc-video").className && new Date().getTime() - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
   }, 30000);
 }
 function choisirWebcam(i, auto) {
