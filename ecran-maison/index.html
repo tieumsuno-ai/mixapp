@@ -300,11 +300,11 @@
     11% { transform: rotate(-8deg); } 15% { transform: rotate(5deg); } }
 
   /* ---------- Pages en glissant ---------- */
-  #pages { position: fixed; top: 0; left: 0; height: 100%; width: 600%;
+  #pages { position: fixed; top: 0; left: 0; height: 100%; width: 700%;
     display: -webkit-box; display: -webkit-flex; display: flex;
-    -webkit-transform: translate3d(-33.3333%,0,0); transform: translate3d(-33.3333%,0,0); }
+    -webkit-transform: translate3d(-28.5714%,0,0); transform: translate3d(-28.5714%,0,0); }
   #pages.anim { -webkit-transition: -webkit-transform 0.38s cubic-bezier(.2,.8,.2,1); transition: transform 0.38s cubic-bezier(.2,.8,.2,1); }
-  .ecran { width: 16.6667%; height: 100%; position: relative; overflow: hidden; -webkit-flex-shrink: 0; flex-shrink: 0; }
+  .ecran { width: 14.2857%; height: 100%; position: relative; overflow: hidden; -webkit-flex-shrink: 0; flex-shrink: 0; }
   .annexe { padding: 5vh 4.5vw 4vh; box-sizing: border-box; height: 100%; -webkit-transition: opacity 2s; transition: opacity 2s; }
   body.attenue .annexe { opacity: 0.55; }
   .annexe h2 { font-size: 4.4vh; font-weight: 600; margin: 0 0 2.4vh; letter-spacing: -0.01em; }
@@ -313,6 +313,42 @@
   #points i { display: inline-block; width: 0.9vh; height: 0.9vh; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 0.5vh;
     -webkit-transition: all 0.3s; transition: all 0.3s; }
   #points i.actif { background: #fff; width: 2.6vh; border-radius: 1vh; }
+
+  /* page Webcams : la photo en grand, qui glisse lentement, et les autres en vignettes */
+  #page-webcams { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #05070d; overflow: hidden; }
+  .wc-fond { position: absolute; top: 0; left: 0; height: 100%; opacity: 0; -webkit-transition: opacity 1.2s; transition: opacity 1.2s;
+    -webkit-animation: wcPan 40s ease-in-out infinite alternate; animation: wcPan 40s ease-in-out infinite alternate; }
+  .wc-fond.on { opacity: 1; }
+  .wc-fond img { height: 100%; display: block; }
+  .wc-haut { position: absolute; top: 0; left: 0; right: 0; padding: 4.5vh 4.5vw 9vh;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0.62), rgba(0,0,0,0)); background: linear-gradient(to bottom, rgba(0,0,0,0.62), rgba(0,0,0,0)); }
+  .wc-haut .etiquette { opacity: 0.75; }
+  .wc-nom { font-size: 5.2vh; font-weight: 600; letter-spacing: -0.01em; margin-top: 0.6vh; text-shadow: 0 1px 8px rgba(0,0,0,0.5); }
+  .wc-infos { margin-top: 1.4vh; font-size: 2.5vh; }
+  .wc-infos span { display: inline-block; margin-right: 1.6vw; white-space: nowrap; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
+  .wc-infos svg { width: 3.4vh; height: 3.4vh; vertical-align: -0.9vh; margin-right: 0.4vw; }
+  .wc-infos em { font-style: normal; color: #ffc27a; }
+  .wc-bas { position: absolute; left: 0; right: 0; bottom: 0; padding: 10vh 4.5vw 4.6vh;
+    background: -webkit-linear-gradient(bottom, rgba(0,0,0,0.6), rgba(0,0,0,0)); background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0));
+    display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: end; -webkit-align-items: flex-end; align-items: flex-end; }
+  .wc-vignettes { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; white-space: nowrap; overflow: hidden; }
+  .wc-v { display: inline-block; width: 13vw; margin-right: 1.2vw; vertical-align: bottom; opacity: 0.6;
+    -webkit-transition: opacity 0.4s, -webkit-transform 0.4s; transition: opacity 0.4s, transform 0.4s; }
+  .wc-v div { height: 8.4vh; border-radius: 1.2vh; background: #222 center / cover no-repeat; box-shadow: 0 0 0 2px rgba(255,255,255,0.25); }
+  .wc-v b { display: block; font-size: 1.6vh; font-weight: 500; margin-top: 0.7vh; overflow: hidden; text-overflow: ellipsis; }
+  .wc-v.on { opacity: 1; -webkit-transform: translateY(-0.6vh); transform: translateY(-0.6vh); }
+  .wc-v.on div { box-shadow: 0 0 0 2px #fff; }
+  .wc-film { font-size: 2.3vh; font-weight: 600; padding: 1.3vh 1.8vw; border-radius: 100px; background: rgba(255,255,255,0.92); color: #0b1026;
+    white-space: nowrap; margin-left: 1.5vw; margin-bottom: 2.6vh; }
+  .wc-film i { display: inline-block; width: 0; height: 0; border-left: 1.4vh solid #0b1026; border-top: 0.85vh solid transparent;
+    border-bottom: 0.85vh solid transparent; margin-right: 0.8vw; vertical-align: -0.1vh; }
+  .wc-vide { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 2.4vh; opacity: 0.6; padding: 0 10vw; }
+  #wc-video { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 30; display: none; }
+  #wc-video.on { display: block; }
+  #wc-video video { width: 100%; height: 100%; }
+  #wc-video .wc-titre { position: absolute; top: 3vh; left: 3vw; font-size: 2.6vh; font-weight: 500; text-shadow: 0 1px 6px #000; }
+  #wc-video .fermer { position: absolute; top: 2vh; right: 2vw; width: 6vh; height: 6vh; border-radius: 50%; border: 0; font-size: 4vh; line-height: 6vh;
+    background: rgba(255,255,255,0.18); color: #fff; padding: 0; }
 
   /* page Météo */
   .m-heures { position: relative; height: 9.5vh; }
@@ -702,13 +738,17 @@
 <section class="ecran"><div class="annexe" id="page-maison"></div></section>
 <section class="ecran"><div class="annexe" id="page-foot"></div></section>
 <section class="ecran"><div class="annexe" id="page-cantine"></div></section>
+<section class="ecran"><div id="page-webcams"></div></section>
 </div>
 <div id="match"><div class="bande"></div><div class="filigrane" id="filigrane"></div><div class="balayage"></div>
   <button class="fermer" onclick="reduireMatch()">&times;</button>
   <div class="contenu" id="match-contenu"></div>
 </div>
 <div id="but"></div>
-<div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i><i></i></div>
+<div id="points"><i></i><i></i><i class="actif"></i><i></i><i></i><i></i><i></i></div>
+<style id="wc-anim"></style>
+<div id="wc-video"><video id="wc-lecteur" muted playsinline webkit-playsinline loop autoplay></video><div class="wc-titre" id="wc-video-titre"></div>
+  <button class="fermer" onclick="fermerVideoWebcam()">&times;</button></div>
 
 <div id="btn-maison" onclick="allerA(3)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="badge-maison"></span></div>
 <div id="maison" onclick="toucheMaison()">
@@ -2204,10 +2244,10 @@ setInterval(alignerColonnes, 2000);
 var alignMinuteur = null;
 function demanderAlignement() { clearTimeout(alignMinuteur); alignMinuteur = setTimeout(alignerColonnes, 30); }
 
-/* ---------- Pages en glissant : Agenda · Météo · ACCUEIL · Maison · PSG ----------
-   Glisser du doigt (ou de la souris, ou flèches du clavier). Retour à l'accueil après 2 min sans toucher. */
+/* ---------- Pages en glissant : Agenda · Météo · ACCUEIL · Maison · Foot · Cantine · Webcams ----------
+   Glisser du doigt (ou de la souris, ou flèches du clavier). Retour à l'accueil après 3 min sans toucher. */
 var PAGE_ACCUEIL = 2, pageActuelle = 2, dernierContact = new Date().getTime(), glisse = null;
-var RENDUS_PAGES = [rendreAgenda, rendreMeteo, null, rendreMaisonPage, rendreFoot, rendreCantine], NB_PAGES = 6;
+var RENDUS_PAGES = [rendreAgenda, rendreMeteo, null, rendreMaisonPage, rendreFoot, rendreCantine, rendreWebcams], NB_PAGES = 7;
 function allerA(n, sansAnim) {
   n = Math.max(0, Math.min(NB_PAGES - 1, n));
   var p = el("pages");
@@ -2219,6 +2259,7 @@ function allerA(n, sansAnim) {
   for (var i = 0; i < pts.length; i++) pts[i].className = i === n ? "actif" : "";
   el("btn-maison").style.display = n === PAGE_ACCUEIL ? "" : "none";
   dernierContact = new Date().getTime();
+  if (n !== 6 && el("wc-video").className) fermerVideoWebcam();
   rendrePage();
   if (n === 3) chargerMaison();
 }
@@ -2454,6 +2495,125 @@ function cantineDemo() {
   return r;
 }
 
+/* ---------- Page Webcams (images préparées par le relais : webcams.json + dossier webcams/) ---------- */
+var etatWebcams = null, wcActive = 0, wcMeteo = {}, wcMinuteur = null;
+function chargerWebcams() {
+  setTimeout(chargerWebcams, 5 * 60000);
+  chargerJSON((CONFIG.urlWebcams || "webcams.json") + "?t=" + new Date().getTime(), function (a) {
+    etatWebcams = a.cams || [];
+    for (var i = 0; i < etatWebcams.length; i++) chargerMeteoWebcam(etatWebcams[i]);
+    if (pageActuelle === 6) rendreWebcams();
+  });
+}
+// Météo sur place : température et temps ; neige pour la montagne, mer et vagues pour la côte
+function chargerMeteoWebcam(c) {
+  if (c.lat === undefined || c.lon === undefined) return;
+  var m = wcMeteo[c.id] || (wcMeteo[c.id] = {});
+  if (m.quand && new Date().getTime() - m.quand < 30 * 60000) return;
+  m.quand = new Date().getTime();
+  var montagne = c.alt && c.alt >= 600;
+  chargerJSON("https://api.open-meteo.com/v1/forecast?latitude=" + c.lat + "&longitude=" + c.lon + (c.alt ? "&elevation=" + c.alt : "") +
+    "&current=temperature_2m,weather_code,wind_speed_10m,is_day" + (montagne ? ",snow_depth&daily=snowfall_sum&forecast_days=3" : "") +
+    "&timezone=Europe%2FParis", function (r) {
+      var cu = r.current || {};
+      m.temp = cu.temperature_2m; m.code = cu.weather_code; m.vent = cu.wind_speed_10m; m.jour = cu.is_day; m.neige = cu.snow_depth;
+      if (r.daily && r.daily.snowfall_sum) m.chute = (r.daily.snowfall_sum[1] || 0) + (r.daily.snowfall_sum[2] || 0);
+      if (pageActuelle === 6) majInfosWebcam();
+    });
+  if (!montagne && c.mer !== false) chargerJSON("https://marine-api.open-meteo.com/v1/marine?latitude=" + c.lat + "&longitude=" + c.lon +
+    "&current=sea_surface_temperature,wave_height&timezone=Europe%2FParis", function (r) {
+      var cu = r.current || {};
+      m.mer = cu.sea_surface_temperature; m.vagues = cu.wave_height;
+      if (pageActuelle === 6) majInfosWebcam();
+    });
+}
+function ageWebcam(c) {
+  if (!c.quand) return "";
+  var s = c.quand, d = new Date(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2));
+  var min = Math.round((new Date().getTime() - d.getTime()) / 60000);
+  if (min < 2) return "à l'instant";
+  if (min < 60) return "il y a " + min + " min";
+  if (min < 180) return "photo de " + hm(d);
+  return "<em>dernière photo " + (joursEntre(d, new Date()) === 0 ? "à " + hm(d) : JOURS[d.getDay()].substr(0, 3) + ". " + hm(d)) + "</em>";
+}
+function infosWebcam(c) {
+  var m = wcMeteo[c.id] || {}, h = "";
+  if (m.temp !== undefined && m.temp !== null) {
+    var mi = meteoInfo(m.code);
+    h += "<span>" + svgIcone(m.jour === 0 ? mi[2] : mi[1]) + Math.round(m.temp) + "°</span>";
+  }
+  if (m.neige) h += "<span>❄ " + Math.round(m.neige * 100) + " cm de neige</span>";
+  if (m.chute >= 1) h += "<span>+" + Math.round(m.chute) + " cm attendus d'ici 2 jours</span>";
+  if (m.mer !== undefined && m.mer !== null) h += "<span>Mer " + Math.round(m.mer) + "°</span>";
+  if (m.vagues) h += "<span>Vagues " + (Math.round(m.vagues * 10) / 10).toString().replace(".", ",") + " m</span>";
+  if (m.vent >= 20) h += "<span>Vent " + Math.round(m.vent) + " km/h</span>";
+  if (c.alt) h += "<span>" + c.alt + " m</span>";
+  var a = ageWebcam(c);
+  if (a) h += "<span>" + a + "</span>";
+  return h;
+}
+function majInfosWebcam() {
+  var z = el("wc-infos"), c = etatWebcams && etatWebcams[wcActive];
+  if (z && c) z.innerHTML = infosWebcam(c);
+}
+function rendreWebcams() {
+  var z = el("page-webcams");
+  if (!etatWebcams || !etatWebcams.length) {
+    z.innerHTML = '<div class="wc-vide">Pas encore d\'images : le relais du NAS les prépare.</div>';
+    return;
+  }
+  if (wcActive >= etatWebcams.length) wcActive = 0;
+  var c = etatWebcams[wcActive], cle = c.id + c.img;
+  if (z.getAttribute("data-cle") !== cle) {
+    // la photo est affichée à pleine hauteur ; si elle déborde (panorama), elle glisse lentement d'un bord à l'autre
+    var H = window.innerHeight, W = window.innerWidth, w = c.largeur && c.hauteur ? H * c.largeur / c.hauteur : W;
+    var dx = Math.round(Math.min(0, W - w)), duree = Math.max(20, Math.round(-dx / 22));
+    el("wc-anim").innerHTML = "@-webkit-keyframes wcPan { from { -webkit-transform: translate3d(0,0,0); } to { -webkit-transform: translate3d(" + dx + "px,0,0); } }" +
+      "@keyframes wcPan { from { transform: translate3d(0,0,0); } to { transform: translate3d(" + dx + "px,0,0); } }";
+    var v = "";
+    for (var i = 0; i < etatWebcams.length; i++)
+      v += '<div class="wc-v' + (i === wcActive ? " on" : "") + '" onclick="choisirWebcam(' + i + ')"><div style="background-image:url(\'' +
+        etatWebcams[i].tn + '\')"></div><b>' + echap(etatWebcams[i].nom.split(" · ").pop()) + "</b></div>";
+    z.innerHTML = '<div class="wc-fond" id="wc-fond" style="-webkit-animation-duration:' + duree + 's;animation-duration:' + duree + 's"><img src="' + c.img + '"></div>' +
+      '<div class="wc-haut"><div class="etiquette">Webcams</div><div class="wc-nom">' + echap(c.nom) + '</div><div class="wc-infos" id="wc-infos"></div></div>' +
+      '<div class="wc-bas"><div class="wc-vignettes">' + v + "</div>" +
+      (c.video ? '<span class="wc-film" onclick="voirVideoWebcam()"><i></i>Dernière minute</span>' : "") + "</div>";
+    z.setAttribute("data-cle", cle);
+    var f = el("wc-fond"), img = f.firstChild;
+    img.onload = function () { f.className = "wc-fond on"; };
+    if (img.complete) f.className = "wc-fond on";
+  }
+  majInfosWebcam();
+  // passe seule à la webcam suivante toutes les 30 s tant qu'on ne touche à rien
+  clearTimeout(wcMinuteur);
+  wcMinuteur = setTimeout(function () {
+    if (pageActuelle === 6 && !el("wc-video").className && new Date().getTime() - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
+  }, 30000);
+}
+function choisirWebcam(i, auto) {
+  if (!etatWebcams || !etatWebcams.length) return;
+  wcActive = (i + etatWebcams.length) % etatWebcams.length;
+  if (!auto) dernierContact = new Date().getTime();
+  rendreWebcams();
+}
+// Viewsurf : le film de la dernière minute (vidéo HLS, lue nativement par Safari)
+function voirVideoWebcam() {
+  var c = etatWebcams && etatWebcams[wcActive];
+  if (!c || !c.video) return;
+  var v = el("wc-lecteur");
+  el("wc-video-titre").innerHTML = echap(c.nom) + " · la dernière minute";
+  v.src = c.video;
+  el("wc-video").className = "on";
+  try { v.play(); } catch (e) {}
+}
+function fermerVideoWebcam() {
+  var v = el("wc-lecteur");
+  try { v.pause(); } catch (e) {}
+  v.removeAttribute("src");
+  try { v.load(); } catch (e) {}
+  el("wc-video").className = "";
+}
+
 /* ---------- Mode match plein écran (PSG, toutes compétitions) ---------- */
 var matchReduit = false, matchOuvert = false, dernierScore = null;
 function sigleEquipe(e) {
@@ -2582,6 +2742,7 @@ chargerMaison();
 chargerActus();
 chargerAgenda();
 chargerCantine();
+chargerWebcams();
 alignerColonnes();
 allerA(PAGE_ACCUEIL, true);
 // démonstration du mode match : ouvrir la page avec #match (but simulé au bout de 6 s)

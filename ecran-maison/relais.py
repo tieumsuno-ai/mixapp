@@ -375,6 +375,133 @@ def maj_cantine():
         log("Cantine : %d jours de menus (%s → %s)" % (len(menus), min(menus), max(menus)))
 
 
+# ---------- 2 sexies. Webcams (images réduites pour l'iPad) ----------
+# WEBCAMS = « Nom;source;lat;lon;altitude | … » avec source = viewsurf:<n° de page pv.viewsurf.com>
+# ou webcamhd:<image>:<config> (app.webcam-hd.com) ou image:<adresse d'une image rafraîchie>. Les images d'origine (4K, panoramas de 7000 px)
+# sont trop lourdes pour le vieil iPad : le relais les réduit et les dépose dans /web/webcams.
+WEBCAMS = [x.strip() for x in os.environ.get("WEBCAMS", "").split("|") if x.strip()]
+webcams_derniere = 0
+pillow_pret = False
+
+
+def preparer_pillow():
+    global pillow_pret
+    if pillow_pret:
+        return True
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        import subprocess, sys
+        log("Webcams : installation de Pillow…")
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--disable-pip-version-check", "pillow"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            log("Webcams : installation impossible", r.stderr[-300:])
+            return False
+    pillow_pret = True
+    return True
+
+
+def telecharger(url, limite=40_000_000):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (ecran-maison)"})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return r.read(limite)
+
+
+def reduire(octets, nom, largeur, hauteur_max):
+    from PIL import Image
+    import io
+    im = Image.open(io.BytesIO(octets))
+    im.draft("RGB", (largeur, hauteur_max))          # décodage JPEG directement à taille réduite
+    im = im.convert("RGB")
+    im.thumbnail((largeur, hauteur_max), Image.LANCZOS)
+    sortie = io.BytesIO()
+    im.save(sortie, "JPEG", quality=82, optimize=True, progressive=True)
+    ecrire(os.path.join("webcams", nom), sortie.getvalue())
+    return im.size
+
+
+def source_webcam(src):
+    """→ (url de l'image d'origine, heure de prise de vue ISO ou None, vidéo HLS du dernier film ou None)"""
+    genre, _, reste = src.partition(":")
+    if genre == "viewsurf":
+        page = telecharger("https://pv.viewsurf.com/%s" % reste.strip(), 2_000_000).decode("utf-8", "replace")
+        m = re.search(r"//(filmspv\.viewsurf\.com/[^\"' ]+?/media_(\d+))\.jpg", page)
+        if not m:
+            raise ValueError("image introuvable")
+        quand = datetime.datetime.fromtimestamp(int(m.group(2))).strftime("%Y-%m-%dT%H:%M")
+        v = re.search(r'"source"\s*:\s*"([0-9a-f-]{20,})"', page)
+        video = "https://deliverys4.quanteec.com/contents/encodings/vod/%s/media_0.m3u8" % v.group(1) if v else None
+        return "https://" + m.group(1) + ".jpg", quand, video
+    if genre == "webcamhd":
+        image, _, config = reste.partition(":")
+        base = "https://app.webcam-hd.com/api/webcam/%s/%s/last-update?config=%s" % (image, image, config)
+        quand = None
+        try:
+            lu = json.loads(telecharger(base, 100_000).decode("utf-8"))
+            quand = datetime.datetime.strptime(lu["lastUpdate"][:16], "%Y-%m-%dT%H:%M").replace(
+                tzinfo=datetime.timezone.utc).astimezone().strftime("%Y-%m-%dT%H:%M")
+        except Exception:
+            pass
+        return ("https://app.webcam-hd.com/api/webcam-image/panorama/%s/mega_%s.jpg?config=%s" % (image, image, config),
+                quand, None)
+    if genre in ("image", "http", "https"):          # image fixe rafraîchie par le site (ex. Windy)
+        return (src if genre != "image" else reste.strip()), None, None
+    raise ValueError("source inconnue : " + src)
+
+
+def maj_webcams():
+    global webcams_derniere
+    if time.time() - webcams_derniere < 9 * 60 or not preparer_pillow():
+        return
+    webcams_derniere = time.time()
+    os.makedirs(os.path.join(WEB, "webcams"), exist_ok=True)
+    try:
+        with open(os.path.join(WEB, "webcams.json"), encoding="utf-8") as f:
+            avant = {c["id"]: c for c in json.load(f).get("cams", [])}
+    except Exception:
+        avant = {}
+    cams = []
+    for x in WEBCAMS:
+        p = [s.strip() for s in x.split(";")]
+        if len(p) < 2:
+            continue
+        ident = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", p[0]).encode("ascii", "ignore").decode().lower()).strip("-")
+        cam = {"id": ident, "nom": p[0]}
+        for i, k in ((2, "lat"), (3, "lon"), (4, "alt")):
+            try:
+                cam[k] = float(p[i])
+            except (IndexError, ValueError):
+                pass
+        try:
+            url, quand, video = source_webcam(p[1])
+            ancienne = avant.get(ident) or {}
+            if quand and quand == ancienne.get("quand") and os.path.exists(os.path.join(WEB, "webcams", ident + ".jpg")):
+                cam.update({k: ancienne[k] for k in ("quand", "largeur", "hauteur", "v") if k in ancienne})
+            else:
+                octets = telecharger(url)
+                empreinte = hashlib.md5(octets).hexdigest()[:12]
+                if not quand and empreinte == ancienne.get("empreinte") and os.path.exists(os.path.join(WEB, "webcams", ident + ".jpg")):
+                    cam.update({k: ancienne[k] for k in ("quand", "largeur", "hauteur", "v", "empreinte") if k in ancienne})
+                else:
+                    l, h = reduire(octets, ident + ".jpg", 2400, 900)
+                    reduire(octets, ident + "_tn.jpg", 420, 160)
+                    cam.update({"quand": quand or datetime.datetime.now().strftime("%Y-%m-%dT%H:%M"), "largeur": l, "hauteur": h,
+                                "v": int(time.time()), "empreinte": empreinte})
+            if video:
+                cam["video"] = video
+            cam["img"] = "webcams/%s.jpg?v=%s" % (ident, cam.get("v", 0))
+            cam["tn"] = "webcams/%s_tn.jpg?v=%s" % (ident, cam.get("v", 0))
+            cams.append(cam)
+        except Exception as e:
+            log("Webcams : %s indisponible" % p[0], repr(e))
+            if ident in avant:
+                cams.append(avant[ident])          # on garde la dernière image connue
+    if cams:
+        ecrire("webcams.json", json.dumps({"maj": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M"), "cams": cams},
+                                          ensure_ascii=False).encode("utf-8"))
+
+
 # ---------- 2 quinquies. Clubs amateurs (championnats et coupes FFF) ----------
 # FOOT_FFF = « 17767=Chambly » (numéro de club FFF = nom court ; plusieurs clubs séparés par des virgules).
 # Résultats, calendrier et classement de l'équipe première senior, lus sur l'API publique de la FFF
@@ -1218,6 +1345,11 @@ while True:
     maj_cantine()
     if FOOT_FFF:
         maj_fff()
+    if WEBCAMS:
+        try:
+            maj_webcams()
+        except Exception as e:
+            log("Webcams :", repr(e))
     if NETATMO:
         maj_netatmo()
     time.sleep(INTERVALLE)
