@@ -161,11 +161,11 @@
   .foot.plusieurs .diapo .ligne:last-child { padding-right: 4.5vw; }
   .foot .pt { display: inline-block; width: 0.8vh; height: 0.8vh; border-radius: 50%; background: rgba(255,255,255,0.28); margin: 0 0.35vh; }
   .foot .pt.on { background: #fff; }
-  .foot .ecu { display: inline-block; width: 2.6vh; height: 2.6vh; border-radius: 50%; background: #fff; margin-right: 0.6vw;
+  .ecu { display: inline-block; width: 2.6vh; height: 2.6vh; border-radius: 50%; background: #fff; margin-right: 0.6vw;
     vertical-align: -0.45vh; overflow: hidden; text-align: center; -webkit-flex-shrink: 0; flex-shrink: 0; }
-  .foot .ecu img { width: 80%; height: 80%; margin-top: 10%; -o-object-fit: contain; object-fit: contain; display: inline-block; vertical-align: top; }
-  .foot .ecu.droite { margin-right: 0; margin-left: 0.6vw; }
-  .foot .ecu.grand { width: 4.2vh; height: 4.2vh; margin-right: 0.9vw; }
+  .ecu img { width: 80%; height: 80%; margin-top: 10%; -o-object-fit: contain; object-fit: contain; display: inline-block; vertical-align: top; }
+  .ecu.droite { margin-right: 0; margin-left: 0.6vw; }
+  .ecu.grand { width: 4.2vh; height: 4.2vh; margin-right: 0.9vw; }
   .foot .haut .etiquette b { font-weight: 600; }
   .foot .diapo .score { font-size: 3.1vh; }
   .foot .diapo .haut .etiquette { letter-spacing: 0.14em; }
@@ -383,6 +383,17 @@
 
   /* page PSG */
   .f { display: -webkit-box; display: -webkit-flex; display: flex; }
+  .f-tete { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    margin-bottom: 2.4vh; }
+  .f-tete .sous { font-size: 2.4vh; font-weight: 300; opacity: 0.7; margin-left: auto; white-space: nowrap; }
+  .f-onglet { display: inline-block; font-size: 2.7vh; font-weight: 500; padding: 1vh 1.6vw 1vh 1vw; margin-right: 1vw; border-radius: 100px;
+    background: rgba(255,255,255,0.1); white-space: nowrap; }
+  .f-onglet.on { background: #fff; color: #0b1026; }
+  .f-onglet .ecu { width: 3.6vh; height: 3.6vh; vertical-align: -1vh; margin-right: 0.8vw; }
+  .f-onglet.on .ecu { box-shadow: 0 0 0 1px rgba(11,16,38,0.15); }
+  .f-ligne .ecu { width: 2.2vh; height: 2.2vh; vertical-align: -0.4vh; margin-right: 0.4vw; }
+  .f-ligne .ecu.droite { margin-left: 0.4vw; }
+  .f-vide { opacity: 0.6; font-weight: 300; font-size: 2vh; padding: 1vh 0; }
   .f-table { width: 44vw; margin-right: 2.4vw; padding: 2vh 1.6vw; box-sizing: border-box; }
   .f-table table { width: 100%; border-collapse: collapse; font-size: 1.95vh; }
   .f-table th { font-weight: 400; opacity: 0.5; text-align: right; padding-bottom: 0.6vh; font-size: 1.6vh; }
@@ -1269,7 +1280,8 @@ function idESPN() { return CONFIG.equipe && (CONFIG.equipe.espn || ESPN_EQUIPES[
 var FOOT_FRANCE = { cle: "fra", nom: "France", court: "France", espn: 478, logo: "https://a.espncdn.com/i/teamlogos/countries/500/fra.png",
   compet: { "uefa.nations": "Ligue des nations", "fifa.world": "Coupe du monde", "uefa.euro": "Euro", "uefa.euroq": "Qualifications Euro",
             "fifa.worldq.uefa": "Qualifications Mondial", "fifa.friendly": "Match amical" },
-  court_: { "uefa.nations": "Ligue des nations", "fifa.world": "Mondial", "uefa.euro": "Euro", "uefa.euroq": "Qualif. Euro",
+  nomTable: "Ligue des nations",
+  court_: { "uefa.nations": "LdN", "fifa.world": "Mondial", "uefa.euro": "Euro", "uefa.euroq": "Qualif. Euro",
            "fifa.worldq.uefa": "Qualif. Mondial", "fifa.friendly": "Amical" }, table: "uefa.nations" };
 var PAYS = { "Spain": "Espagne", "Belgium": "Belgique", "Italy": "Italie", "Türkiye": "Turquie", "Turkey": "Turquie", "Germany": "Allemagne",
   "England": "Angleterre", "Netherlands": "Pays-Bas", "Croatia": "Croatie", "Sweden": "Suède", "Norway": "Norvège", "Senegal": "Sénégal",
@@ -1331,6 +1343,8 @@ function chargerEquipeESPN(eq, fin) {
         var nous = String(en[i].team.id) === String(id);
         res.table.push({ rang: st.rank, nom: PAYS[en[i].team.displayName] || en[i].team.shortDisplayName || en[i].team.displayName, j: st.gamesPlayed, pts: st.points,
                          diff: st.pointDifferential, g: st.wins, n: st.ties, p: st.losses, nous: nous });
+        if (nous && nomGr) res.etiqTable = "Groupe " + nomGr.replace(/^(Group|League)\s+/i, "");
+        if (nous) res.nomTable = (eq.nomTable || "") + (nomGr ? " · groupe " + nomGr.replace(/^(Group|League)\s+/i, "") : "");
         if (nous) res.classement = { rang: st.rank, points: st.points, joues: st.gamesPlayed,
                                      ou: nomGr ? "" + nomGr.replace(/^(Group|League)\s+/i, "") : eq.ouClassement || "L1" };
       }
@@ -1341,7 +1355,7 @@ function chargerEquipeESPN(eq, fin) {
 }
 function equipePrincipale() {
   var e = CONFIG.equipe;
-  return { cle: "club", nom: e.nom, court: e.court, espn: idESPN(), compet: ESPN_COMPET, court_: COMPET_COURT, table: "fra.1", ouClassement: "L1",
+  return { cle: "club", nom: e.nom, court: e.court, espn: idESPN(), compet: ESPN_COMPET, court_: COMPET_COURT, table: "fra.1", ouClassement: "L1", nomTable: "Ligue 1",
            logo: e.logo || (idESPN() ? "https://a.espncdn.com/i/teamlogos/soccer/500/" + idESPN() + ".png" : "") };
 }
 function chargerFoot() {
@@ -1373,7 +1387,7 @@ function chargerFFF() {
         var m = { id: "fff" + i + "-" + j, date: new Date(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2)),
                   sansHeure: !x.heure, termine: x.termine, dom: x.nousDom ? e.court : x.dom, ext: x.nousDom ? x.ext : e.court, nousDom: x.nousDom,
                   sd: x.sd, se: x.se, tab: x.tab, cNom: x.compet + (x.poule && x.poule[4] ? " · " + x.poule[4] + "e journée" : ""),
-                  cCourt: x.compet, ldom: x.logoDom, lext: x.logoExt };
+                  cCourt: x.compet === "Coupe de France" ? "CdF" : x.compet, ldom: x.logoDom, lext: x.logoExt };
         if (m.termine) passes.push(m); else if (m.date.getTime() > now - 3 * 3600000) futurs.push(m);
       }
       passes.sort(function (x, y) { return y.date - x.date; });
@@ -1382,7 +1396,7 @@ function chargerFFF() {
       for (j = 0; j < (e.table || []).length; j++) if (e.table[j].nous) cl = { rang: e.table[j].rang, points: e.table[j].pts, joues: e.table[j].j, ou: e.competCourt || "" };
       l.push({ eq: { cle: "fff" + e.club, nom: e.court, court: e.court, logo: e.logo, compet: e.compet },
                f: { dernier: passes[0] || null, prochain: futurs[0] || null, passes: passes.slice(0, 6), avenir: futurs.slice(0, 6),
-                    forme: passes.slice(0, 5).reverse(), classement: cl, table: e.table || null } });
+                    forme: passes.slice(0, 5).reverse(), classement: cl, table: e.table || null, nomTable: e.compet || "" } });
     }
     etatFFF = l;
     afficherFoot();
@@ -1531,13 +1545,17 @@ function diapoFoot(eq, f, now, enDirect) {
   }
   return h;
 }
-function afficherFoot() {
-  var z = document.getElementById("foot"), now = new Date(), l = [];
+function equipesFoot() {
+  var l = [], dispo = [];
   if (etatFoot && CONFIG.equipe) l.push({ eq: equipePrincipale(), f: etatFoot });
   if (etatFrance) l.push({ eq: FOOT_FRANCE, f: etatFrance });
   for (var i = 0; i < etatFFF.length; i++) { etatFFF[i].eq.fff = true; l.push(etatFFF[i]); }
-  var dispo = [];
   for (i = 0; i < l.length; i++) if (l[i].f && (l[i].f.dernier || l[i].f.prochain)) dispo.push(l[i]);
+  return dispo;
+}
+function afficherFoot() {
+  var z = document.getElementById("foot"), now = new Date(), i, dispo = equipesFoot();
+  if (pageActuelle === 4) rendreFoot();
   if (!dispo.length) { z.className = "carte foot"; return; }
   var cleActive = footCles[footDiapo], direct = footDirect && etatFoot && etatFoot.prochain && footDirect.etat === "in";
   footCles = [];
@@ -1777,11 +1795,20 @@ function franceDemo() {
   var L = "https://a.espncdn.com/i/teamlogos/countries/500/";
   return {
     dernier: { id: "f1", compet: "uefa.nations", date: new Date(2026, 10, 15, 20, 45), termine: true, dom: "France", ext: "Türkiye", nousDom: true, sd: 3, se: 1,
-               cNom: "Ligue des nations", cCourt: "Ligue des nations", ldom: L + "fra.png", lext: L + "tur.png",
+               cNom: "Ligue des nations", cCourt: "LdN", ldom: L + "fra.png", lext: L + "tur.png",
                buts: [{ nom: "Mbappé", min: "12'", nous: true }, { nom: "Olise", min: "54'", nous: true }, { nom: "Güler", min: "71'", nous: false }, { nom: "Doué", min: "88'", nous: true }] },
     prochain: { id: "f2", compet: "uefa.nations", date: new Date(2027, 2, 25, 20, 45), termine: false, dom: "Spain", ext: "France", nousDom: false,
-                cNom: "Ligue des nations", cCourt: "Ligue des nations", ldom: L + "esp.png", lext: L + "fra.png" },
-    classement: { rang: 1, points: 13, joues: 6, ou: "A1" },
+                cNom: "Ligue des nations", cCourt: "LdN", ldom: L + "esp.png", lext: L + "fra.png" },
+    classement: { rang: 1, points: 13, joues: 6, ou: "A1" }, nomTable: "Ligue des nations · groupe A1", etiqTable: "Groupe A1",
+    table: [{ rang: 1, nom: "France", j: 6, g: 4, n: 1, p: 1, diff: 7, pts: 13, nous: true }, { rang: 2, nom: "Belgique", j: 6, g: 4, n: 0, p: 2, diff: 3, pts: 12 },
+            { rang: 3, nom: "Italie", j: 6, g: 3, n: 1, p: 2, diff: 2, pts: 10 }, { rang: 4, nom: "Turquie", j: 6, g: 0, n: 0, p: 6, diff: -12, pts: 0 }],
+    passes: [{ compet: "uefa.nations", cCourt: "LdN", date: new Date(2026, 10, 15, 20, 45), dom: "France", ext: "Türkiye", nousDom: true, sd: 3, se: 1, ldom: L + "fra.png", lext: L + "tur.png" },
+             { compet: "uefa.nations", cCourt: "LdN", date: new Date(2026, 9, 5, 20, 45), dom: "France", ext: "Belgium", nousDom: true, sd: 1, se: 1, ldom: L + "fra.png", lext: L + "bel.png" },
+             { compet: "uefa.nations", cCourt: "LdN", date: new Date(2026, 9, 2, 20, 45), dom: "France", ext: "Italy", nousDom: true, sd: 2, se: 0, ldom: L + "fra.png", lext: L + "ita.png" },
+             { compet: "uefa.nations", cCourt: "LdN", date: new Date(2026, 8, 28, 20, 45), dom: "Belgium", ext: "France", nousDom: false, sd: 1, se: 1, ldom: L + "bel.png", lext: L + "fra.png" },
+             { compet: "uefa.nations", cCourt: "LdN", date: new Date(2026, 8, 25, 20, 45), dom: "Türkiye", ext: "France", nousDom: false, sd: 0, se: 2, ldom: L + "tur.png", lext: L + "fra.png" }],
+    avenir: [{ compet: "uefa.nations", cCourt: "LdN", date: new Date(2027, 2, 25, 20, 45), dom: "Spain", ext: "France", nousDom: false, ldom: L + "esp.png", lext: L + "fra.png" },
+             { compet: "uefa.nations", cCourt: "LdN", date: new Date(2027, 2, 28, 20, 45), dom: "France", ext: "Spain", nousDom: true, ldom: L + "fra.png", lext: L + "esp.png" }],
     forme: [{ nousDom: false, sd: 0, se: 2 }, { nousDom: false, sd: 1, se: 1 }, { nousDom: true, sd: 2, se: 0 }, { nousDom: true, sd: 1, se: 1 }, { nousDom: true, sd: 3, se: 1 }]
   };
 }
@@ -2344,28 +2371,44 @@ function rendreMaisonPage() {
 }
 
 /* --- page PSG --- */
+var footPage = null;
+function choisirFootPage(cle) { footPage = cle; rendreFoot(); }
 function rendreFoot() {
-  var z = el("page-foot"), f = etatFoot;
-  if (!f) { z.innerHTML = "<h2>" + (CONFIG.equipe ? CONFIG.equipe.court : "Football") + "</h2>"; return; }
+  var z = el("page-foot"), l = equipesFoot(), i, sel = null;
+  if (!l.length) { z.innerHTML = "<h2>Football</h2>"; return; }
+  for (i = 0; i < l.length; i++) if (l[i].eq.cle === footPage) sel = l[i];
+  if (!sel) { sel = l[0]; footPage = sel.eq.cle; }
+  var eq = sel.eq, f = sel.f, nomM = eq.fff ? function (n) { return n; } : nomEquipe;
+  var onglets = "";
+  for (i = 0; i < l.length; i++)
+    onglets += '<span class="f-onglet' + (l[i] === sel ? " on" : "") + '" onclick="choisirFootPage(\'' + l[i].eq.cle + '\')">' + ecusson(l[i].eq.logo) + echap(l[i].eq.court) + "</span>";
+  var nomTable = f.nomTable || eq.nomTable || "", cl = f.classement;
+  var sous = cl && cl.rang ? (cl.rang === 1 ? (eq.cle === "fra" ? "1re" : "1er") : cl.rang + "e") + (nomTable ? " · " + echap(nomTable) : "") + " · " + cl.points + " pts" : "";
   var t = "";
-  if (f.table) for (var i = 0; i < f.table.length; i++) {
+  if (f.table) for (i = 0; i < f.table.length; i++) {
     var r = f.table[i];
     t += '<tr' + (r.nous ? ' class="nous"' : "") + '><td class="r">' + r.rang + '</td><td class="e">' + echap(r.nom) + "</td><td>" + r.j + "</td><td>" + r.g + "</td><td>" + r.n + "</td><td>" + r.p +
       "</td><td>" + (r.diff > 0 ? "+" : "") + r.diff + '</td><td class="pts">' + r.pts + "</td></tr>";
   }
-  var table = t ? '<div class="carte f-table"><div class="etiquette">Classement Ligue 1</div><table><tr><th></th><th class="e"></th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>' + t + "</table></div>" : "";
+  var table = t ? '<div class="carte f-table"><div class="etiquette">Classement' + (f.etiqTable || nomTable ? " · " + echap(f.etiqTable || nomTable) : "") + '</div><table><tr><th></th><th class="e"></th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>' + t + "</table></div>" : "";
   function ligne(m, fini) {
-    var d = m.date, q = JOURS[d.getDay()].substr(0, 3) + ". " + d.getDate() + " " + MOISCOURT[d.getMonth()] + (fini ? "" : " " + hm(d));
+    var d = m.date, q = JOURS[d.getDay()].substr(0, 3) + ". " + d.getDate() + " " + MOISCOURT[d.getMonth()] + (fini || m.sansHeure ? "" : " " + hm(d));
     var res = "";
-    if (fini) { var n2 = m.nousDom ? m.sd : m.se, e2 = m.nousDom ? m.se : m.sd, x = n2 > e2 ? "V" : n2 < e2 ? "D" : "N"; res = '<span class="res ' + x + '">' + x + "</span>"; }
-    return '<div class="f-ligne"><span class="d">' + q + '</span><span class="m">' + nomEquipe(m.dom) + (fini ? " <b>" + m.sd + " – " + m.se + "</b> " : " – ") + nomEquipe(m.ext) +
-      '<span class="c">' + COMPET_COURT[m.compet] + "</span></span>" + res + "</div>";
+    if (fini) {
+      var n2 = m.nousDom ? m.sd : m.se, e2 = m.nousDom ? m.se : m.sd;
+      if (n2 === e2 && m.tab) { n2 = m.nousDom ? m.tab[0] : m.tab[1]; e2 = m.nousDom ? m.tab[1] : m.tab[0]; }
+      var x = n2 > e2 ? "V" : n2 < e2 ? "D" : "N";
+      res = '<span class="res ' + x + '">' + x + "</span>";
+    }
+    return '<div class="f-ligne"><span class="d">' + q + '</span><span class="m">' + ecusson(m.ldom) + echap(nomM(m.dom)) + (fini ? " <b>" + m.sd + " – " + m.se + "</b> " : " – ") +
+      echap(nomM(m.ext)) + ecusson(m.lext, "droite") + '<span class="c">' + echap(m.cCourt || COMPET_COURT[m.compet] || "") + "</span></span>" + res + "</div>";
   }
-  var a = "", b = "", k;
-  if (f.passes) for (k = 0; k < f.passes.length && k < 5; k++) a += ligne(f.passes[k], true);
-  if (f.avenir) for (k = 0; k < f.avenir.length && k < 5; k++) b += ligne(f.avenir[k], false);
-  z.innerHTML = "<h2>" + CONFIG.equipe.court + (f.classement ? "<span>" + (f.classement.rang === 1 ? "1er" : f.classement.rang + "e") + " de Ligue 1 · " + f.classement.points + " pts</span>" : "") + "</h2>" +
-    '<div class="f">' + table + '<div class="f-cote"><div class="carte"><div class="etiquette">Derniers résultats</div>' + a + '</div><div class="carte"><div class="etiquette">Prochains matchs</div>' + b + "</div></div></div>";
+  var a = "", b = "", k, max = t ? 5 : 6;
+  if (f.passes) for (k = 0; k < f.passes.length && k < max; k++) a += ligne(f.passes[k], true);
+  if (f.avenir) for (k = 0; k < f.avenir.length && k < max; k++) b += ligne(f.avenir[k], false);
+  z.innerHTML = '<div class="f-tete">' + onglets + '<span class="sous">' + sous + "</span></div>" +
+    '<div class="f">' + table + '<div class="f-cote"><div class="carte"><div class="etiquette">Derniers résultats</div>' + (a || '<div class="f-vide">Aucun match récent</div>') +
+    '</div><div class="carte"><div class="etiquette">Prochains matchs</div>' + (b || '<div class="f-vide">Pas encore programmé</div>') + "</div></div></div>";
 }
 
 /* --- page Cantine (cantine.json, écrit par le relais à partir des PDF du dossier Web/cantine) --- */
