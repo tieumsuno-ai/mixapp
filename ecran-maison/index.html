@@ -2643,6 +2643,13 @@ function pastilleVigilance() {
 
 /* ---------- Mode Noël : du 1er décembre à l'Épiphanie ; le lutin farceur du 1er au 24 ---------- */
 var noelCle = "", noelForce = null, noelBulleMin = null;
+// le lutin ne se montre que le matin : 7h–8h en semaine, 7h–12h le week-end (réglable dans config.js)
+function lutinVisible(d) {
+  if (noelForce) return true;
+  var we = d.getDay() === 0 || d.getDay() === 6, h = d.getHours() + d.getMinutes() / 60;
+  var p = we ? (CONFIG.lutinWeekEnd || [7, 12]) : (CONFIG.lutinSemaine || [7, 8]);
+  return h >= p[0] && h < p[1];
+}
 function periodeNoel(d) {
   if (CONFIG.noel === false) return 0;
   if (noelForce) return noelForce;
@@ -2887,7 +2894,8 @@ function majNoel(force) {
   var now = new Date(), j = periodeNoel(now);
   var conseil = conseilMatin(now), zh = zoneHorloge();
   var W = page.offsetWidth, H = page.offsetHeight;
-  var cle = [j, conseil ? conseil.t + conseil.s : "", W, H, zh ? Math.round(zh.x) + "," + Math.round(zh.w) : "", cartesCle()].join("|");
+  var vis = lutinVisible(now);
+  var cle = [j, vis, conseil ? conseil.t + conseil.s : "", W, H, zh ? Math.round(zh.x) + "," + Math.round(zh.w) : "", cartesCle()].join("|");
   if (cle === noelCle && !force) return;
   noelCle = cle;
   var dep = el("depart");
@@ -2905,11 +2913,11 @@ function majNoel(force) {
   }
   var Z = zonesNoel(page, zh);
   if (Z.fete) {
-    var yeux = j <= 24 && FARCES[j] && FARCES[j].sapinYeux, sh = yeux ? Z.u * 15 : Math.min(Z.fete.h * 0.86, Z.u * 11), sw = sh * 0.77;
-    h += noelBoite("sapin acc", Z.fete.r - sw - Z.u * 2.2, Z.fete.b - sh - Z.u * 0.8, sw, sh, sapinSVG(j <= 24 && FARCES[j] && FARCES[j].sapinYeux));
+    var yeux = vis && j <= 24 && FARCES[j] && FARCES[j].sapinYeux, sh = yeux ? Z.u * 15 : Math.min(Z.fete.h * 0.86, Z.u * 11), sw = sh * 0.77;
+    h += noelBoite("sapin acc", Z.fete.r - sw - Z.u * 2.2, Z.fete.b - sh - Z.u * 0.8, sw, sh, sapinSVG(yeux));
     Z.sapin = { x: Z.fete.r - sw - Z.u * 2.2, w: sw };
   }
-  if (j <= 24 && FARCES[j]) {
+  if (j <= 24 && FARCES[j] && vis) {
     var L = outilsLutin(Z), contenu = "";
     Z.anim = function (k) { styles.push(k); };
     try { contenu = FARCES[j].f(Z, L); } catch (e) { contenu = ""; }
