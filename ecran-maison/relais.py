@@ -425,14 +425,33 @@ def source_webcam(src):
     """→ (url de l'image d'origine, heure de prise de vue ISO ou None, vidéo HLS du dernier film ou None)"""
     genre, _, reste = src.partition(":")
     if genre == "viewsurf":
+        # page publique → identifiant du film (webcam à films) ou du direct ; l'API du lecteur donne l'image en grand
         page = telecharger("https://pv.viewsurf.com/%s" % reste.strip(), 2_000_000).decode("utf-8", "replace")
-        m = re.search(r"//(filmspv\.viewsurf\.com/[^\"' ]+?/media_(\d+))\.jpg", page)
-        if not m:
-            raise ValueError("image introuvable")
-        quand = datetime.datetime.fromtimestamp(int(m.group(2))).strftime("%Y-%m-%dT%H:%M")
         v = re.search(r'"source"\s*:\s*"([0-9a-f-]{20,})"', page)
-        video = "https://deliverys4.quanteec.com/contents/encodings/vod/%s/media_0.m3u8" % v.group(1) if v else None
-        return "https://" + m.group(1) + ".jpg", quand, video
+        m = re.search(r"//(filmspv\.viewsurf\.com/[^\"' ]+?/media_(\d+))\.jpg", page)
+        quand = datetime.datetime.fromtimestamp(int(m.group(2))).strftime("%Y-%m-%dT%H:%M") if m else None
+        image, video = ("https://" + m.group(1) + ".jpg") if m else None, None
+        if v:
+            for serveur in ("platforms11", "platforms9", "platforms7"):
+                try:
+                    man = json.loads(telecharger("https://%s.joada.net/api/videos/manifest/%s" % (serveur, v.group(1)), 200_000).decode("utf-8"))
+                    break
+                except Exception:
+                    man = {}
+            image = image or man.get("poster")
+            # vidéo seulement s'il existe une version HD (1080p) : le vieil iPad ne lit pas la 4K
+            try:
+                maitre = man.get("m3u8") or ""
+                liste = telecharger(maitre, 100_000).decode("utf-8", "replace")
+                for res, uri in re.findall(r"RESOLUTION=(\d+)x\d+[^\n]*\n([^\n#]+)", liste):
+                    if int(res) <= 1920:
+                        video = maitre.rsplit("/", 1)[0] + "/" + uri.strip()
+                        break
+            except Exception:
+                pass
+        if not image:
+            raise ValueError("image introuvable")
+        return image, quand, video
     if genre == "webcamhd":
         image, _, config = reste.partition(":")
         base = "https://app.webcam-hd.com/api/webcam/%s/%s/last-update?config=%s" % (image, image, config)
