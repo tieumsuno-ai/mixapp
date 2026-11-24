@@ -3073,16 +3073,20 @@ function rendreWebcams() {
     if (img.complete) f.className = "wc-fond on";
   }
   majInfosWebcam();
-  // passe seule à la webcam suivante toutes les 30 s tant qu'on ne touche à rien
-  clearTimeout(wcMinuteur);
-  wcMinuteur = setTimeout(function () {
-    if (pageActuelle === PAGE_WEBCAMS && !el("wc-video").className && new Date().getTime() - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
-  }, 30000);
 }
+// passe seule à la webcam suivante toutes les 30 s tant qu'on ne touche à rien
+// (minuteur indépendant : la page est redessinée toutes les 15 s, ce qui ne doit pas le remettre à zéro)
+var wcDernierChangement = 0;
+setInterval(function () {
+  var t = new Date().getTime();
+  if (pageActuelle !== PAGE_WEBCAMS || el("wc-video").className || !etatWebcams || etatWebcams.length < 2) { wcDernierChangement = t; return; }
+  if (t - wcDernierChangement >= 30000 && t - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
+}, 5000);
 function choisirWebcam(i, auto) {
   if (!etatWebcams || !etatWebcams.length) return;
   wcActive = (i + etatWebcams.length) % etatWebcams.length;
-  if (!auto) dernierContact = new Date().getTime();
+  wcDernierChangement = new Date().getTime();
+  if (!auto) dernierContact = wcDernierChangement;
   rendreWebcams();
 }
 // Viewsurf : le film de la dernière minute (vidéo HLS, lue nativement par Safari)
