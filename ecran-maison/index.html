@@ -2075,7 +2075,7 @@ function actusDemo() {
 var ambianceCle = "", filanteMinuteur = null;
 function hasard(a, b) { return a + Math.random() * (b - a); }
 function majAmbiance(code, temp, nuit) {
-  if (!CONFIG.animerIcones) return;
+  if (!CONFIG.animerIcones || CONFIG.modeLeger) return;
   var pluie = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
   var neige = (code >= 71 && code <= 77) || code === 85 || code === 86;
   var nuages = code === 2 || code === 3 || code === 45 || code === 48;
@@ -2326,6 +2326,7 @@ function allerA(n, sansAnim) {
   el("btn-maison").style.display = n === PAGE_ACCUEIL ? "" : "none";
   dernierContact = new Date().getTime();
   if (n !== PAGE_WEBCAMS && el("wc-video").className) fermerVideoWebcam();
+  if (n !== PAGE_WEBCAMS) setTimeout(viderWebcams, 900);
   rendrePage();
   if (n === PAGE_MAISON) chargerMaison();
 }
@@ -2907,7 +2908,7 @@ function majNoel(force) {
   if (!j) { couche.innerHTML = ""; return; }
   // guirlande en haut de l'écran et neige légère (sauf si la météo fait déjà neiger)
   var h = guirlandeSVG(W), styles = [];
-  if (ambianceCle.indexOf("neige") < 0) for (var i = 0; i < 16; i++) {
+  if (ambianceCle.indexOf("neige") < 0 && !CONFIG.modeLeger) for (var i = 0; i < 16; i++) {
     var t = hasard(12, 20).toFixed(1), r = hasard(0, 20).toFixed(1);
     h += '<div class="noel-flocon" style="left:' + hasard(0, 100).toFixed(1) + "%;animation-duration:" + t + "s;animation-delay:-" + r + 's"><i style="transform:scale(' + hasard(0.6, 1.2).toFixed(2) + ')"></i></div>';
   }
@@ -3047,6 +3048,7 @@ function majInfosWebcam() {
 }
 function rendreWebcams() {
   var z = el("page-webcams");
+  if (CONFIG.modeLeger) { z.innerHTML = '<div class="wc-vide">Webcams en pause pour soulager l\'iPad (mode léger).</div>'; return; }
   if (!etatWebcams || !etatWebcams.length) {
     z.innerHTML = '<div class="wc-vide">Pas encore d\'images : le relais du NAS les prépare.</div>';
     return;
@@ -3054,6 +3056,7 @@ function rendreWebcams() {
   if (wcActive >= etatWebcams.length) wcActive = 0;
   var c = etatWebcams[wcActive], cle = c.id + c.img;
   if (z.getAttribute("data-cle") !== cle) {
+    libererImages(z);
     // la photo est affichée à pleine hauteur ; si elle déborde (panorama), elle glisse lentement d'un bord à l'autre
     var H = window.innerHeight, W = window.innerWidth, w = c.largeur && c.hauteur ? H * c.largeur / c.hauteur : W;
     var dx = Math.round(Math.min(0, W - w)), duree = Math.max(20, Math.round(-dx / 22));
@@ -3082,6 +3085,19 @@ setInterval(function () {
   if (pageActuelle !== PAGE_WEBCAMS || el("wc-video").className || !etatWebcams || etatWebcams.length < 2) { wcDernierChangement = t; return; }
   if (t - wcDernierChangement >= 30000 && t - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
 }, 5000);
+function libererImages(z) {
+  var im = z.getElementsByTagName("img");
+  for (var i = 0; i < im.length; i++) { im[i].onload = null; im[i].src = "data:image/gif;base64,R0lGODlhAQABAAAAACw="; }
+}
+function viderWebcams() {
+  if (pageActuelle === PAGE_WEBCAMS) return;
+  var z = el("page-webcams");
+  if (!z.getAttribute("data-cle")) return;
+  libererImages(z);
+  z.innerHTML = "";
+  z.setAttribute("data-cle", "");
+  el("wc-anim").innerHTML = "";
+}
 function choisirWebcam(i, auto) {
   if (!etatWebcams || !etatWebcams.length) return;
   wcActive = (i + etatWebcams.length) % etatWebcams.length;
@@ -3222,6 +3238,19 @@ setInterval(verifierVersion, 30 * 60000);
 verifierVersion();
 
 /* ---------- Démarrage ---------- */
+// Si Safari a dû relancer la page plusieurs fois en peu de temps (manque de mémoire sur le vieil iPad),
+// on passe en mode léger pour la journée : pas de webcams ni d'animations décoratives.
+(function () {
+  try {
+    var t = new Date().getTime(), l = JSON.parse(localStorage.getItem("ecran-demarrages") || "[]"), r = [];
+    for (var i = 0; i < l.length; i++) if (t - l[i] < 5 * 60000) r.push(l[i]);
+    r.push(t);
+    localStorage.setItem("ecran-demarrages", JSON.stringify(r));
+    var leger = +localStorage.getItem("ecran-leger-jusque") || 0;
+    if (r.length >= 3) { leger = t + 12 * 3600000; localStorage.setItem("ecran-leger-jusque", String(leger)); }
+    if (t < leger || location.hash === "#leger") CONFIG.modeLeger = true;
+  } catch (e) {}
+})();
 creerEtoiles();
 majHorloge();
 setInterval(majHorloge, 1000);

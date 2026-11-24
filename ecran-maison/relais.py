@@ -495,15 +495,15 @@ def maj_webcams():
         try:
             url, quand, video = source_webcam(p[1])
             ancienne = avant.get(ident) or {}
-            if quand and quand == ancienne.get("quand") and os.path.exists(os.path.join(WEB, "webcams", ident + ".jpg")):
+            if quand and quand == ancienne.get("quand") and ancienne.get("largeur", 0) <= 1800 and os.path.exists(os.path.join(WEB, "webcams", ident + ".jpg")):
                 cam.update({k: ancienne[k] for k in ("quand", "largeur", "hauteur", "v") if k in ancienne})
             else:
                 octets = telecharger(url)
                 empreinte = hashlib.md5(octets).hexdigest()[:12]
-                if not quand and empreinte == ancienne.get("empreinte") and os.path.exists(os.path.join(WEB, "webcams", ident + ".jpg")):
+                if not quand and empreinte == ancienne.get("empreinte") and ancienne.get("largeur", 0) <= 1800 and os.path.exists(os.path.join(WEB, "webcams", ident + ".jpg")):
                     cam.update({k: ancienne[k] for k in ("quand", "largeur", "hauteur", "v", "empreinte") if k in ancienne})
                 else:
-                    l, h = reduire(octets, ident + ".jpg", 2400, 900)
+                    l, h = reduire(octets, ident + ".jpg", 1800, 640)      # assez net pour l'iPad, sans saturer sa mémoire
                     reduire(octets, ident + "_tn.jpg", 420, 160)
                     cam.update({"quand": quand or datetime.datetime.now().strftime("%Y-%m-%dT%H:%M"), "largeur": l, "hauteur": h,
                                 "v": int(time.time()), "empreinte": empreinte})
