@@ -525,6 +525,50 @@
   #but .ecusson { position: absolute; left: 50%; top: 50%; width: 22vh; height: 22vh; margin: -40vh 0 0 -11vh; opacity: 0;
     -webkit-animation: qui 12s ease-out forwards; animation: qui 12s ease-out forwards; }
   #but.eux .ecusson { display: none; }
+  /* ---------- Mi-temps : grand compte à rebours ---------- */
+  #match .mt { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-box-orient: vertical; -webkit-flex-direction: column; flex-direction: column; -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center; }
+  #match .mt-titre { font-size: 4.2vh; font-weight: 800; letter-spacing: 0.5em; margin-right: -0.5em; text-transform: uppercase; color: #ff5a4e; }
+  #match .mt-cercle { position: relative; width: 62vh; height: 62vh; margin-top: 2vh; }
+  #match .mt-cercle svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  #match .mt-temps { position: absolute; top: 0; left: 0; right: 0; bottom: 0; line-height: 62vh; font-size: 20vh; font-weight: 800; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; text-shadow: 0 0 4vh rgba(255,90,78,0.45); }
+  #match .mt-temps.fini { font-size: 7vh; font-weight: 700; letter-spacing: 0.04em; animation: clignote 1.4s infinite; }
+  #match .mt-score { margin-top: 2.4vh; display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+    font-size: 6.5vh; font-weight: 700; }
+  #match .mt-score img, #match .mt-score .sigle { width: 8vh; height: 8vh; margin: 0 2.4vw; }
+  #match .mt-score .sigle { display: inline-block; border-radius: 50%; background: rgba(255,255,255,0.12); font-size: 2.6vh; line-height: 8vh; text-align: center; }
+  #match .mt-buts { margin-top: 1.2vh; font-size: 2.3vh; font-weight: 300; opacity: 0.8; }
+  /* ---------- BUT ! : maillot du buteur, étincelles froides et flammes ---------- */
+  #but.nous .mot { -webkit-animation: motNous 13s cubic-bezier(.2,1.4,.4,1) forwards; animation: motNous 13s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes motNous { 0% { transform: scale(0.2) rotate(-8deg); opacity: 0; } 4% { transform: scale(1.12) rotate(2deg); opacity: 1; } 7% { transform: scale(1); }
+    24% { transform: scale(1.05); } 31% { transform: translateY(-31vh) scale(0.5); } 94% { transform: translateY(-31vh) scale(0.5); opacity: 1; } 100% { transform: translateY(-31vh) scale(0.6); opacity: 0; } }
+  #but.nous .ecusson { display: none; }
+  #but.nous .qui { display: none; }
+  #but .maillot { position: absolute; left: 50%; top: 50%; width: 46vh; height: 50vh; margin: -22vh 0 0 -23vh; opacity: 0;
+    animation: maillot 13s cubic-bezier(.2,1.5,.4,1) forwards; }
+  @keyframes maillot { 0%, 27% { opacity: 0; transform: scale(0.2) rotate(-14deg); } 34% { opacity: 1; transform: scale(1.08) rotate(3deg); }
+    38% { transform: scale(1) rotate(0); } 60% { transform: scale(1.04) rotate(-1deg); } 80% { transform: scale(1) rotate(1deg); } 94% { opacity: 1; } 100% { opacity: 0; transform: scale(1.3); } }
+  #but .maillot svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2vh 4vh rgba(0,0,0,0.5)); }
+  #but .halo { position: absolute; left: 50%; top: 52%; width: 90vh; height: 90vh; margin: -45vh 0 0 -45vh; border-radius: 50%; opacity: 0;
+    background: radial-gradient(circle, rgba(255,214,102,0.55) 0%, rgba(255,120,40,0.25) 35%, rgba(255,80,20,0) 65%); animation: halo 13s ease-out forwards; }
+  @keyframes halo { 0%, 28% { opacity: 0; transform: scale(0.4); } 36% { opacity: 1; transform: scale(1.05); } 50% { transform: scale(0.95); } 70% { transform: scale(1.03); } 94% { opacity: 1; } 100% { opacity: 0; } }
+  #but .gerbe { position: absolute; bottom: -1vh; width: 0; height: 0; opacity: 0; animation: gerbeOn 13s linear forwards; }
+  @keyframes gerbeOn { 0%, 25% { opacity: 0; } 27%, 93% { opacity: 1; } 100% { opacity: 0; } }
+  #but .gerbe i { position: absolute; left: 0; bottom: 0; width: 0.8vh; height: 0.8vh; border-radius: 50%; background: #fffbea;
+    box-shadow: 0 0 1.2vh 0.5vh rgba(255,226,140,1), 0 0 0.3vh 0.1vh #fff; opacity: 0; }
+  #but.nous .flash { background: #b81d14; }
+  #but .minute { position: absolute; z-index: 2; left: 0; right: 0; top: 50%; margin-top: 27.5vh; font-size: 4.2vh; font-weight: 700; letter-spacing: 0.06em; opacity: 0;
+    animation: minute 13s ease-out forwards; text-shadow: 0 0.4vh 1.5vh rgba(0,0,0,0.4); }
+  @keyframes minute { 0%, 36% { opacity: 0; transform: translateY(2vh); } 42%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes etinG { 0% { transform: translate(0,0); opacity: 1; } 75% { opacity: 0.9; } 100% { transform: translate(-6vw,-52vh); opacity: 0; } }
+  @keyframes etinD { 0% { transform: translate(0,0); opacity: 1; } 75% { opacity: 0.9; } 100% { transform: translate(6vw,-52vh); opacity: 0; } }
+  @keyframes etinM { 0% { transform: translate(0,0); opacity: 1; } 75% { opacity: 0.9; } 100% { transform: translate(0.8vw,-62vh); opacity: 0; } }
+  @keyframes etinM2 { 0% { transform: translate(0,0); opacity: 1; } 75% { opacity: 0.9; } 100% { transform: translate(-1.2vw,-44vh); opacity: 0; } }
+  #but .flammes { position: absolute; left: 0; right: 0; bottom: 0; height: 22vh; opacity: 0; animation: gerbeOn 13s linear forwards; }
+  #but .flamme { position: absolute; bottom: -2vh; transform-origin: 50% 100%; animation: flamme 0.5s ease-in-out infinite alternate; }
+  @keyframes flamme { from { transform: scaleY(0.82) skewX(-4deg); } to { transform: scaleY(1.12) skewX(4deg); } }
   /* écusson du PSG en grand, en filigrane derrière le match */
   #match .filigrane { position: absolute; left: 50%; top: 50%; width: 92vh; height: 92vh; margin: -46vh 0 0 -46vh; opacity: 0.09;
     background: center/contain no-repeat; -webkit-animation: respire2w 6s ease-in-out infinite alternate; animation: respire2 6s ease-in-out infinite alternate; }
@@ -1530,15 +1574,22 @@ function matchESPN(e, compet, idEq, eq) {
 function dateUTC(s) { return new Date(Date.UTC(+s.substr(0, 4), +s.substr(5, 2) - 1, +s.substr(8, 2), +s.substr(11, 2), +s.substr(14, 2))); }
 function nomFamille(n) { var p = (n || "").split(" "); return p.length > 1 && p[p.length - 1].length > 2 ? p[p.length - 1] : n; }
 function lireButs(s, m) {
-  var l = [], k = s.keyEvents || [];
+  var l = [], k = s.keyEvents || [], numeros = {};
+  try {
+    for (var r = 0; r < (s.rosters || []).length; r++) {
+      var ro = s.rosters[r].roster || [];
+      for (var q = 0; q < ro.length; q++) if (ro[q].athlete) numeros[String(ro[q].athlete.id)] = ro[q].jersey || ro[q].athlete.jersey || "";
+    }
+  } catch (e) {}
   for (var i = 0; i < k.length; i++) {
     var e = k[i];
     if (!e.scoringPlay) continue;
     var txt = e.text || "", qui = e.participants && e.participants[0] && e.participants[0].athlete ? e.participants[0].athlete.displayName : "";
     var csc = /own goal/i.test(txt) || (e.type && /own/i.test(e.type.text || "")), pen = /penalty/i.test(txt);
     var pourDom = e.team && e.team.displayName === m.dom;
+    var ath = e.participants && e.participants[0] && e.participants[0].athlete;
     l.push({ nom: nomFamille(qui) + (csc ? " (csc)" : pen ? " (sp)" : ""), min: (e.clock && e.clock.displayValue || "").replace("'+", "+"),
-             nous: pourDom === m.nousDom });
+             nous: pourDom === m.nousDom, famille: nomFamille(qui), csc: csc, numero: ath ? numeros[String(ath.id)] || ath.jersey || "" : "" });
   }
   return l;
 }
@@ -1587,6 +1638,7 @@ function recevoirDirect(s, p) {
   footDirect = { etat: st.state, minute: c.status.displayClock || "", detail: st.shortDetail || "", nomEtat: st.name || "",
                  sd: sc.home, se: sc.away, buts: lireButs(s, p), dom: eq.home, ext: eq.away, stats: stats, compet: p.compet };
   if (st.state === "post" && !footDirect.finA) footDirect.finA = avant && avant.finA ? avant.finA : new Date().getTime();
+  if (estMiTemps(footDirect)) footDirect.miTempsA = avant && avant.miTempsA ? avant.miTempsA : new Date().getTime();
   afficherFoot();
   majMatch(avant);
   if (st.state === "post" && new Date().getTime() - footDirect.finA > 15 * 60000) { footDirect = null; fermerMatch(); chargerFoot(); }
@@ -3154,9 +3206,39 @@ function logoNous() {
   if (!d || !d.dom) return "";
   return d.dom.nom === CONFIG.equipe.nom ? d.dom.logo : d.ext.nom === CONFIG.equipe.nom ? d.ext.logo : "";
 }
+function estMiTemps(d) { return d && (d.nomEtat === "STATUS_HALFTIME" || /^(HT|Halftime|Mi-temps)$/i.test(d.detail || "")); }
+// Mi-temps : un grand compte à rebours de 15 min (réglable : CONFIG.dureeMiTemps), avec le score en dessous
+var mtMinuteur = null;
+function rendreMiTemps() {
+  var d = footDirect, z = el("match-contenu");
+  if (!d || !estMiTemps(d)) { clearInterval(mtMinuteur); mtMinuteur = null; return false; }
+  var duree = (CONFIG.dureeMiTemps || 15) * 60000, reste = Math.max(0, duree - (new Date().getTime() - (d.miTempsA || new Date().getTime())));
+  var mn = Math.floor(reste / 60000), sc = Math.floor(reste % 60000 / 1000), frac = reste / duree, R = 46, C = 2 * Math.PI * R;
+  var tps = el("mt-temps");
+  if (tps) {   // mise à jour seule du compteur (chaque seconde)
+    tps.innerHTML = reste > 0 ? mn + ":" + deux(sc) : "Reprise imminente";
+    tps.className = "mt-temps" + (reste > 0 ? "" : " fini");
+    el("mt-arc").setAttribute("stroke-dashoffset", (C * (1 - frac)).toFixed(1));
+    return true;
+  }
+  var nousDom = d.dom.nom === CONFIG.equipe.nom, a = [], b = [];
+  for (var i = 0; i < d.buts.length; i++) (d.buts[i].nous === nousDom ? a : b).push(d.buts[i].nom + " " + d.buts[i].min);
+  z.innerHTML = '<div class="mt"><div class="mt-titre">Mi-temps</div>' +
+    '<div class="mt-cercle"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="' + R + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2.2"/>' +
+    '<circle id="mt-arc" cx="50" cy="50" r="' + R + '" fill="none" stroke="#ff5a4e" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="' + C.toFixed(1) +
+    '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" style="transition:stroke-dashoffset 1s linear"/></svg>' +
+    '<div class="mt-temps" id="mt-temps"></div></div>' +
+    '<div class="mt-score">' + sigleEquipe(d.dom) + d.sd + " – " + d.se + sigleEquipe(d.ext) + "</div>" +
+    (a.length || b.length ? '<div class="mt-buts">&#9917; ' + echap(a.concat(b).join(" · ")) + "</div>" : "") + "</div>";
+  rendreMiTemps();
+  if (!mtMinuteur) mtMinuteur = setInterval(function () { if (!rendreMiTemps()) rendreMatch(); }, 1000);
+  return true;
+}
 function rendreMatch(rebond) {
   var d = footDirect, z = el("match-contenu");
   if (!d || !d.dom) return;
+  if (estMiTemps(d)) { if (!el("mt-temps")) z.innerHTML = ""; rendreMiTemps(); return; }
+  clearInterval(mtMinuteur); mtMinuteur = null;
   var lg = logoNous();
   el("filigrane").style.backgroundImage = lg ? "url('" + lg.replace(/'/g, "%27") + "')" : "none";
   var pause = d.nomEtat === "STATUS_HALFTIME" || /^(HT|Halftime|Mi-temps)$/i.test(d.detail), fin = d.etat === "post";
@@ -3184,17 +3266,51 @@ function rendreMatch(rebond) {
 function ouvrirMatch() { if (!matchOuvert) { matchOuvert = true; el("match").className = "ouvert"; } }
 function fermerMatch() { matchOuvert = false; el("match").className = ""; dernierScore = null; matchReduit = false; }
 function reduireMatch() { matchReduit = true; matchOuvert = false; el("match").className = ""; }
+// Maillot du buteur (dessin, pas de photo) : nom et numéro dans le dos, aux couleurs du club
+function maillotSVG(nom, numero) {
+  nom = (nom || "").toUpperCase();
+  var t = nom.length > 9 ? 9.5 : nom.length > 7 ? 11 : 13;
+  return '<svg viewBox="0 0 100 110"><defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="#0d1d52"/><stop offset="0.5" stop-color="#16296e"/><stop offset="1" stop-color="#0b1846"/></linearGradient></defs>' +
+    '<path d="M30 4 Q50 12 70 4 L94 16 L100 42 L82 46 L80 106 H20 L18 46 L0 42 L6 16 Z" fill="url(#mg)" stroke="rgba(255,255,255,0.25)" stroke-width="0.8"/>' +
+    '<path d="M30 4 Q50 12 70 4" stroke="#da291c" stroke-width="3" fill="none"/><path d="M6 16 L0 42 L4 42.6 L9.5 17.5Z M94 16 L100 42 L96 42.6 L90.5 17.5Z" fill="#da291c"/>' +
+    '<text x="50" y="34" text-anchor="middle" font-family="-apple-system, Helvetica, Arial" font-weight="800" font-size="' + t + '" fill="#fff" letter-spacing="0.6">' + echap(nom) + "</text>" +
+    (numero ? '<text x="50" y="88" text-anchor="middle" font-family="-apple-system, Helvetica, Arial" font-weight="800" font-size="46" fill="#fff" stroke="#da291c" stroke-width="1.6">' + echap(String(numero)) + "</text>"
+      : '<g transform="translate(50 66)"><circle r="17" fill="none" stroke="#fff" stroke-width="3"/><path d="M0 -7 L6.6 -2.2 L4.1 5.7 H-4.1 L-6.6 -2.2Z" fill="#fff"/></g>') + "</svg>";
+}
+// étincelles froides (gerbes comme dans les stades) et flammes au bas de l'écran
+function feuxBut() {
+  var h = "", pos = [5, 18, 31, 69, 82, 95];
+  for (var g = 0; g < pos.length; g++) {
+    h += '<div class="gerbe" style="left:' + pos[g] + 'vw">';
+    for (var i = 0; i < 20; i++) {
+      var an = g < 3 ? (i % 3 === 0 ? "etinM" : i % 3 === 1 ? "etinM2" : "etinG") : (i % 3 === 0 ? "etinM" : i % 3 === 1 ? "etinM2" : "etinD");
+      h += '<i style="animation:' + an + " " + (0.9 + (i % 5) * 0.14).toFixed(2) + "s linear infinite;animation-delay:-" + (i * 0.067).toFixed(2) + 's"></i>';
+    }
+    h += "</div>";
+  }
+  var f = '<div class="flammes">';
+  for (var k = 0; k < 13; k++) {
+    var x = k * 8 - 2, ht = 9 + (k % 3) * 4 + (k === 6 ? 3 : 0);
+    f += '<svg class="flamme" viewBox="0 0 40 80" preserveAspectRatio="none" style="left:' + x + "vw;width:11vw;height:" + ht + "vh;animation-delay:-" + ((k * 0.13) % 0.5).toFixed(2) + 's">' +
+      '<path d="M20 2 C26 18 38 28 36 50 C34 70 26 78 20 78 C14 78 6 70 4 52 C2 36 12 30 14 16 C16 24 19 26 20 2Z" fill="#ff6a1a" opacity="0.85"/>' +
+      '<path d="M20 26 C24 36 31 44 29 58 C28 70 24 76 20 76 C16 76 12 70 11 60 C10 50 16 46 17 38 C18 44 20 44 20 26Z" fill="#ffc23d"/>' +
+      '<path d="M20 50 C22 56 25 60 24 68 C23 74 21 76 20 76 C19 76 17 74 16 69 C15 63 19 60 20 50Z" fill="#fff3c4"/></svg>';
+  }
+  return h + f + "</div>";
+}
 function celebrerBut(pourNous, but, adversaire) {
   if (!CONFIG.animerIcones) return;
   var z = el("but");
   z.className = "";
-  var lg = logoNous();
+  var lg = logoNous(), maillot = pourNous && but && !but.csc && CONFIG.maillotBut !== false;
   z.innerHTML = '<div class="flash"></div>' + (pourNous ? '<div class="onde"></div><div class="onde" style="-webkit-animation-delay:.5s;animation-delay:.5s"></div>' : "") +
+    (maillot ? '<div class="halo"></div>' + feuxBut() + '<div class="maillot">' + maillotSVG(but.famille || but.nom, but.numero) + "</div>" +
+      '<div class="minute">' + echap(but.nom) + " · " + echap(but.min) + "</div>" : "") +
     (pourNous && lg ? '<img class="ecusson" src="' + echap(lg) + '" alt="">' : "") +
     '<div class="mot">' + (pourNous ? "BUT !" : "But " + (adversaire ? "de " + echap(adversaire) : "adverse")) + "</div>" +
     (but ? '<div class="qui">' + echap(but.nom) + " · " + echap(but.min) + "</div>" : "");
-  setTimeout(function () { z.className = "go" + (pourNous ? "" : " eux"); }, 30);
-  setTimeout(function () { z.className = ""; z.innerHTML = ""; }, 12300);
+  setTimeout(function () { z.className = "go" + (pourNous ? (maillot ? " nous" : "") : " eux"); }, 30);
+  setTimeout(function () { z.className = ""; z.innerHTML = ""; }, maillot ? 13300 : 12300);
 }
 // aperçu : match simulé (#demo + matchDemo() dans la console)
 function matchDemo() {
@@ -3205,9 +3321,16 @@ function matchDemo() {
     stats: { home: { possessionPct: "61", totalShots: "14", shotsOnTarget: "6" }, away: { possessionPct: "39", totalShots: "7", shotsOnTarget: "3" } } };
   dernierScore = "1-1"; majMatch(null);
 }
+function matchDemoMiTemps() {
+  matchDemo();
+  footDirect.nomEtat = "STATUS_HALFTIME"; footDirect.detail = "HT"; footDirect.minute = "45'"; footDirect.miTempsA = new Date().getTime() - (3 * 60 + 18) * 1000;
+  footDirect.buts = [{ nom: "Dembélé", min: "23'", nous: true }];
+  footDirect.sd = 1; footDirect.se = 0;
+  rendreMatch();
+}
 function matchDemoBut() {
   var avant = { sd: footDirect.sd, se: footDirect.se };
-  footDirect.sd = 2; footDirect.minute = "74'"; footDirect.buts.push({ nom: "Doué", min: "74'", nous: true });
+  footDirect.sd = 2; footDirect.minute = "74'"; footDirect.buts.push({ nom: "Doué", famille: "Doué", numero: "14", min: "74'", nous: true });
   majMatch(avant);
 }
 
@@ -3272,6 +3395,7 @@ alignerColonnes();
 allerA(PAGE_ACCUEIL, true);
 // démonstration du mode match : ouvrir la page avec #match (but simulé au bout de 6 s)
 if (location.hash === "#match") setTimeout(function () { matchDemo(); setTimeout(matchDemoBut, 6000); }, 1500);
+if (location.hash === "#mitemps") setTimeout(matchDemoMiTemps, 1500);
 </script>
 </body>
 </html>
