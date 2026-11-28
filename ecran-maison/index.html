@@ -553,6 +553,12 @@
   #match .stat .v { width: 6vw; font-weight: 700; }
   #match .stat .barre { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; height: 0.9vh; border-radius: 1vh; background: rgba(255,255,255,0.12); position: relative; overflow: hidden; }
   #match .stat .barre i { position: absolute; top: 0; bottom: 0; left: 0; background: #fff; border-radius: 1vh; }
+  #match .autres-matchs { position: absolute; left: 3vw; top: 2.6vh; text-align: left; z-index: 2; }
+  #match .autres-matchs .autre { display: block; margin: 0 0 0.8vh; padding: 0.9vh 1.6vw 0.9vh 1vw; border-radius: 100px; background: rgba(255,255,255,0.12);
+    font-size: 2.3vh; white-space: nowrap; }
+  #match .autres-matchs .ecu { width: 3vh; height: 3vh; vertical-align: -0.7vh; margin: 0 0.6vw; }
+  #match .autres-matchs b { font-weight: 800; margin: 0 0.4vw; }
+  #match .autres-matchs em { font-style: normal; opacity: 0.7; margin-left: 0.8vw; font-size: 2.1vh; }
   #match .note-fff { margin-top: 3vh; font-size: 1.8vh; opacity: 0.55; letter-spacing: 0.06em; }
   /* bandeau d'avant-match sur l'accueil (2 h avant le coup d'envoi) */
   .avantmatch { display: none; margin-top: 0.8vh; font-size: 2.15vh; line-height: 1.2; }
@@ -1767,6 +1773,39 @@ function surveillerEquipe(eq, f) {
   directMinuteurs[eq.cle] = setTimeout(function () { surveillerEquipe(eq, f); }, 30000);
 }
 // le match affiché en plein écran : le premier en cours (ou fini depuis moins de 15 min) dans l'ordre de priorité
+// Autres matchs en cours que celui du plein écran : petit bandeau en bas, et leurs buts sont fêtés aussi
+var scoresAutres = {};
+function autresDirects() {
+  var l = [];
+  for (var k in directs) { var d = directs[k]; if (d && d.etat === "in" && (!footDirect || d.cle !== footDirect.cle)) l.push(d); }
+  return l;
+}
+function bandeauAutres() {
+  var l = autresDirects(), h = "";
+  for (var i = 0; i < l.length; i++) {
+    var d = l[i], nomM = d.estime ? function (n) { return n; } : nomEquipe;
+    h += '<span class="autre">' + ecusson(d.dom.logo) + echap(nomM(d.dom.nom)) + " <b>" + valScore(d.sd) + " – " + valScore(d.se) + "</b> " + echap(nomM(d.ext.nom)) +
+      ecusson(d.ext.logo, "droite") + ' <em>' + (estMiTemps(d) ? "mi-temps" : (d.estime ? "≈ " : "") + echap(d.minute || d.detail || "")) + "</em></span>";
+  }
+  return h ? '<div class="autres-matchs">' + h + "</div>" : "";
+}
+function butsAutres() {
+  var l = autresDirects();
+  for (var i = 0; i < l.length; i++) {
+    var d = l[i], cle = d.sd + "-" + d.se, avant = scoresAutres[d.cle];
+    scoresAutres[d.cle] = cle;
+    if (avant === undefined || avant === cle || d.sd === null || d.sd === undefined) continue;
+    var a = avant.split("-");
+    if (a[0] === "null" || a[0] === "undefined") continue;
+    var nousDom = d.dom.nom === d.nous, butDom = d.sd > +a[0], butExt = d.se > +a[1];
+    if (!butDom && !butExt) continue;
+    var pourNous = (butDom && nousDom) || (butExt && !nousDom), but = null;
+    for (var j = d.buts.length - 1; j >= 0; j--) if (d.buts[j].nous === pourNous) { but = d.buts[j]; break; }
+    if (!but && pourNous) but = { nom: d.court || nomEquipe(d.nous), famille: d.court || nomEquipe(d.nous), numero: "", min: d.minute || "" };
+    else if (but && pourNous) but = { nom: but.nom + " · " + (d.court || nomEquipe(d.nous)), famille: but.famille, numero: but.numero, min: but.min, csc: but.csc };
+    celebrerBut(pourNous, but, pourNous ? null : nomEquipe(nousDom ? d.ext.nom : d.dom.nom) + " contre " + (d.court || nomEquipe(d.nous)), d);
+  }
+}
 function choisirDirect(avant) {
   var ordre = ORDRE_DIRECT.slice(0);
   for (var k in directs) if (ordre.indexOf(k) < 0) ordre.push(k);
@@ -1774,6 +1813,7 @@ function choisirDirect(avant) {
   for (var i = 0; i < ordre.length && !actif; i++) { var d = directs[ordre[i]]; if (d && (d.etat === "in" || d.etat === "post")) actif = d; }
   var change = (actif && actif.cle) !== (footDirect && footDirect.cle);
   footDirect = actif;
+  if (actif) { try { butsAutres(); } catch (e) {} }
   if (change) { dernierScore = null; clearInterval(mtMinuteur); mtMinuteur = null; if (!actif) fermerMatch(); else el("match-contenu").innerHTML = ""; }
   afficherFoot();
   if (actif) majMatch(change ? null : avant);
@@ -3492,8 +3532,8 @@ function majMatch(avant) {
   if (!matchReduit) ouvrirMatch();
   rendreMatch(avant && (avant.sd !== d.sd || avant.se !== d.se));
 }
-function logoNous() {
-  var d = footDirect;
+function logoNous(dd) {
+  var d = dd || footDirect;
   if (!d || !d.dom) return "";
   return d.dom.nom === d.nous ? d.dom.logo : d.ext.nom === d.nous ? d.ext.logo : "";
 }
@@ -3510,6 +3550,9 @@ function rendreMiTemps() {
     tps.innerHTML = reste > 0 ? mn + ":" + deux(sc) : "Reprise imminente";
     tps.className = "mt-temps" + (reste > 0 ? "" : " fini");
     el("mt-arc").setAttribute("stroke-dashoffset", (C * (1 - frac)).toFixed(1));
+    var ab = z.querySelector(".autres-matchs"), nb = bandeauAutres();
+    if (ab) { if (!nb) ab.parentNode.removeChild(ab); else if (ab.outerHTML !== nb) ab.outerHTML = nb; }
+    else if (nb) z.insertAdjacentHTML("beforeend", nb);
     return true;
   }
   var nousDom = d.dom.nom === d.nous, a = [], b = [];
@@ -3520,7 +3563,7 @@ function rendreMiTemps() {
     '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" style="transition:stroke-dashoffset 1s linear"/></svg>' +
     '<div class="mt-temps" id="mt-temps"></div></div>' +
     '<div class="mt-score">' + sigleEquipe(d.dom) + valScore(d.sd) + " – " + valScore(d.se) + sigleEquipe(d.ext) + "</div>" +
-    (a.length || b.length ? '<div class="mt-buts">&#9917; ' + echap(a.concat(b).join(" · ")) + "</div>" : "") + "</div>";
+    (a.length || b.length ? '<div class="mt-buts">&#9917; ' + echap(a.concat(b).join(" · ")) + "</div>" : "") + "</div>" + bandeauAutres();
   rendreMiTemps();
   if (!mtMinuteur) mtMinuteur = setInterval(function () { if (!rendreMiTemps()) rendreMatch(); }, 1000);
   return true;
@@ -3555,7 +3598,8 @@ function rendreMatch(rebond) {
     '<div class="equipe' + (nousDom ? "" : " nous") + '">' + sigleEquipe(d.ext) + '<div class="nom">' + echap(nomEquipe(d.ext.nom)) + "</div></div></div>" +
     '<div class="buts"><div class="g">' + g + '</div><div class="d">' + dr + "</div></div>" +
     '<div class="stats">' + stat("Possession", "possessionPct", true) + stat("Tirs", "totalShots") + stat("Cadrés", "shotsOnTarget") + "</div>" +
-    (d.estime ? '<div class="note-fff">Temps de jeu estimé · score ' + (d.sd === null || d.sd === undefined ? "publié par la FFF en fin de match" : "transmis par la FFF") + "</div>" : "");
+    (d.estime ? '<div class="note-fff">Temps de jeu estimé · score ' + (d.sd === null || d.sd === undefined ? "publié par la FFF en fin de match" : "transmis par la FFF") + "</div>" : "") +
+    bandeauAutres();
 }
 function ouvrirMatch() { if (!matchOuvert) { matchOuvert = true; el("match").className = "ouvert"; } }
 function fermerMatch() { matchOuvert = false; el("match").className = ""; dernierScore = null; matchReduit = false; }
@@ -3593,19 +3637,28 @@ function feuxBut() {
   }
   return h + f + "</div>";
 }
-function celebrerBut(pourNous, but, adversaire) {
+// deux buts en même temps (deux matchs en direct) : le second attend la fin du premier
+var butsEnAttente = [], butEnCours = false;
+function celebrerBut(pourNous, but, adversaire, dd) {
+  dd = dd || footDirect;
   if (!CONFIG.animerIcones) return;
+  if (butEnCours) { if (butsEnAttente.length < 4) butsEnAttente.push([pourNous, but, adversaire, dd]); return; }
+  butEnCours = true;
   var z = el("but");
   z.className = "";
-  var lg = logoNous(), maillot = pourNous && but && !but.csc && CONFIG.maillotBut !== false;
+  var lg = logoNous(dd), maillot = pourNous && but && !but.csc && CONFIG.maillotBut !== false;
   z.innerHTML = '<div class="flash"></div>' + (pourNous ? '<div class="onde"></div><div class="onde" style="-webkit-animation-delay:.5s;animation-delay:.5s"></div>' : "") +
-    (maillot ? '<div class="halo"></div>' + feuxBut() + '<div class="maillot">' + maillotSVG(but.famille || but.nom, but.numero, footDirect && footDirect.couleurs) + "</div>" +
+    (maillot ? '<div class="halo"></div>' + feuxBut() + '<div class="maillot">' + maillotSVG(but.famille || but.nom, but.numero, dd && dd.couleurs) + "</div>" +
       '<div class="minute">' + echap(but.nom) + " · " + echap(but.min) + "</div>" : "") +
     (pourNous && lg ? '<img class="ecusson" src="' + echap(lg) + '" alt="">' : "") +
     '<div class="mot">' + (pourNous ? "BUT !" : "But " + (adversaire ? "de " + echap(adversaire) : "adverse")) + "</div>" +
     (but ? '<div class="qui">' + echap(but.nom) + " · " + echap(but.min) + "</div>" : "");
   setTimeout(function () { z.className = "go" + (pourNous ? (maillot ? " nous" : "") : " eux"); }, 30);
-  setTimeout(function () { z.className = ""; z.innerHTML = ""; }, maillot ? 13300 : 12300);
+  setTimeout(function () {
+    z.className = ""; z.innerHTML = ""; butEnCours = false;
+    var s = butsEnAttente.shift();
+    if (s) setTimeout(function () { celebrerBut(s[0], s[1], s[2], s[3]); }, 600);
+  }, maillot ? 13300 : 12300);
 }
 // aperçu : match simulé (#demo + matchDemo() dans la console)
 function matchDemo() {
