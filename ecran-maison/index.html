@@ -309,6 +309,41 @@
   body.attenue .annexe { opacity: 0.55; }
   .annexe h2 { font-size: 4.4vh; font-weight: 600; margin: 0 0 2.4vh; letter-spacing: -0.01em; }
   .annexe h2 span { font-weight: 300; opacity: 0.6; font-size: 2.6vh; margin-left: 1.2vw; letter-spacing: 0; }
+  /* ---------- Diaporama plein écran : horloge, actus, « ce jour-là » ---------- */
+  #diaporama { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 7; opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 1s, visibility 0s 1s; padding: 6vh 6vw; box-sizing: border-box; }
+  #diaporama.on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 1s; }
+  #diaporama { background: #0c1633; background: linear-gradient(160deg, #0f1d44 0%, #1d2a5e 55%, #3a2a5c 100%); }
+  body.diaporama #pages, body.diaporama #points { opacity: 0; transition: opacity 0.8s; }
+  #pages, #points { transition: opacity 0.8s; }
+  .dp-scene { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 7vh 7vw; box-sizing: border-box; animation: dp-entre 1s ease-out; }
+  @keyframes dp-entre { from { opacity: 0; transform: translateY(2vh); } to { opacity: 1; transform: none; } }
+  .dp-etiquette { font-size: 2.3vh; letter-spacing: 0.35em; text-transform: uppercase; opacity: 0.7; }
+  .dp-horloge { text-align: center; padding-top: 9vh; }
+  .dp-horloge .h { font-size: 33vh; font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .dp-horloge .h span { opacity: 0.55; animation: clignote 2s infinite; }
+  .dp-horloge .d { font-size: 6.5vh; font-weight: 300; margin-top: 1vh; }
+  .dp-horloge .s { font-size: 3vh; font-weight: 300; opacity: 0.85; margin-top: 3vh; }
+  .dp-horloge .s b { font-weight: 600; }
+  .dp-horloge .s svg { width: 3.4vh; height: 3.4vh; vertical-align: -0.8vh; margin: 0 0.4vw; }
+  .dp-horloge .s .sep { margin: 0 0.8vw; opacity: 0.6; }
+  .dp-horloge .f { display: inline-block; margin-top: 4.5vh; font-size: 4.4vh; padding: 1.6vh 3.2vw; border-radius: 100px; background: rgba(255,255,255,0.13); }
+  .dp-horloge .f em { font-style: normal; opacity: 0.65; font-size: 2.4vh; letter-spacing: 0.3em; text-transform: uppercase; margin-right: 1.5vw; vertical-align: 0.5vh; }
+  .dp-horloge .a { font-size: 4vh; font-weight: 500; margin-top: 3vh; color: #ffd98a; }
+  .dp-actu { padding: 3.2vh 0; border-bottom: 1px solid rgba(255,255,255,0.14); }
+  .dp-actu:last-child { border-bottom: 0; }
+  .dp-actu .src { font-size: 2vh; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.65; }
+  .dp-actu .t { font-size: 4.6vh; font-weight: 600; line-height: 1.2; margin-top: 1vh; }
+  .dp-actu .r { font-size: 2.6vh; font-weight: 300; opacity: 0.85; margin-top: 1.2vh; line-height: 1.35; }
+  .dp-jour h1 { font-size: 6vh; font-weight: 700; margin: 1vh 0 0; }
+  .dp-jour .journee { display: inline-block; margin: 1.6vh 1vw 0 0; padding: 1vh 2vw; border-radius: 100px; background: rgba(255,214,102,0.22); font-size: 2.6vh; }
+  .dp-cols { display: -webkit-box; display: -webkit-flex; display: flex; margin-top: 3vh; }
+  .dp-cols > div { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; }
+  .dp-cols > div + div { margin-left: 4vw; }
+  .dp-jour h2 { font-size: 2.2vh; letter-spacing: 0.3em; text-transform: uppercase; opacity: 0.7; font-weight: 600; margin: 2.6vh 0 1vh; }
+  .dp-jour p { margin: 0 0 1.4vh; font-size: 2.45vh; font-weight: 300; line-height: 1.3; display: -webkit-box; display: -webkit-flex; display: flex; }
+  .dp-jour p b { -webkit-flex: 0 0 6.2vw; flex: 0 0 6.2vw; font-weight: 700; color: #ffd98a; }
+  .dp-jour p span.t { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 0; }
   #points { position: fixed; left: 0; right: 0; bottom: 1.2vh; text-align: center; z-index: 6; pointer-events: none; }
   #points i { display: inline-block; width: 0.9vh; height: 0.9vh; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 0.5vh;
     -webkit-transition: all 0.3s; transition: all 0.3s; }
@@ -861,6 +896,7 @@
   <div class="contenu" id="match-contenu"></div>
 </div>
 <div id="but"></div>
+<div id="diaporama" onclick="dernierToucher = new Date().getTime(); arreterDiaporama(); allerA(PAGE_ACCUEIL);"></div>
 <div id="points"><i></i><i></i><i></i><i class="actif"></i><i></i><i></i><i></i></div>
 <style id="wc-anim"></style>
 <style id="noel-anim"></style>
@@ -2209,11 +2245,34 @@ function chargerActus() {
   if (!CONFIG.urlActus) return;
   chargerJSON(CONFIG.urlActus + "?t=" + new Date().getTime(), function (d) { etatActus = d || []; construireInfos(); });
 }
+// Date de l'événement annoncé dans une actu (« jeudi 19 novembre », « le 5 déc. », « 19/11 »…) :
+// on garde la plus tardive ; l'année est déduite de la date de publication.
+var MOIS_NOMS = ["janv", "f[ée]v", "mars", "avr", "mai", "juin", "juil", "ao[uû]", "sept", "oct", "nov", "d[ée]c"];
+function dateEvenementActu(a, pub) {
+  var t = ((a.titre || "") + " " + (a.resume || "")).toLowerCase(), best = null, m;
+  var re = new RegExp("\\b(\\d{1,2})(?:er)?\\s+(" + MOIS_NOMS.join("|") + ")[a-zéû]*\\.?(?:\\s+(20\\d\\d))?", "g");
+  function retenir(j, mo, an) {
+    if (j < 1 || j > 31 || mo < 0 || mo > 11) return;
+    var y = an || pub.getFullYear(), d = new Date(y, mo, j, 23, 59);
+    if (!an && d.getTime() < pub.getTime() - 60 * 86400000) d = new Date(y + 1, mo, j, 23, 59);   // ex. publié en décembre pour janvier
+    if (!best || d > best) best = d;
+  }
+  while ((m = re.exec(t))) {
+    var mo = -1;
+    for (var k = 0; k < MOIS_NOMS.length; k++) if (new RegExp("^" + MOIS_NOMS[k]).test(m[2])) { mo = k; break; }
+    retenir(+m[1], mo, m[3] ? +m[3] : 0);
+  }
+  var re2 = /\b(\d{1,2})\/(\d{1,2})(?:\/(20\d\d|\d\d))?\b/g;
+  while ((m = re2.exec(t))) retenir(+m[1], +m[2] - 1, m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : 0);
+  return best;
+}
 function slidesActus(now) {
   var r = [], lim = now.getTime() - CONFIG.joursActus * 86400000;
   for (var i = 0; i < etatActus.length && r.length < 3; i++) {
     var a = etatActus[i], d = parseISO(a.date);
     if (!d || d.getTime() < lim) continue;
+    var ev = dateEvenementActu(a, d);
+    if (ev && ev.getTime() < now.getTime()) continue;     // événement déjà passé : on n'en parle plus
     r.push({ titre: "Actu · " + echap(a.source) + " · " + d.getDate() + " " + MOISCOURT[d.getMonth()],
              grand: echap(a.titre), petit: echap(a.resume), image: a.image, classe: "actu" });
   }
@@ -2500,7 +2559,7 @@ setInterval(function () {
   if (pageActuelle !== PAGE_ACCUEIL && new Date().getTime() - dernierContact > (CONFIG.retourAccueilMinutes || 3) * 60000) allerA(PAGE_ACCUEIL);
   else if (pageActuelle !== PAGE_ACCUEIL) rendrePage();
 }, 15000);
-function debutGlisse(x, y) { glisse = { x: x, y: y, dx: 0, actif: false }; dernierContact = new Date().getTime(); }
+function debutGlisse(x, y) { glisse = { x: x, y: y, dx: 0, actif: false }; dernierContact = dernierToucher = new Date().getTime(); }
 function suiteGlisse(x, y, ev) {
   if (!glisse) return;
   var dx = x - glisse.x, dy = y - glisse.y;
@@ -3144,6 +3203,88 @@ function taperLutin(e) {
   montrerBulleNoel();
 }
 
+/* ---------- Diaporama : l'écran défile seul en grand, une minute par écran ----------
+   Accueil → Horloge (éphéméride, fête, anniversaires) → Météo → Actus → Ce jour-là → Webcams → Accueil…
+   On touche l'écran : le diaporama s'arrête et reprend 3 min après le dernier contact.
+   Réglages (config.js) : diaporama: false pour le couper, secondesDiapo (60 par défaut). */
+var DIAPO_ETAPES = ["accueil", "horloge", "meteo", "actus", "jour", "webcams"], diapoIdx = 0, diapoDebut = new Date().getTime(),
+    dernierToucher = 0, diapoScene = "accueil", etatCeJour = null;
+function chargerJour() {
+  setTimeout(chargerJour, 2 * 3600000);
+  chargerJSON((CONFIG.urlJour || "jour.json") + "?t=" + new Date().getTime(), function (a) { etatCeJour = a; });
+}
+function sceneDispo(nom) {
+  var now = new Date();
+  if (nom === "actus") return slidesActus(now).length > 0;
+  if (nom === "jour") return !!(etatCeJour && etatCeJour.date === now.getFullYear() + "-" + deux(now.getMonth() + 1) + "-" + deux(now.getDate()) &&
+    (etatCeJour.evenements.length || etatCeJour.naissances.length));
+  if (nom === "webcams") return !CONFIG.modeLeger && !!(etatWebcams && etatWebcams.length);
+  if (nom === "meteo") return !!etatMeteo;
+  return true;
+}
+function sceneHorloge(now) {
+  var fete = el("fete") ? el("fete").innerHTML : "", ann = el("fete-sous") ? el("fete-sous").innerHTML : "";
+  var astre = el("astre") ? el("astre").innerHTML : "";
+  return '<div class="dp-scene dp-horloge"><div class="h" id="dp-h">' + deux(now.getHours()) + "<span>:</span>" + deux(now.getMinutes()) + "</div>" +
+    '<div class="d">' + el("date").innerHTML + "</div>" + (astre ? '<div class="s">' + astre + "</div>" : "") +
+    (fete ? '<div class="f"><em>Bonne fête</em>' + fete + "</div>" : "") + (ann ? '<div class="a">' + ann + "</div>" : "") + "</div>";
+}
+function sceneActus(now) {
+  var l = slidesActus(now), h = "";
+  for (var i = 0; i < l.length; i++) h += '<div class="dp-actu"><div class="src">' + l[i].titre + '</div><div class="t">' + l[i].grand + "</div>" +
+    (l[i].petit ? '<div class="r">' + l[i].petit + "</div>" : "") + "</div>";
+  return '<div class="dp-scene"><div class="dp-etiquette">Actus des communes</div>' + h + "</div>";
+}
+function sceneJour(now) {
+  var j = etatCeJour, an = now.getFullYear(), h = "";
+  function ligne(e) { return "<p><b>" + e.annee + '</b><span class="t">' + echap(e.texte) + (e.annee > 0 && an - e.annee <= 150 ? ' <span style="opacity:.55">· il y a ' + (an - e.annee) + " ans</span>" : "") + "</span></p>"; }
+  var jn = (j.journees || []).concat(j.france || []);
+  for (var i = 0; i < jn.length && i < 3; i++) h += '<span class="journee">&#127760; ' + echap(jn[i]) + "</span>";
+  if (!jn.length && j.nationales && j.nationales.length) h += '<span class="journee">&#127988; ' + echap(j.nationales[0]) + "</span>";
+  var ev = "", na = "", de = "";
+  for (i = 0; i < j.evenements.length; i++) ev += ligne(j.evenements[i]);
+  for (i = 0; i < j.naissances.length; i++) na += ligne(j.naissances[i]);
+  for (i = 0; i < j.deces.length; i++) de += ligne(j.deces[i]);
+  return '<div class="dp-scene dp-jour"><div class="dp-etiquette">Ce jour-là</div><h1>' + echap(j.titre || "") + "</h1>" + h +
+    '<div class="dp-cols"><div><h2>Dans l\'histoire</h2>' + ev + "</div><div><h2>Ils sont nés</h2>" + na +
+    (de ? "<h2>Ils nous ont quittés</h2>" + de : "") + "</div></div></div>";
+}
+function montrerScene(nom) {
+  diapoScene = nom;
+  var z = el("diaporama"), now = new Date();
+  if (nom === "horloge" || nom === "actus" || nom === "jour") {
+    try { z.innerHTML = nom === "horloge" ? sceneHorloge(now) : nom === "actus" ? sceneActus(now) : sceneJour(now); } catch (e) { z.innerHTML = ""; }
+    z.className = "on";
+    document.body.className = document.body.className.replace(/\s*diaporama/g, "") + " diaporama";
+    return;
+  }
+  z.className = "";
+  document.body.className = document.body.className.replace(/\s*diaporama/g, "");
+  allerA(nom === "meteo" ? 1 : nom === "webcams" ? PAGE_WEBCAMS : PAGE_ACCUEIL);
+}
+function arreterDiaporama() {
+  if (diapoScene === "accueil" && el("diaporama").className !== "on") return;
+  el("diaporama").className = "";
+  document.body.className = document.body.className.replace(/\s*diaporama/g, "");
+  diapoScene = "accueil"; diapoIdx = 0;
+}
+setInterval(function () {
+  try {
+    var t = new Date().getTime();
+    if (CONFIG.diaporama === false) return;
+    if (matchOuvert || el("but").className || el("wc-video").className) { diapoDebut = t; if (diapoScene !== "accueil") arreterDiaporama(); return; }
+    if (t - dernierToucher < 3 * 60000) { diapoDebut = t; diapoIdx = 0; if (el("diaporama").className === "on") arreterDiaporama(); return; }
+    if (diapoScene === "horloge") { var hh = el("dp-h"), n = new Date(); if (hh) { var v = deux(n.getHours()) + "<span>:</span>" + deux(n.getMinutes()); if (hh.innerHTML !== v) hh.innerHTML = v; } }
+    if (t - diapoDebut < (CONFIG.secondesDiapo || 60) * 1000) return;
+    diapoDebut = t;
+    for (var k = 0; k < DIAPO_ETAPES.length; k++) {
+      diapoIdx = (diapoIdx + 1) % DIAPO_ETAPES.length;
+      if (sceneDispo(DIAPO_ETAPES[diapoIdx])) break;
+    }
+    montrerScene(DIAPO_ETAPES[diapoIdx]);
+  } catch (e) {}
+}, 1000);
+
 /* ---------- Page Webcams (images préparées par le relais : webcams.json + dossier webcams/) ---------- */
 var etatWebcams = null, wcActive = 0, wcMeteo = {}, wcMinuteur = null;
 function chargerWebcams() {
@@ -3242,7 +3383,8 @@ var wcDernierChangement = 0;
 setInterval(function () {
   var t = new Date().getTime();
   if (pageActuelle !== PAGE_WEBCAMS || el("wc-video").className || !etatWebcams || etatWebcams.length < 2) { wcDernierChangement = t; return; }
-  if (t - wcDernierChangement >= 30000 && t - dernierContact > 25000) choisirWebcam(wcActive + 1, true);
+  var auto = diapoScene === "webcams";
+  if (t - wcDernierChangement >= (auto ? 15000 : 30000) && (auto || t - dernierContact > 25000)) choisirWebcam(wcActive + 1, true);
 }, 5000);
 function libererImages(z) {
   var im = z.getElementsByTagName("img");
@@ -3503,6 +3645,7 @@ chargerAgenda();
 chargerCantine();
 chargerWebcams();
 chargerVigilance();
+chargerJour();
 setInterval(function () { try { majNoel(); } catch (e) {} }, 30000);
 setTimeout(function () { try { majNoel(true); } catch (e) {} }, 1500);
 alignerColonnes();
