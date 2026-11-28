@@ -75,14 +75,18 @@ def iter_audio_files(root: Path):
                 yield Path(dirpath) / name
 
 
-def scan(conn: sqlite3.Connection, roots: list[str | Path]) -> ScanResult:
-    """Synchronise la base avec le contenu des dossiers racine."""
+def scan(conn: sqlite3.Connection, roots: list[str | Path], exclude=()) -> ScanResult:
+    """Synchronise la base avec le contenu des dossiers racine.
+    `exclude` : playlists (dossiers) retirées par l'utilisateur, ignorées."""
     res = ScanResult(errors=[])
     roots = [Path(r).expanduser().resolve() for r in roots]
+    excl = {str(Path(e)) for e in exclude}
     seen: set[str] = set()
 
     for root in roots:
         for path in iter_audio_files(root):
+            if str(path.parent) in excl:
+                continue
             spath = str(path)
             seen.add(spath)
             try:
@@ -154,7 +158,22 @@ def playlist_tracks(conn: sqlite3.Connection, folder: str) -> list[sqlite3.Row]:
     return sorted(rows, key=lambda r: _natural_key(r["filename"]))
 
 
-def watch(conn_factory, roots: list[str | Path], on_change=None):
+def forget(conn: sqlite3.Connection, folder: str | Path, recursive: bool) -> list[dict]:
+    """Retire de la base les morceaux d'un dossier (et de ses sous-dossiers si
+    `recursive`). Ne touche à aucun fichier. Renvoie les morceaux retirés."""
+    folder = Path(folder)
+    gone = []
+    for row in conn.execute("SELECT id, path, folder, mtime FROM tracks").fetchall():
+        f = Path(row["folder"])
+        if f == folder or (recursive and folder in f.parents):
+            conn.execute("DELETE FROM tracks WHERE id = ?", (row["id"],))
+            db.fts_delete(conn, row["id"])
+            gone.append(dict(row))
+    conn.commit()
+    return gone
+
+
+def watch(conn_factory, roots: list[str | Path], on_change=None, exclude=lambda: ()):
     """Surveille les dossiers et relance un scan à chaque changement.
 
     Nécessite le paquet optionnel `watchdog`. Les événements sont regroupés
@@ -191,7 +210,7 @@ def watch(conn_factory, roots: list[str | Path], on_change=None):
         def _rescan(self):
             with self._lock:  # jamais deux scans / analyses en même temps
                 conn = conn_factory()
-                res = scan(conn, roots)
+                res = scan(conn, roots, exclude())
                 conn.close()
                 if on_change and (res.added or res.updated or res.removed):
                     on_change(res)

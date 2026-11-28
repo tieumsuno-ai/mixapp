@@ -30,7 +30,7 @@ from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeySequence, QLinearG
                            QPainterPath, QPixmap, QShortcut)
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-                               QListWidgetItem, QMainWindow, QMessageBox, QProgressBar,
+                               QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressBar,
                                QProxyStyle, QPushButton, QSizePolicy, QSlider, QSplitter, QStackedWidget, QStyle, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -343,7 +343,7 @@ class MainWindow(QMainWindow):
         self.search_box.setClearButtonEnabled(True)
         top.addWidget(self.search_box, 1)
         self.btn_folders = QPushButton("Dossiers de musique…")
-        self.btn_folders.setToolTip("Ajouter un dossier de musique : chaque sous-dossier devient une playlist")
+        self.btn_folders.setToolTip("Tes dossiers de musique : ajouter, retirer, playlists retirées")
         top.addWidget(self.btn_folders)
         self.btn_view = QPushButton("◎  Platines")
         self.btn_view.setCheckable(True)
@@ -656,8 +656,10 @@ class MainWindow(QMainWindow):
         self.search_box.textChanged.connect(self._on_search_changed)
         self._search_timer = QTimer(self, singleShot=True, interval=150)
         self._search_timer.timeout.connect(self.run_search)
-        self.btn_folders.clicked.connect(self.choose_folders)
+        self.btn_folders.clicked.connect(self.show_folders)
         self.playlist_list.currentItemChanged.connect(self._on_playlist_selected)
+        self.playlist_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.playlist_list.customContextMenuRequested.connect(self._playlist_menu)
         self.table.itemDoubleClicked.connect(lambda *_: self.on_double_click())
         self.table.itemSelectionChanged.connect(self._update_buttons)
         self.btn_play_here.clicked.connect(self.play_from_selection)
@@ -772,6 +774,325 @@ class MainWindow(QMainWindow):
         self.status.setText(f"Ajout de {len(added)} dossier(s)…" if added else "Dossier déjà dans la bibliothèque")
         self.start_library_tasks()
 
+    # ------------------------------------------------------------ dossiers et playlists retirées
+
+    def _removed(self):
+        return list(self.settings.get("removed", []))
+
+    def _restart_watch(self):
+        if self.observer is not None:
+            try:
+                self.observer.stop()
+            except Exception:
+                pass
+            self.observer = None
+
+    def _forget(self, folder, recursive):
+        """MixApp oublie un dossier : base, analyses et pochettes de ses morceaux.
+        Aucun fichier de musique n'est touché."""
+        gone = library.forget(self.conn, folder, recursive)
+        paths = {g["path"] for g in gone}
+        keys = {self._hl_key(g) for g in gone}
+        import hashlib
+        cdir = covers.cache_dir()
+        for pth in paths:
+            k = hashlib.md5(pth.encode("utf-8")).hexdigest()
+            for f in cdir.glob(k + ".*"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        for k in keys:
+            try:
+                self.vocal_cache.mem.pop(k, None)
+                self.vocal_cache._file(k).unlink(missing_ok=True)
+            except OSError:
+                pass
+            self._hl_store.pop(k, None)
+            self.info_cache.data.pop(k, None)
+        try:
+            self._hl_file.write_text(json.dumps(self._hl_store))
+            self.info_cache.path.write_text(json.dumps(self.info_cache.data, ensure_ascii=False))
+        except Exception:
+            pass
+        hidden = self.settings.get("hidden", {})
+        for f in list(hidden):
+            if Path(f) == Path(folder) or (recursive and Path(folder) in Path(f).parents):
+                hidden.pop(f, None)
+        return gone
+
+    def _after_forget(self, folders):
+        if self.current_folder and any(
+                Path(self.current_folder) == Path(f) or Path(f) in Path(self.current_folder).parents
+                for f in folders):
+            self.current_folder = None
+            self._fill_table([], False)
+        self.refresh_playlists(keep=True)
+        if self.current_folder is None and self.playlist_list.count():
+            self.playlist_list.setCurrentRow(0)
+        save_settings(self.settings)
+        self._on_analysis_progress(0, 0)
+
+    def _ask(self, title, text, ok_text, icon="turntable"):
+        """Petite fenêtre de confirmation au style de l'appli ; « Annuler » par défaut."""
+        from PySide6.QtWidgets import QDialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle(APP_NAME)
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(22, 20, 22, 18)
+        head = QHBoxLayout()
+        ic = QLabel()
+        ic.setPixmap(make_icon(icon, 30, tc("#6c8cff")).pixmap(30, 30))
+        head.addWidget(ic, alignment=Qt.AlignTop)
+        col = QVBoxLayout()
+        t = QLabel(title)
+        t.setObjectName("nowTitle")
+        col.addWidget(t)
+        sub = QLabel(text)
+        sub.setObjectName("nowInfo")
+        col.addWidget(sub)
+        head.addSpacing(10)
+        head.addLayout(col, 1)
+        v.addLayout(head)
+        v.addSpacing(10)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton("Annuler")
+        ok = QPushButton(ok_text)
+        ok.setObjectName("primary")
+        for b in (cancel, ok):
+            b.setAutoDefault(False)
+            row.addWidget(b)
+        cancel.setDefault(True)
+        cancel.clicked.connect(dlg.reject)
+        ok.clicked.connect(dlg.accept)
+        v.addLayout(row)
+        dlg.setStyleSheet(theme.css("QDialog { background: #1b1e24; }"))
+        cancel.setFocus()
+        return dlg.exec() == QDialog.Accepted
+
+    def remove_playlist(self, folder):
+        rows = library.playlist_tracks(self.conn, folder)
+        name = self._display_name(folder)
+        n = len(rows)
+        if not self._ask(f"Retirer « {name} » de MixApp ?",
+                         f"{n} morceau{'x' if n > 1 else ''} · leurs fichiers restent sur ton ordinateur.\n"
+                         "La playlist n'apparaîtra plus, même si le dossier est toujours là.\n"
+                         "Pour la retrouver : Dossiers de musique… › Playlists retirées.",
+                         "Retirer la playlist"):
+            return
+        rem = self.settings.setdefault("removed", [])
+        if folder not in rem:
+            rem.append(folder)
+        self._forget(folder, recursive=False)
+        self._restart_watch()
+        self._after_forget([folder])
+        self.start_library_tasks()
+        self.status.setText(f"« {name} » retirée de MixApp (fichiers intacts)")
+
+    def restore_playlist(self, folder):
+        rem = self.settings.setdefault("removed", [])
+        if folder in rem:
+            rem.remove(folder)
+        save_settings(self.settings)
+        self._restart_watch()
+        self.start_library_tasks()
+
+    def remove_root(self, root, ask=True):
+        if ask and not self._ask(f"Retirer le dossier « {Path(root).name} » ?",
+                                 "MixApp oublie ce dossier et toutes ses playlists.\n"
+                                 "Aucun fichier n'est supprimé de ton ordinateur ;\n"
+                                 "tu pourras l'ajouter à nouveau plus tard.",
+                                 "Retirer le dossier"):
+            return False
+        roots = self.settings.setdefault("roots", [])
+        if root in roots:
+            roots.remove(root)
+        self.settings["removed"] = [f for f in self.settings.get("removed", [])
+                                    if not (Path(root) == Path(f) or Path(root) in Path(f).parents)]
+        self._forget(root, recursive=True)
+        self._restart_watch()
+        self._after_forget([root])
+        self.start_library_tasks()
+        return True
+
+    def _root_stats(self, root):
+        rows = self.conn.execute("SELECT folder FROM tracks").fetchall()
+        r = Path(root)
+        folders = [Path(x[0]) for x in rows if Path(x[0]) == r or r in Path(x[0]).parents]
+        return len(set(folders)), len(folders)
+
+    def show_folders(self):
+        """Fenêtre « Dossiers de musique » : ajouter, retirer, oublier les
+        dossiers introuvables, remettre une playlist retirée."""
+        from PySide6.QtWidgets import QDialog, QScrollArea
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Dossiers de musique")
+        dlg.setMinimumWidth(640)
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(24, 22, 24, 20)
+        outer.setSpacing(10)
+        title = QLabel("Dossiers de musique")
+        title.setObjectName("nowTitle")
+        outer.addWidget(title)
+        sub = QLabel("Chaque sous-dossier contenant des MP3 devient une playlist. "
+                     "Retirer un dossier ne supprime aucun fichier : MixApp l'oublie, c'est tout.")
+        sub.setWordWrap(True)
+        sub.setObjectName("nowInfo")
+        outer.addWidget(sub)
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)
+        body = QWidget()
+        body.setObjectName("fbody")
+        v = QVBoxLayout(body)
+        v.setContentsMargins(0, 4, 0, 4)
+        v.setSpacing(10)
+        area.setWidget(body)
+        outer.addWidget(area, 1)
+        bottom = QHBoxLayout()
+        add = QPushButton("Ajouter un dossier…")
+        clean = QPushButton()
+        close = QPushButton("Fermer")
+        close.setObjectName("primary")
+        for b in (add, clean, close):
+            b.setAutoDefault(False)
+        close.setDefault(True)
+        bottom.addWidget(add)
+        bottom.addStretch(1)
+        bottom.addWidget(clean)
+        bottom.addWidget(close)
+        outer.addLayout(bottom)
+
+        def short(p):
+            home = str(Path.home())
+            return "~" + p[len(home):] if p.startswith(home) else p
+
+        def why(p):
+            pp = Path(p)
+            on_drive = (sys.platform == "darwin" and str(pp).startswith("/Volumes/")) or \
+                       (sys.platform.startswith("win") and pp.drive and not Path(pp.drive + "\\").exists())
+            return "disque débranché ?" if on_drive else "dossier supprimé ou déplacé"
+
+        def build():
+            while v.count():
+                it = v.takeAt(0)
+                wdg = it.widget()
+                if wdg is not None:
+                    wdg.hide()
+                    wdg.setParent(None)
+                    wdg.deleteLater()
+            roots = list(self.settings.get("roots", []))
+            missing = [r for r in roots if not Path(r).is_dir()]
+            for r in roots:
+                lost = r in missing
+                fr = QFrame()
+                fr.setObjectName("frowLost" if lost else "frow")
+                h = QHBoxLayout(fr)
+                h.setContentsMargins(14, 10, 10, 10)
+                col = QVBoxLayout()
+                col.setSpacing(1)
+                t = QLabel(("⚠  " if lost else "") + (Path(r).name or r))
+                t.setObjectName("fTitle")
+                col.addWidget(t)
+                pl = QLabel(short(r))
+                pl.setObjectName("fPath")
+                col.addWidget(pl)
+                npl, ntr = self._root_stats(r)
+                info = f"{npl} playlist{'s' if npl > 1 else ''} · {ntr} morceau{'x' if ntr > 1 else ''}"
+                il = QLabel(f"Introuvable ({why(r)}) · {info}" if lost else info)
+                il.setObjectName("fWarn" if lost else "fInfo")
+                col.addWidget(il)
+                h.addLayout(col, 1)
+                b = QPushButton("Retirer")
+                b.setAutoDefault(False)
+                b.clicked.connect(lambda _=False, r=r: (self.remove_root(r), build()))
+                h.addWidget(b, alignment=Qt.AlignVCenter)
+                v.addWidget(fr)
+            if not roots:
+                e = QLabel("Aucun dossier pour l'instant : clique sur « Ajouter un dossier… ».")
+                e.setObjectName("fInfo")
+                v.addWidget(e)
+            rem = [f for f in self.settings.get("removed", [])]
+            if rem:
+                sec = QLabel("PLAYLISTS RETIRÉES")
+                sec.setObjectName("fSec")
+                v.addSpacing(4)
+                v.addWidget(sec)
+                for f in rem:
+                    fr = QFrame()
+                    fr.setObjectName("frow")
+                    h = QHBoxLayout(fr)
+                    h.setContentsMargins(14, 6, 10, 6)
+                    lb = QLabel(f"{self._display_name(f)}  <span style='color:{tc('#8a90a0')}'>· {short(f)}</span>")
+                    h.addWidget(lb, 1)
+                    b = QPushButton("Remettre")
+                    b.setAutoDefault(False)
+                    b.clicked.connect(lambda _=False, f=f: (self.restore_playlist(f), build()))
+                    h.addWidget(b)
+                    v.addWidget(fr)
+            v.addStretch(1)
+            clean.setText(f"Oublier les dossiers introuvables ({len(missing)})")
+            clean.setVisible(bool(missing))
+            body.adjustSize()
+            area.setMinimumHeight(min(440, body.sizeHint().height() + 8))
+
+        def forget_missing():
+            missing = [r for r in self.settings.get("roots", []) if not Path(r).is_dir()]
+            n = len(missing)
+            if not missing or not self._ask(
+                    f"Oublier {n} dossier{'s' if n > 1 else ''} introuvable{'s' if n > 1 else ''} ?",
+                    "Leurs playlists disparaissent de MixApp.\n"
+                    "Si c'est un disque débranché, rien n'est perdu : rebranche-le\n"
+                    "et ajoute le dossier à nouveau.", "Oublier"):
+                return
+            for r in missing:
+                self.remove_root(r, ask=False)
+            build()
+
+        add.clicked.connect(lambda: (self.choose_folders(), build()))
+        clean.clicked.connect(forget_missing)
+        close.clicked.connect(dlg.accept)
+        dlg.setStyleSheet(theme.css("""
+            QDialog { background: #1b1e24; }
+            QWidget#fbody, QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }
+            QFrame#frow, QFrame#frowLost { background: #1f2229; border: 1px solid #353a46; border-radius: 10px; }
+            QFrame#frowLost { border-color: #e0b341; }
+            QFrame#frow QLabel, QFrame#frowLost QLabel { background: transparent; border: none; }
+            QLabel#fTitle { font-weight: 600; }
+            QLabel#fPath, QLabel#fInfo { color: #8a90a0; font-size: 12px; }
+            QLabel#fWarn { color: #e0b341; font-size: 12px; }
+            QLabel#fSec { color: #8a90a0; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
+        """))
+        build()
+        self._folders_dialog = dlg
+        dlg.exec()
+        self._folders_dialog = None
+
+    def _playlist_menu(self, pos):
+        it = self.playlist_list.itemAt(pos)
+        if it is None:
+            return
+        folder = it.data(Qt.UserRole)
+        menu = QMenu(self)
+        a_play = menu.addAction("Lire cette playlist")
+        a_show = menu.addAction("Afficher dans le Finder" if sys.platform == "darwin"
+                                else "Afficher dans l'Explorateur")
+        menu.addSeparator()
+        a_rem = menu.addAction("Retirer de MixApp…")
+        a_show.setEnabled(Path(folder).is_dir())
+        act = menu.exec(self.playlist_list.viewport().mapToGlobal(pos))
+        if act is a_play:
+            self.playlist_list.setCurrentItem(it)
+            self.table.clearSelection()
+            self.play_from_selection()
+        elif act is a_show:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        elif act is a_rem:
+            self.remove_playlist(folder)
+
     def eventFilter(self, obj, ev):
         # Espace / → dans les listes : ce sont les touches du lecteur (sinon la
         # liste les « mange » pour sa propre navigation, surtout sous Windows)
@@ -821,7 +1142,8 @@ class MainWindow(QMainWindow):
         if self.observer is None:
             try:
                 self.observer = library.watch(lambda: db.connect(self.db_path), roots,
-                                              on_change=lambda res: self._after_watch_change())
+                                              on_change=lambda res: self._after_watch_change(),
+                                              exclude=self._removed)
             except Exception as e:  # watchdog absent ou dossier inaccessible
                 self.bus.log.emit(f"Surveillance des dossiers indisponible : {e}")
 
@@ -842,7 +1164,7 @@ class MainWindow(QMainWindow):
                     self._analysis_again = False
                     conn = db.connect(self.db_path)
                     self.bus.log.emit("Lecture des dossiers…")
-                    library.scan(conn, roots)
+                    library.scan(conn, roots, self._removed())
                     self.bus.library_changed.emit()
                     paths = [r[0] for r in conn.execute("SELECT path FROM tracks")]
                     self.logos = covers.logo_hashes(paths)
