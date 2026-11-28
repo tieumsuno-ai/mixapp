@@ -3265,11 +3265,13 @@ function taperLutin(e) {
   montrerBulleNoel();
 }
 
-/* ---------- Diaporama : l'écran défile seul en grand, une minute par écran ----------
-   Accueil → Horloge (éphéméride, fête, anniversaires) → Météo en grand → Ce jour-là → Webcams → Accueil…
+/* ---------- Diaporama : l'écran défile seul, 30 secondes par écran ----------
+   Accueil → Horloge (éphéméride, fête, anniversaires) → Météo en grand → Prévisions → Ce jour-là → Webcams
+   → Agenda → Maison → Foot → Cantine → Accueil…
    On touche l'écran : le diaporama s'arrête et reprend 3 min après le dernier contact.
-   Réglages (config.js) : diaporama: false pour le couper, secondesDiapo (60 par défaut). */
-var DIAPO_ETAPES = ["accueil", "horloge", "meteo", "jour", "webcams"], diapoIdx = 0, diapoDebut = new Date().getTime(),
+   Réglages (config.js) : diaporama: false pour le couper, secondesDiapo (30 par défaut). */
+var DIAPO_PAGES = { previsions: 1, webcams: 2, agenda: 0, maison: 4, foot: 5, cantine: 6 };
+var DIAPO_ETAPES = ["accueil", "horloge", "meteo", "previsions", "jour", "webcams", "agenda", "maison", "foot", "cantine"], diapoIdx = 0, diapoDebut = new Date().getTime(),
     dernierToucher = 0, diapoScene = "accueil", etatCeJour = null;
 function chargerJour() {
   setTimeout(chargerJour, 2 * 3600000);
@@ -3336,7 +3338,7 @@ function montrerScene(nom) {
   }
   z.className = "";
   document.body.className = document.body.className.replace(/\s*diaporama/g, "");
-  allerA(nom === "webcams" ? PAGE_WEBCAMS : PAGE_ACCUEIL);
+  allerA(DIAPO_PAGES[nom] !== undefined ? DIAPO_PAGES[nom] : PAGE_ACCUEIL);
 }
 function arreterDiaporama() {
   if (diapoScene === "accueil" && el("diaporama").className !== "on") return;
@@ -3355,7 +3357,7 @@ setInterval(function () {
     if (jn && jn <= 24 && lutinVisible(nj)) { diapoDebut = t; diapoIdx = 0; if (diapoScene !== "accueil" || pageActuelle !== PAGE_ACCUEIL) { arreterDiaporama(); allerA(PAGE_ACCUEIL); } return; }
     if (diapoScene === "meteo" && new Date().getSeconds() === 0) { try { el("diaporama").innerHTML = sceneMeteo(); } catch (e) {} }
     if (diapoScene === "horloge") { var hh = el("dp-h"), n = new Date(); if (hh) { var v = deux(n.getHours()) + "<span>:</span>" + deux(n.getMinutes()); if (hh.innerHTML !== v) hh.innerHTML = v; } }
-    if (t - diapoDebut < (CONFIG.secondesDiapo || 60) * 1000) return;
+    if (t - diapoDebut < (CONFIG.secondesDiapo || 30) * 1000) return;
     diapoDebut = t;
     for (var k = 0; k < DIAPO_ETAPES.length; k++) {
       diapoIdx = (diapoIdx + 1) % DIAPO_ETAPES.length;
