@@ -16,10 +16,13 @@ from mixapp import gui  # noqa: E402
 
 DUR = float(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1][0].isdigit() else 20
 FULL = "--plein-ecran" in sys.argv
+SIZE = next((a.split("=")[1] for a in sys.argv if a.startswith("--taille=")), "1440x860")
+MODE = next((a.split("=")[1] for a in sys.argv if a.startswith("--mode=")), "")
+QUICK = "--rapide" in sys.argv
 app = QApplication(sys.argv[:1])
 app.setStyleSheet(gui.STYLE)
 w = gui.MainWindow(None)
-w.resize(1440, 860)
+w.resize(*[int(v) for v in SIZE.split("x")])
 w.showFullScreen() if FULL else w.show()
 proc = psutil.Process()
 out = []
@@ -57,7 +60,8 @@ while w._analysis_running and time.time() - t0 < 600:
     pump(0.5)
 say(f"écran : {app.primaryScreen().size().width()}x{app.primaryScreen().size().height()} "
     f"× {app.primaryScreen().devicePixelRatio()} · fenêtre {w.width()}x{w.height()} · {os.cpu_count()} cœurs")
-measure("repos (rien ne joue)")
+if not QUICK:
+    measure("repos (rien ne joue)")
 for i in range(w.playlist_list.count()):
     if "Soirée Disco" in w.playlist_list.item(i).text():
         w.playlist_list.setCurrentRow(i)
@@ -65,17 +69,17 @@ pump(1)
 w.table.selectRow(0)
 w.play_from_selection()
 pump(8)
-measure("lecture · vue liste")
+if not QUICK:
+    measure("lecture · vue liste")
 w.btn_view.setChecked(True)
+if MODE:
+    w.deck.mode_box.setCurrentIndex({"fluide": 0, "leger": 1, "aucune": 2}[MODE])
+say(f"   fenêtre réelle {w.width()}x{w.height()} · mode {w.deck.mode} · natif={os.environ.get('MIXAPP_NATIVE_ANIM', '0')}")
 pump(3)
 measure("lecture · vue Platines")
 w._on_seek(0.80)
 pump(4)
 measure("vue Platines pendant un mix")
-w.deck.mode_box.setCurrentIndex(1) if hasattr(w.deck, "mode_box") else None
-w._on_seek(0.3)
-pump(3)
-measure("vue Platines · mode léger")
 p = os.environ.get("GITHUB_STEP_SUMMARY")
 if p:
     with open(p, "a") as f:

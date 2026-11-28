@@ -14,6 +14,7 @@ Pensée pour rester légère :
 from __future__ import annotations
 
 import math
+import os
 import re
 import threading
 import time
@@ -22,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from PySide6.QtCore import QEvent, QPointF, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QImage, QLinearGradient, QPainter, QPainterPath, QPen,
-                           QPixmap, QRadialGradient)
+                           QPixmap, QRadialGradient, QRegion)
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPushButton,
                                QSizePolicy, QVBoxLayout, QWidget)
 
@@ -330,6 +331,34 @@ class Jog(_Opaque, QWidget):
         self._frames = frames
         return img
 
+    def _marker_rect(self, angle):
+        d = self._side()
+        x0, y0, c = (self.width() - d) / 2, (self.height() - d) / 2, d / 2
+        a = math.radians(angle - 90)
+        p1 = (x0 + c + math.cos(a) * c * 0.66, y0 + c + math.sin(a) * c * 0.66)
+        p2 = (x0 + c + math.cos(a) * c * 0.78, y0 + c + math.sin(a) * c * 0.78)
+        return QRectF(QPointF(min(p1[0], p2[0]) - 3, min(p1[1], p2[1]) - 3),
+                      QPointF(max(p1[0], p2[0]) + 3, max(p1[1], p2[1]) + 3)).toAlignedRect()
+
+    def refresh(self, angle, active):
+        """Ne redessine que ce qui bouge : le rond central et le repère blanc
+        (le plateau autour est fixe). Rien du tout si l'image n'a pas changé."""
+        full = active != self.active or self._base is None
+        old = self.angle
+        self.active, self.angle = active, angle
+        if full:
+            self.update()
+            return
+        same_frame = int(old / 5) % 72 == int(angle / 5) % 72 or not self.spin
+        if same_frame and abs(old - angle) < 0.5:
+            return
+        d = self._side()
+        x0, y0, c = (self.width() - d) / 2, (self.height() - d) / 2, d / 2
+        r = c * 0.46 + 3
+        reg = QRegion(QRectF(x0 + c - r, y0 + c - r, 2 * r, 2 * r).toAlignedRect())
+        reg = reg.united(self._marker_rect(old)).united(self._marker_rect(angle))
+        self.update(reg)
+
     def paintEvent(self, _e):
         t0 = time.perf_counter()
         d = self._side()
@@ -416,6 +445,9 @@ class DeckView(QWidget):
         self.wave = WaveStrip(self)
         self.xf = XFader(self)
         self.jogs = [Jog(self), Jog(self)]
+        if os.environ.get("MIXAPP_NATIVE_ANIM") == "1":           # essai : vues natives séparées
+            for wd in (self.wave, self.xf, *self.jogs):
+                wd.setAttribute(Qt.WA_NativeWindow)
         self.pad_label = QLabel("Prochaine transition", self)
         self.style_pads = {}
         tips = {"auto": "L'appli choisit la meilleure transition (réglage normal)",
@@ -652,10 +684,10 @@ class DeckView(QWidget):
             tr = s[0] if s else None
             j.set_cover(self._ck(tr) if tr is not None else None,
                         self.cover_for(tr) if tr is not None else None)
-            j.active = s is not None and i == side_a and not paused
+            ang = j.angle
             if s is not None and not paused and self.mode != "aucune":
-                j.angle = (s[1] * RPM / 60.0 * 360.0) % 360.0
-            j.update()
+                ang = (s[1] * RPM / 60.0 * 360.0) % 360.0
+            j.refresh(ang, s is not None and i == side_a and not paused)
         decks = [None, None]
         for i, s in enumerate(show):
             if s is None or s[0] is None:

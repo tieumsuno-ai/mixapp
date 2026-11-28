@@ -20,47 +20,32 @@ jobs:
           python tools/make_demo_tracks.py "$HOME/Music/Mes playlists"
           mkdir -p "$HOME/Library/Application Support/MixApp"
           printf '{"roots": ["%s"], "covers_online": false, "volume": 0.9}' "$HOME/Music/Mes playlists" > "$HOME/Library/Application Support/MixApp/settings.json"
-      - name: Mesure (fenêtre)
-        timeout-minutes: 15
+      - name: "Mesure : petite fenêtre 1024x700 · fluide"
+        timeout-minutes: 10
         env:
           MIXAPP_FAKE_AUDIO: "1"
-        run: python tools/cpu_probe.py 20
-      - name: Mesure (plein écran)
-        timeout-minutes: 15
+        run: python tools/cpu_probe.py 20 --rapide --taille=1024x700 --mode=fluide
+      - name: "Mesure : grande fenêtre 2560x1600 · fluide"
+        timeout-minutes: 10
         env:
           MIXAPP_FAKE_AUDIO: "1"
-        run: python tools/cpu_probe.py 20 --plein-ecran
-      - name: Profil détaillé (vue Platines, 25 s)
-        timeout-minutes: 15
+        run: python tools/cpu_probe.py 20 --rapide --taille=2560x1600 --mode=fluide
+      - name: "Mesure : grande fenêtre 2560x1600 · léger"
+        timeout-minutes: 10
         env:
           MIXAPP_FAKE_AUDIO: "1"
-          MIXAPP_PROFILE: "1"
+        run: python tools/cpu_probe.py 20 --rapide --taille=2560x1600 --mode=leger
+      - name: "Mesure : grande fenêtre 2560x1600 · fluide · vues natives"
+        timeout-minutes: 10
+        env:
+          MIXAPP_FAKE_AUDIO: "1"
+          MIXAPP_NATIVE_ANIM: "1"
+        run: python tools/cpu_probe.py 20 --rapide --taille=2560x1600 --mode=fluide
+      - name: "Référence : version d'avant (grande fenêtre · fluide)"
+        timeout-minutes: 10
+        env:
+          MIXAPP_FAKE_AUDIO: "1"
         run: |
-          python tools/cpu_probe.py 25 &
-          PID=$!
-          sleep 75
-          sudo py-spy record --native --nonblocking -p $PID -d 25 -f raw -o prof.txt || true
-          wait $PID || true
-          python - <<'PY'
-          import collections
-          leaf = collections.Counter(); incl = collections.Counter(); tot = 0
-          for line in open("prof.txt", encoding="utf-8", errors="replace"):
-              stack, _, n = line.rstrip().rpartition(" ")
-              n = int(n); tot += n
-              frames = stack.split(";")
-              leaf[frames[-1]] += n
-              for f in set(frames):
-                  incl[f] += n
-          print("== feuilles (où le temps est passé)")
-          for f, n in leaf.most_common(25):
-              print(f"{100*n/tot:5.1f} %  {f[:160]}")
-          print("== inclusif (fonctions MixApp)")
-          for f, n in incl.most_common(400):
-              if "mixapp" in f:
-                  print(f"{100*n/tot:5.1f} %  {f[:160]}")
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: profil
-          path: prof.txt
+          git fetch -q --depth 5 origin 5a264b87ed01935d7140e40492277df582fcc1d3 || true
+          git checkout 5a264b87ed01935d7140e40492277df582fcc1d3 -- mixapp
+          python tools/cpu_probe.py 20 --rapide --taille=2560x1600 --mode=fluide

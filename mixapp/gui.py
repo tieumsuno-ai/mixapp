@@ -228,6 +228,42 @@ class ElideLabel(QLabel):
         p.end()
 
 
+class StableLabel(QLabel):
+    """Étiquette pour les textes qui changent souvent (temps, « dans 0:42 »…).
+    Tant que le nouveau texte tient dans la place déjà prise, on le redessine
+    simplement, sans relancer la mise en page de la fenêtre (qui redessinait
+    aussi le « Le saviez-vous ? » plusieurs fois par seconde)."""
+
+    def __init__(self, text=""):
+        super().__init__(text)
+        self._txt = text
+
+    def text(self):
+        return self._txt
+
+    def setText(self, t):
+        t = t or ""
+        if t == self._txt:
+            return
+        self._txt = t
+        fm = self.fontMetrics()
+        m = self.contentsMargins()
+        need = fm.horizontalAdvance(t) + m.left() + m.right() + 2
+        if not self.isVisible() or need > self.width() or not t or not super().text():
+            super().setText(t)          # place à agrandir (rare) : mise en page normale
+        else:
+            self.update()
+
+    def paintEvent(self, e):
+        if self._txt == super().text():
+            return super().paintEvent(e)
+        p = QPainter(self)
+        p.setPen(self.palette().color(self.foregroundRole()))
+        p.setFont(self.font())
+        p.drawText(self.contentsRect(), int(self.alignment()) | Qt.AlignVCenter, self._txt)
+        p.end()
+
+
 class AmbientFrame(QFrame):
     """Cadre du lecteur teinté de la couleur de la pochette en cours
     (couleur calculée une fois par morceau, dessin d'un simple dégradé)."""
@@ -274,6 +310,9 @@ class Bus(QObject):
 
 class MainWindow(QMainWindow):
     def __init__(self, db_path=None):
+        # curseur de texte fixe : son clignotement faisait redessiner toute la
+        # fenêtre deux fois par seconde (coûteux sur les grands écrans Retina)
+        QApplication.setCursorFlashTime(0)
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 780)
@@ -529,11 +568,11 @@ class MainWindow(QMainWindow):
         self.fact_label.setToolTip("Le saviez-vous ? Année de sortie (MusicBrainz) et anecdote tirée de "
                                    "Wikipédia, sans rien inventer")
         row1.addWidget(self.fact_label, 3)
-        self.counter = QLabel("")
+        self.counter = StableLabel("")
         self.counter.setToolTip("Temps restant de la soirée, nombre de morceaux et heure de fin estimée")
         self.counter.setObjectName("counter")
         self.counter.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.transition_label = QLabel("")
+        self.transition_label = StableLabel("")
         self.transition_label.setObjectName("transition")
         rcol = QVBoxLayout()
         rcol.addWidget(self.counter, alignment=Qt.AlignRight)
@@ -548,14 +587,14 @@ class MainWindow(QMainWindow):
         self.mix_badge.setSizePolicy(sp)
         pv.addWidget(self.mix_badge)
         row2 = QHBoxLayout()
-        self.pos_label = QLabel("0:00")
+        self.pos_label = StableLabel("0:00")
         self.progress = SeekBar()
         self.progress.setMaximumHeight(10)
         self.progress.setToolTip("Clique ou glisse pour avancer / reculer dans le morceau")
         self.progress.seek.connect(self._on_seek)
-        self.len_label = QLabel("0:00")
+        self.len_label = StableLabel("0:00")
         self._ss(self.len_label, "color:#8a90a0;")
-        self.remain_label = QLabel("-0:00")
+        self.remain_label = StableLabel("-0:00")
         self.remain_label.setObjectName("remain")
         self.remain_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.remain_label.setToolTip("Temps restant du morceau en cours")
