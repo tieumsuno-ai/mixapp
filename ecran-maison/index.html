@@ -3310,6 +3310,9 @@ setInterval(function () {
     if (CONFIG.diaporama === false) return;
     if (matchOuvert || el("but").className || el("wc-video").className) { diapoDebut = t; if (diapoScene !== "accueil") arreterDiaporama(); return; }
     if (t - dernierToucher < 3 * 60000) { diapoDebut = t; diapoIdx = 0; if (el("diaporama").className === "on") arreterDiaporama(); return; }
+    // en décembre, pendant les heures du lutin farceur, on reste sur l'accueil pour voir sa bêtise du jour
+    var nj = new Date(), jn = periodeNoel(nj);
+    if (jn && jn <= 24 && lutinVisible(nj)) { diapoDebut = t; diapoIdx = 0; if (diapoScene !== "accueil" || pageActuelle !== PAGE_ACCUEIL) { arreterDiaporama(); allerA(PAGE_ACCUEIL); } return; }
     if (diapoScene === "meteo" && new Date().getSeconds() === 0) { try { el("diaporama").innerHTML = sceneMeteo(); } catch (e) {} }
     if (diapoScene === "horloge") { var hh = el("dp-h"), n = new Date(); if (hh) { var v = deux(n.getHours()) + "<span>:</span>" + deux(n.getMinutes()); if (hh.innerHTML !== v) hh.innerHTML = v; } }
     if (t - diapoDebut < (CONFIG.secondesDiapo || 60) * 1000) return;
