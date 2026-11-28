@@ -1,0 +1,66 @@
+name: Mesure processeur Mac
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mesure:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliothèques
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pillow psutil py-spy
+      - name: Musique de démonstration et réglages
+        run: |
+          python tools/make_demo_tracks.py "$HOME/Music/Mes playlists"
+          mkdir -p "$HOME/Library/Application Support/MixApp"
+          printf '{"roots": ["%s"], "covers_online": false, "volume": 0.9}' "$HOME/Music/Mes playlists" > "$HOME/Library/Application Support/MixApp/settings.json"
+      - name: Mesure (fenêtre)
+        timeout-minutes: 15
+        env:
+          MIXAPP_FAKE_AUDIO: "1"
+        run: python tools/cpu_probe.py 20
+      - name: Mesure (plein écran)
+        timeout-minutes: 15
+        env:
+          MIXAPP_FAKE_AUDIO: "1"
+        run: python tools/cpu_probe.py 20 --plein-ecran
+      - name: Profil détaillé (vue Platines, 25 s)
+        timeout-minutes: 15
+        env:
+          MIXAPP_FAKE_AUDIO: "1"
+          MIXAPP_PROFILE: "1"
+        run: |
+          python tools/cpu_probe.py 25 &
+          PID=$!
+          sleep 75
+          sudo py-spy record --native --nonblocking -p $PID -d 25 -f raw -o prof.txt || true
+          wait $PID || true
+          python - <<'PY'
+          import collections
+          leaf = collections.Counter(); incl = collections.Counter(); tot = 0
+          for line in open("prof.txt", encoding="utf-8", errors="replace"):
+              stack, _, n = line.rstrip().rpartition(" ")
+              n = int(n); tot += n
+              frames = stack.split(";")
+              leaf[frames[-1]] += n
+              for f in set(frames):
+                  incl[f] += n
+          print("== feuilles (où le temps est passé)")
+          for f, n in leaf.most_common(25):
+              print(f"{100*n/tot:5.1f} %  {f[:160]}")
+          print("== inclusif (fonctions MixApp)")
+          for f, n in incl.most_common(400):
+              if "mixapp" in f:
+                  print(f"{100*n/tot:5.1f} %  {f[:160]}")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profil
+          path: prof.txt
