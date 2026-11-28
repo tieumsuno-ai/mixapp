@@ -375,6 +375,98 @@ def maj_cantine():
         log("Cantine : %d jours de menus (%s → %s)" % (len(menus), min(menus), max(menus)))
 
 
+# ---------- 2 septies. « Ce jour-là » : éphéméride de Wikipédia (page « 28 novembre ») ----------
+# Événements, naissances, décès et journées (internationales / nationales) du jour → jour.json, une fois par jour.
+JOUR_MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+jour_fait = None
+
+
+def wikitexte_propre(t):
+    t = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>|<!--.*?-->", "", t, flags=re.S)
+    for _ in range(4):                                     # modèles : {{date-|18 octobre 1541}} → 18 octobre 1541, {{Albanie}} → Albanie
+        t = re.sub(r"\{\{\s*(?:date|date-|date de naissance|date de décès|nobr|lang\|[a-z-]+|s-?|-s-?|sp|nombre|unité)\|([^{}|]*)(?:\|[^{}]*)?\}\}",
+                   lambda m: m.group(1), t, flags=re.I)
+        t = re.sub(r"\{\{\s*([^{}|]{2,40})\s*\}\}", lambda m: m.group(1) if m.group(1)[:1].isupper() and " " not in m.group(1).strip() else "", t)
+        t = re.sub(r"\{\{[^{}]*\}\}", "", t)
+    t = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", t)
+    t = re.sub(r"\[https?://\S+\s*([^\]]*)\]", r"\1", t)
+    t = t.replace("'''", "").replace("''", "").replace("&nbsp;", " ")
+    t = re.sub(r"<[^>]+>", "", t)
+    return re.sub(r"\s+", " ", html.unescape(t)).strip(" .;:,")
+
+
+def lire_ephemeride(wt):
+    sections, courante, sous = {}, None, ""
+    for ligne in wt.split("\n"):
+        m = re.match(r"^(={2,4})\s*(.*?)\s*\1\s*$", ligne)
+        if m:
+            titre = wikitexte_propre(m.group(2)).lower()
+            if len(m.group(1)) == 2:
+                courante, sous = titre, ""
+            else:
+                sous = titre
+            continue
+        if not courante or not ligne.startswith("*"):
+            continue
+        brut = ligne.lstrip("*: ").strip()
+        y = re.match(r"^(?:\[\[(?:[^\]|]*\|)?(-?\d{1,4})\]\]|\{\{date-?\|(-?\d{1,4})\}\}|(-?\d{1,4}))\s*(?:av\. J\.-C\.\s*)?[:,–-]\s*(.*)$", brut)
+        annee, texte = (int(next(g for g in y.groups()[:3] if g)), y.group(4)) if y else (None, brut)
+        texte = wikitexte_propre(texte)
+        if len(texte) < 4:
+            continue
+        sections.setdefault(courante, []).append({"annee": annee, "texte": texte, "sous": sous})
+    return sections
+
+
+def maj_jour():
+    global jour_fait
+    auj = datetime.date.today()
+    if jour_fait == auj and os.path.exists(os.path.join(WEB, "jour.json")):
+        return
+    titre = ("1er" if auj.day == 1 else str(auj.day)) + " " + JOUR_MOIS[auj.month - 1]
+    url = "https://fr.wikipedia.org/w/api.php?" + urllib.parse.urlencode(
+        {"action": "parse", "page": titre, "prop": "wikitext", "format": "json", "formatversion": "2", "redirects": "1"})
+    req = urllib.request.Request(url, headers={"User-Agent": "ecran-maison/1.0 (écran domestique ; relais personnel)"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        wt = json.loads(r.read().decode("utf-8"))["parse"]["wikitext"]
+    s = lire_ephemeride(wt)
+    import random
+    hasard_ = random.Random(auj.toordinal())             # même sélection toute la journée
+
+    def choisir(cles, n, annee_min=None):
+        l = [e for k in s for e in s[k] if any(c in k for c in cles) and e["annee"] is not None
+             and (annee_min is None or e["annee"] >= annee_min) and len(e["texte"]) <= 170]
+        hasard_.shuffle(l)
+        l = sorted(l[:n], key=lambda e: e["annee"])
+        return [{"annee": e["annee"], "texte": e["texte"][:1].upper() + e["texte"][1:]} for e in l]
+
+    def personnes(cle, n):
+        l = choisir([cle], 40, 1700)
+        # on privilégie les notices courtes et parlantes (« Jean-Baptiste Lully, compositeur français »)
+        l = [e for e in l if "," in e["texte"]] or l
+        hasard_.shuffle(l)
+        out = []
+        for e in sorted(l[:n], key=lambda e: e["annee"]):
+            t = re.sub(r"\s*\([^()]*\d{3,4}[^()]*\)\s*$", "", e["texte"])
+            out.append({"annee": e["annee"], "texte": t})
+        return out
+
+    celeb = [e for k in s for e in s[k] if "célébration" in k]
+    journees = [e["texte"] for e in celeb if "internation" in e["sous"] or re.search(r"journée (mondiale|internationale)", e["texte"], re.I)]
+    nat = [e["texte"] for e in celeb if "nationa" in e["sous"] and "internation" not in e["sous"]]
+    france = [t for t in nat if t.lower().startswith("france")]
+    nationales = [t for t in nat if not t.lower().startswith("france")]
+    data = {"date": auj.isoformat(), "titre": titre,
+            "evenements": choisir(["événement", "arts", "science", "économie", "sport"], 5, 1000),
+            "naissances": personnes("naissance", 5), "deces": personnes("décès", 4),
+            "journees": [j for j in journees if not j.lower().startswith("pas de")][:4],
+            "france": france[:2], "nationales": nationales[:3]}
+    ecrire("jour.json", json.dumps(data, ensure_ascii=False).encode("utf-8"))
+    jour_fait = auj
+    log("Ce jour-là : %d événements, %d naissances, %d décès, %d journées" % (
+        len(data["evenements"]), len(data["naissances"]), len(data["deces"]), len(data["journees"])))
+
+
 # ---------- 2 sexies. Webcams (images réduites pour l'iPad) ----------
 # WEBCAMS = « Nom;source;lat;lon;altitude | … » avec source = viewsurf:<n° de page pv.viewsurf.com>
 # ou webcamhd:<image>:<config> (app.webcam-hd.com) ou image:<adresse d'une image rafraîchie>. Les images d'origine (4K, panoramas de 7000 px)
@@ -1381,6 +1473,11 @@ while True:
     if AGENDA_ICS:
         maj_agenda()
     maj_cantine()
+    if os.environ.get("CE_JOUR", "1") != "0":
+        try:
+            maj_jour()
+        except Exception as e:
+            log("Ce jour-là :", repr(e))
     if WEBCAMS:
         try:
             maj_webcams()
