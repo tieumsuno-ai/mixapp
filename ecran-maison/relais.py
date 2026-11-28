@@ -632,17 +632,25 @@ def equipe_fff(club, court):
 
 
 def maj_fff():
+    """Toutes les heures ; toutes les 14 min un jour de match ; toutes les 2 min pendant un match (score en direct)."""
     global fff_derniere
     maintenant = time.time()
     aujourdhui = datetime.date.today().isoformat()
-    jour_de_match = False
+    jour_de_match, pendant = False, False
     try:
         with open(os.path.join(WEB, "foot_fff.json"), encoding="utf-8") as f:
             for e in json.load(f).get("equipes", []):
-                jour_de_match |= any(m["date"][:10] == aujourdhui for m in e.get("matchs", []))
+                for m in e.get("matchs", []):
+                    if m["date"][:10] == aujourdhui:
+                        jour_de_match = True
+                        try:
+                            debut = datetime.datetime.strptime(m["date"], "%Y-%m-%dT%H:%M").timestamp()
+                            pendant |= m.get("heure") and debut - 10 * 60 <= maintenant <= debut + 140 * 60
+                        except ValueError:
+                            pass
     except Exception:
         pass
-    if maintenant - fff_derniere < (14 * 60 if jour_de_match else 55 * 60):
+    if maintenant - fff_derniere < (110 if pendant else 14 * 60 if jour_de_match else 55 * 60):
         return
     equipes = []
     for x in FOOT_FFF:
@@ -655,6 +663,15 @@ def maj_fff():
         fff_derniere = maintenant
         ecrire("foot_fff.json", json.dumps({"maj": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M"), "equipes": equipes},
                                            ensure_ascii=False).encode("utf-8"))
+
+
+def boucle_fff():
+    while True:
+        try:
+            maj_fff()
+        except Exception as e:
+            log("FFF :", repr(e))
+        time.sleep(60)
 
 
 # ---------- 2. Netatmo ----------
@@ -1350,6 +1367,8 @@ def demarrer_sonos():
 log("Relais démarré — Netatmo %s" % ("activé" if NETATMO else "non configuré"))
 if TYDOM:
     threading.Thread(target=tydom.boucle, daemon=True).start()
+if FOOT_FFF:
+    threading.Thread(target=boucle_fff, daemon=True).start()
 if SONOS or TYDOM:
     try:
         demarrer_sonos()
@@ -1362,8 +1381,6 @@ while True:
     if AGENDA_ICS:
         maj_agenda()
     maj_cantine()
-    if FOOT_FFF:
-        maj_fff()
     if WEBCAMS:
         try:
             maj_webcams()
